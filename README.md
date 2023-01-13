@@ -3,15 +3,25 @@
 ## Overview
 1. [ ] Inference and validation of splicing factor activities
     - [X] download GO splicing factors (https://www.gsea-msigdb.org/gsea/msigdb/geneset_page.jsp?geneSetName=GOBP_RNA_SPLICING)
-    - [ ] download CCLE splicing factor omics
+    - [X] download CCLE splicing factor omics
     - [X] download SpliceAid RBP exon interactions (http://srv00.recas.ba.infn.it/SpliceAidF/)
-    - [ ] download CLIP seq from ENCODE
-    - [ ] validate concordance CLIP seq vs RBP vs SpliceAid interactions
-    - [ ] inference with correlations
-    - [ ] inference with WGCNA
-    - [ ] inference with ARACNE
-    - [ ] inference with robustica
-    - [ ] inference with multiomic signatures
+    - [X] download eCLIP seq from ENCODE
+    - [X] validate concordance CLIP seq vs RBP vs SpliceAid interactions
+        - eCLIP vs RBP KD --> strong changes in splicing do not occur where RBP binds
+    - [ ] network inference: save raw outputs and process them to make inference of regulation sign and magnitude
+        - [ ] with correlations: mRNA levels SF vs exon inclusion
+        - [ ] with WGCNA
+        - [ ] with ARACNE
+        - [ ] with robustica
+        - [ ] with multiomic signatures
+    - [ ] network evaluation:
+        - we want to find those exons sensitive to changes in splicing factor activity
+        - "correlation" between association scores and observed inclusion changes upon KD of that splicing factor
+        - or precision and recall generating different sets of exons
+            - from RBP KDs, consider different delta PSI thresholds (consider also possible % change thresholds) to define targets and non-targets
+            - from eCLIP, we can only have true positives
+            - from SpliceAid, we can only have true positives
+        - evaluate considering or not the directionality of the SF-exon interactions
 2. [ ] Chart and validate splicing factor activities in cancer
 3. [ ] tissue specific vs pan-cancer regulatory networks
 
