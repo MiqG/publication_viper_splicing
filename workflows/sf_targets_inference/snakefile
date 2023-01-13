@@ -1,0 +1,45 @@
+"""
+Author: Miquel Anglada Girotto
+Contact: miquelangladagirotto [at] gmail [dot] com
+"""
+
+import os
+import pandas as pd
+
+# variables
+ROOT = os.path.dirname(os.path.dirname(os.getcwd()))
+RAW_DIR = os.path.join(ROOT,"data","raw")
+PREP_DIR = os.path.join(ROOT,"data","prep")
+SUPPORT_DIR = os.path.join(ROOT,"support")
+RESULTS_DIR = os.path.join(ROOT,"results","sf_targets_inference")
+
+METHODS_INFER = ["correlation"]
+
+##### RULES #####
+rule all:
+    input:
+        # target inference
+        expand(os.path.join(RESULTS_DIR,"files","target_inference","{method}.tsv.gz"), method=METHODS_INFER)
+        
+        # evaluation
+
+rule target_inference:
+    input:
+        splicing = os.path.join(PREP_DIR,"event_psi","CCLE-EX.tsv.gz"),
+        genexpr = os.path.join(PREP_DIR,"genexpr_tpm","CCLE.tsv.gz"),
+        gene_sources = os.path.join(SUPPORT_DIR,"GOBP_RNA_SPLICING-ensembl.txt")
+    output:
+        os.path.join(RESULTS_DIR,"files","target_inference","{method}.tsv.gz")
+    params:
+        method="{method}"
+    threads: 16
+    shell:
+        """
+        nice python scripts/infer_targets.py \
+                    --splicing_file={input.splicing} \
+                    --genexpr_file={input.genexpr} \
+                    --gene_sources_file={input.gene_sources} \
+                    --method={params.method} \
+                    --n_jobs={threads} \
+                    --output_file={output}
+        """
