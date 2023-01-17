@@ -20,7 +20,8 @@ ROOT = here::here()
 # -----------
 # PREP_DIR = file.path(ROOT,'data','prep')
 # eclip_file = file.path(PREP_DIR,"eclip_peaks_mapped","merged.tsv.gz")
-# delta_psi_file = file.path(PREP_DIR,"ENCORE","delta_psi-EX.tsv.gz")
+# delta_psi_file = file.path(PREP_DIR,"kd_transcriptomes","ENCORE","delta_psi-EX.tsv.gz")
+# delta_psi_file = file.path(PREP_DIR,"kd_transcriptomes","ENCORE","delta_psi_rel-EX.tsv.gz")
 # metadata_file = file.path(PREP_DIR,'metadata','ENCORE.tsv.gz')
 # figs_dir = file.path(ROOT,'results','eda','figures','eda')
 
@@ -44,11 +45,25 @@ plot_comparison = function(eclip, dpsi){
     dpsi %>%
         ggboxplot(x="binds_rbp", y="abs_deltaPSI") +
         stat_compare_means(method="wilcox.test") +
-        facet_wrap(~KD+cell_line)
+        facet_wrap(~KD_GENE+cell_line)
     
-    # KD PSI changes vs eCLIP peaks
+    dpsi %>% 
+        mutate(deltaPSI_binned = cut(abs_deltaPSI, breaks=seq(0,100,5))) %>%
+        drop_na() %>%
+        count(KD_GENE, cell_line, deltaPSI_binned, binds_rbp) %>%
+        group_by(KD_GENE, cell_line, binds_rbp) %>%
+        mutate(perc = n / sum(n)) %>%
+        ungroup() %>%
+        group_by(KD_GENE, cell_line, deltaPSI_binned) %>%
+        mutate(rel_perc = perc / sum(perc)) %>%
+        ungroup() %>%        
+        ggbarplot(x="deltaPSI_binned", y="rel_perc", fill="binds_rbp") +
+        facet_wrap(~KD_GENE+cell_line) +
+        theme_pubr(x.text.angle = 70)
+    
+    # KD_GENE PSI changes vs eCLIP peaks
     X = eclip %>%
-        left_join(dpsi, by=c("EVENT","cell_line","rbp"="KD")) %>%
+        left_join(dpsi, by=c("EVENT","cell_line","rbp"="KD_GENE")) %>%
         drop_na(deltaPSI)
     
     # does change in PSI correlate with eCLIP features?
@@ -100,7 +115,7 @@ plot_comparison = function(eclip, dpsi){
     
     # correlation between delta PSI and FC or p-value
     x = X %>%
-        filter(abs(deltaPSI)>10) %>%
+        filter(abs(deltaPSI)>5) %>%
         group_by(cell_line, rbp) %>%
         summarize(correlation = cor(deltaPSI, log2_fc, method="spearman")) %>%
         ungroup()
@@ -249,8 +264,8 @@ main = function(){
     
     events_oi = eclip %>% distinct(EVENT) %>% pull()
     samples_oi = metadata %>%
-        filter(KD %in% (eclip %>% pull(rbp))) %>%
-        filter(KD %in% c("AQR","SF3B1")) %>%
+        filter(KD_GENE %in% (eclip %>% pull(rbp))) %>%
+        filter(KD_GENE %in% c("AQR","SF3B1")) %>%
         distinct(sampleID) %>%
         pull(sampleID)
     dpsi = delta_psi %>%
@@ -260,8 +275,8 @@ main = function(){
         filter(rowSums(!is.na(across(all_of(samples_oi)))) > 0) %>%
         pivot_longer(-EVENT, names_to="sampleID", values_to="deltaPSI") %>%
         drop_na() %>%
-        left_join(metadata %>% distinct(sampleID,cell_line,KD), by="sampleID") %>%
-        group_by(EVENT, cell_line, KD) %>%
+        left_join(metadata %>% distinct(sampleID,cell_line,KD_GENE), by="sampleID") %>%
+        group_by(EVENT, cell_line, KD_GENE) %>%
         summarize(deltaPSI = median(deltaPSI, na.rm=TRUE)) %>%
         ungroup() %>%
         drop_na(deltaPSI) %>%
@@ -269,7 +284,7 @@ main = function(){
             eclip %>% 
             distinct(EVENT, cell_line, rbp) %>%
             mutate(binds_rbp = TRUE), 
-            by=c("EVENT","cell_line","KD"="rbp")
+            by=c("EVENT","cell_line","KD_GENE"="rbp")
         ) %>%
         mutate(
             binds_rbp = replace_na(binds_rbp, FALSE),
