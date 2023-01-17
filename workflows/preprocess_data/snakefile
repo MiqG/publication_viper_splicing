@@ -25,6 +25,7 @@ SUPPORT_DIR = os.path.join(ROOT,"support")
 SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
 
 EVENT_TYPES = ["EX"]
+CELL_LINES = ["K562","HepG2"]
 
 ##### RULES #####
 rule all:
@@ -47,12 +48,12 @@ rule all:
 
         # ENCORE RBP KD SCREENS
         ## compute log FC TPM
-        os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE','log2_fold_change_tpm.tsv.gz'),
+        expand(os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE',"{cell_line}",'log2_fold_change_tpm.tsv.gz'), cell_line=CELL_LINES),
         ## compute delta PSI
-        expand(os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE','delta_psi-{event_type}.tsv.gz'), event_type=EVENT_TYPES),
-        expand(os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE','delta_psi_rel-{event_type}.tsv.gz'), event_type=EVENT_TYPES),
+        expand(os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE',"{cell_line}",'delta_psi-{event_type}.tsv.gz'), event_type=EVENT_TYPES, cell_line=CELL_LINES),
+        expand(os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE',"{cell_line}",'delta_psi_rel-{event_type}.tsv.gz'), event_type=EVENT_TYPES, cell_line=CELL_LINES),
         ## simplify delta PSI
-        expand(os.path.join(PREP_DIR,'ground_truth_kd','ENCORE','{dpsi_type}-{event_type}.tsv.gz'), event_type=EVENT_TYPES, dpsi_type=["delta_psi","delta_psi_rel"])
+        expand(os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'{dpsi_type}-{event_type}.tsv.gz'), event_type=EVENT_TYPES, dpsi_type=["delta_psi","delta_psi_rel"], cell_line=CELL_LINES)
 
 rule preprocess_ccle:
     input:
@@ -280,13 +281,19 @@ rule diff_tpm_encore:
         metadata = os.path.join(PREP_DIR,'metadata','ENCORE.tsv.gz'),
         genexpr = os.path.join(RAW_DIR,'ENCODE','ENCORE','vast_out','TPM-hg38-1097.tab.gz')
     output:
-        diff_tpm = os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE','log2_fold_change_tpm.tsv.gz')
+        diff_tpm = os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE',"{cell_line}",'log2_fold_change_tpm.tsv.gz')
+    params:
+        cell_line = "{cell_line}"
     run:
         import pandas as pd
         import numpy as np
         
         metadata = pd.read_table(input.metadata)
         genexpr = pd.read_table(input.genexpr, index_col=[0,1])
+        cell_line = params.cell_line
+        
+        # subset by cell line
+        metadata = metadata.loc[metadata["cell_line"]==cell_line].copy()
         
         # log transform
         genexpr = np.log2(genexpr + 1)
@@ -323,14 +330,20 @@ rule delta_psi_encore:
         metadata = os.path.join(PREP_DIR,'metadata','ENCORE.tsv.gz'),
         psi = os.path.join(PREP_DIR,'event_psi','ENCORE-{event_type}.tsv.gz')
     output:
-        delta_psi = os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE','delta_psi-{event_type}.tsv.gz'),
-        delta_psi_rel = os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE','delta_psi_rel-{event_type}.tsv.gz')
+        delta_psi = os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE','{cell_line}','delta_psi-{event_type}.tsv.gz'),
+        delta_psi_rel = os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE','{cell_line}','delta_psi_rel-{event_type}.tsv.gz')
+    params:
+        cell_line = "{cell_line}"
     run:
         import pandas as pd
         import numpy as np
         
         metadata = pd.read_table(input.metadata)
         psi = pd.read_table(input.psi, index_col=0)
+        cell_line = params.cell_line
+        
+        # subset by cell line
+        metadata = metadata.loc[metadata["cell_line"]==cell_line].copy()
         
         # delta PSI as the difference between conditions and the mean of the conditions
         delta_psi = {}
@@ -374,17 +387,23 @@ rule delta_psi_encore:
 rule prepare_ground_truth_kd:
     input:
         metadata = os.path.join(PREP_DIR,'metadata','ENCORE.tsv.gz'),
-        dpsi = os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE','{dpsi_type}-{event_type}.tsv.gz'),
+        dpsi = os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE',"{cell_line}",'{dpsi_type}-{event_type}.tsv.gz')
+    params:
+        cell_line = "{cell_line}"
     output:
-        dpsi = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE','{dpsi_type}-{event_type}.tsv.gz')
+        dpsi = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'{dpsi_type}-{event_type}.tsv.gz')
     run:
         import pandas as pd
         
         metadata = pd.read_table(input.metadata)
         dpsi = pd.read_table(input.dpsi, index_col=0)
+        cell_line = params.cell_line
         
         # drop control samples
         metadata = metadata.loc[~metadata["KD_ENSEMBL"].isnull()].copy()
+        
+        # subset by cell line
+        metadata = metadata.loc[metadata["cell_line"]==cell_line].copy()
         
         dpsis = []
         for ensembl in metadata["KD_ENSEMBL"].unique():

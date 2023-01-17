@@ -14,6 +14,7 @@ SUPPORT_DIR = os.path.join(ROOT,"support")
 RESULTS_DIR = os.path.join(ROOT,"results","sf_targets_inference")
 
 METHODS_INFER = ["correlation"]
+CELL_LINES = ["K562","HepG2"]
 
 ##### RULES #####
 rule all:
@@ -22,8 +23,8 @@ rule all:
         expand(os.path.join(RESULTS_DIR,"files","target_inference","{method}.tsv.gz"), method=METHODS_INFER),
         
         # evaluation
-        expand(os.path.join(RESULTS_DIR,"files","inference_evaluation","{method}.tsv.gz"), method=METHODS_INFER)
-
+        expand(os.path.join(RESULTS_DIR,"files","inference_evaluation","{method}-{cell_line}.tsv.gz"), method=METHODS_INFER, cell_line=CELL_LINES),
+        os.path.join(RESULTS_DIR,"files","inference_evaluation","merged.tsv.gz")
         
 rule target_inference:
     input:
@@ -50,10 +51,10 @@ rule target_inference:
 rule inference_evaluation:
     input:
         inference = os.path.join(RESULTS_DIR,"files","target_inference","{method}.tsv.gz"),
-        ground_truth_kd_dpsi = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE','delta_psi-EX.tsv.gz'),
-        ground_truth_kd_rel = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE','delta_psi_rel-EX.tsv.gz')
+        ground_truth_kd_dpsi = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'delta_psi-EX.tsv.gz'),
+        ground_truth_kd_rel = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'delta_psi_rel-EX.tsv.gz')
     output:
-        os.path.join(RESULTS_DIR,"files","inference_evaluation","{method}.tsv.gz")
+        os.path.join(RESULTS_DIR,"files","inference_evaluation","{method}-{cell_line}.tsv.gz")
     threads: 16
     shell:
         """
@@ -64,3 +65,32 @@ rule inference_evaluation:
                     --n_jobs={threads} \
                     --output_file={output}
         """
+
+rule combine_inference_evaluations:
+    input:
+        evaluations = [
+            os.path.join(RESULTS_DIR,"files","inference_evaluation","{method}-{cell_line}.tsv.gz").format(method=method, cell_line=cell_line)
+            for method in METHODS_INFER for cell_line in CELL_LINES
+        ]
+    output:
+        os.path.join(RESULTS_DIR,"files","inference_evaluation","merged.tsv.gz")
+    run:
+        import os
+        import pandas as pd
+        
+        dfs = []
+        for evaluation_file in input.evaluations:
+            method = os.path.basename(evaluation_file).replace(".tsv.gz","").split("-")[0]
+            cell_line = os.path.basename(evaluation_file).replace(".tsv.gz","").split("-")[1]
+            
+            df = pd.read_table(evaluation_file)
+            df["sf_target_inference_method"] = method
+            df["kd_cell_line"] = cell_line
+            
+            dfs.append(df)
+            
+        dfs = pd.concat(dfs)
+        dfs.to_csv(output[0], index=False, sep="\t", compression="gzip")
+            
+        print("Done!")
+        
