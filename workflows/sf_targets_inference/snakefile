@@ -19,10 +19,12 @@ METHODS_INFER = ["correlation"]
 rule all:
     input:
         # target inference
-        expand(os.path.join(RESULTS_DIR,"files","target_inference","{method}.tsv.gz"), method=METHODS_INFER)
+        expand(os.path.join(RESULTS_DIR,"files","target_inference","{method}.tsv.gz"), method=METHODS_INFER),
         
         # evaluation
+        expand(os.path.join(RESULTS_DIR,"files","inference_evaluation","{method}.tsv.gz"), method=METHODS_INFER)
 
+        
 rule target_inference:
     input:
         splicing = os.path.join(PREP_DIR,"event_psi","CCLE-EX.tsv.gz"),
@@ -40,6 +42,25 @@ rule target_inference:
                     --genexpr_file={input.genexpr} \
                     --gene_sources_file={input.gene_sources} \
                     --method={params.method} \
+                    --n_jobs={threads} \
+                    --output_file={output}
+        """
+        
+        
+rule inference_evaluation:
+    input:
+        inference = os.path.join(RESULTS_DIR,"files","target_inference","{method}.tsv.gz"),
+        ground_truth_kd_dpsi = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE','delta_psi-EX.tsv.gz'),
+        ground_truth_kd_rel = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE','delta_psi_rel-EX.tsv.gz')
+    output:
+        os.path.join(RESULTS_DIR,"files","inference_evaluation","{method}.tsv.gz")
+    threads: 16
+    shell:
+        """
+        nice python scripts/evaluate_inference.py \
+                    --inference_file={input.inference} \
+                    --ground_truth_kd_dpsi_file={input.ground_truth_kd_dpsi} \
+                    --ground_truth_kd_rel_file={input.ground_truth_kd_rel} \
                     --n_jobs={threads} \
                     --output_file={output}
         """

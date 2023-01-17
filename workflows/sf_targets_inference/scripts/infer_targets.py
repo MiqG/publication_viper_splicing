@@ -4,8 +4,7 @@
 #
 # Script purpose
 # --------------
-# For each drug, measure the shortest path length from each of its targets
-# to each of the genes significantly associated to the drug sensitivity profile
+# For each splicing-related gene, infer the exons sensitive to its activity
 
 import argparse
 import pandas as pd

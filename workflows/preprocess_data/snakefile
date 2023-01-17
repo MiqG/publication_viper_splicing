@@ -1,0 +1,400 @@
+"""
+Author: Miquel Anglada Girotto
+Contact: miquelangladagirotto [at] gmail [dot] com
+Last Update: 2021-01-12
+
+Workflow purpose
+--------------
+Preprocess raw data.
+
+Outline
+-------
+
+"""
+
+import os
+import pandas as pd
+
+# variables
+ROOT = os.path.dirname(os.path.dirname(os.getcwd()))
+RAW_DIR = os.path.join(ROOT,"data","raw")
+SRC_DIR = os.path.join(ROOT,"src")
+PREP_DIR = os.path.join(ROOT,"data","prep")
+SUPPORT_DIR = os.path.join(ROOT,"support")
+
+SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
+
+EVENT_TYPES = ["EX"]
+
+##### RULES #####
+rule all:
+    input:
+        # preprocess CCLE
+        os.path.join(PREP_DIR,"metadata","CCLE.tsv.gz"),
+        os.path.join(PREP_DIR,"event_psi","CCLE-EX.tsv.gz"),
+        os.path.join(PREP_DIR,"event_psi","CCLE-ALTA.tsv.gz"),
+        os.path.join(PREP_DIR,"event_psi","CCLE-ALTD.tsv.gz"),
+        os.path.join(PREP_DIR,"event_psi","CCLE-INT.tsv.gz"),
+        os.path.join(PREP_DIR,"genexpr_tpm","CCLE.tsv.gz"),
+
+        # preprocess ENCORE
+        os.path.join(PREP_DIR,"metadata","ENCORE.tsv.gz"),
+        os.path.join(PREP_DIR,"event_psi","ENCORE-EX.tsv.gz"),
+        os.path.join(PREP_DIR,"event_psi","ENCORE-ALTA.tsv.gz"),
+        os.path.join(PREP_DIR,"event_psi","ENCORE-ALTD.tsv.gz"),
+        os.path.join(PREP_DIR,"event_psi","ENCORE-INT.tsv.gz"),
+        os.path.join(PREP_DIR,"genexpr_tpm","ENCORE.tsv.gz"),    
+
+        # ENCORE RBP KD SCREENS
+        ## compute log FC TPM
+        os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE','log2_fold_change_tpm.tsv.gz'),
+        ## compute delta PSI
+        expand(os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE','delta_psi-{event_type}.tsv.gz'), event_type=EVENT_TYPES),
+        expand(os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE','delta_psi_rel-{event_type}.tsv.gz'), event_type=EVENT_TYPES),
+        ## simplify delta PSI
+        expand(os.path.join(PREP_DIR,'ground_truth_kd','ENCORE','{dpsi_type}-{event_type}.tsv.gz'), event_type=EVENT_TYPES, dpsi_type=["delta_psi","delta_psi_rel"])
+
+rule preprocess_ccle:
+    input:
+        sample_info = os.path.join(RAW_DIR,"DepMap","achilles_ccle","sample_info.csv"),
+        ccle_cancer_types = os.path.join(RAW_DIR,"articles","Yu2019","ccle_metadata.xls"),
+        sample_annotation = os.path.join(RAW_DIR,"CCLE","ENA_filereport-PRJNA523380-CCLE.tsv"),
+        psi = os.path.join(RAW_DIR,'CCLE','vast_out','PSI-minN_1-minSD_0-noVLOW-min_ALT_use25-Tidy.tab.gz'),
+        genexpr = os.path.join(RAW_DIR,'CCLE','vast_out','TPM-hg38-1019.tab.gz')
+    output:
+        metadata = os.path.join(PREP_DIR,"metadata","CCLE.tsv.gz"),
+        psi_EX = os.path.join(PREP_DIR,'event_psi','CCLE-EX.tsv.gz'),
+        psi_ALTA = os.path.join(PREP_DIR,'event_psi','CCLE-ALTA.tsv.gz'),
+        psi_ALTD = os.path.join(PREP_DIR,'event_psi','CCLE-ALTD.tsv.gz'),
+        psi_INT = os.path.join(PREP_DIR,'event_psi','CCLE-INT.tsv.gz'),
+        genexpr = os.path.join(PREP_DIR,'genexpr_tpm','CCLE.tsv.gz')      
+    run:
+        import gc
+        import pandas as pd
+        import numpy as np
+        
+        # load
+        print("Loading data...")
+        sample_info = pd.read_csv(input.sample_info)
+        cancer_types = pd.read_excel(input.ccle_cancer_types)
+        sample_annot = pd.read_table(input.sample_annotation)
+        psi = pd.read_table(input.psi, index_col=0)
+        genexpr = pd.read_table(input.genexpr, index_col=[0,1])
+        
+        gc.collect()
+        
+        # metadata
+        ## preprocess
+        sample_annot = sample_annot.rename(
+            columns={"sample_alias": "CCLE_Name"}
+        )
+        sample_annot = sample_annot.loc[sample_annot["library_strategy"] == "RNA-Seq"]
+        cancer_types = cancer_types.rename(
+            columns={"CCLE_name": "CCLE_Name", "disease": "cancer_type"}
+        )
+
+        ## combine
+        metadata = pd.merge(sample_info, cancer_types, on="CCLE_Name", how="left")
+        metadata = pd.merge(
+            metadata,
+            sample_annot[["run_accession", "CCLE_Name"]],
+            on="CCLE_Name",
+            how="left",
+        )   
+        
+        # PSI
+        print("Processing PSI matrix...")
+        ## drop empty rows
+        is_na = psi.isnull()
+        non_missing = is_na.shape[1] - is_na.sum(1)
+        to_keep = non_missing >= 1
+        psi = psi.loc[to_keep]
+        
+        ## remove vast-tools' suffix
+        psi.columns = [c.replace('_1','') for c in psi.columns]
+        
+        ## split by event type
+        event_types = ["EX","ALTA","ALTD","INT"]
+        psis = {e: psi.loc[psi.index.str.contains(e)] for e in event_types}
+        
+        # TPM
+        print("Processing TPM matrix...")
+        ## remove vast-tools' suffix
+        genexpr.columns = [c.replace('_1','') for c in genexpr.columns]
+        
+        # subset
+        ## find common samples
+        common_samples = set(metadata["run_accession"]).intersection(
+            psis["EX"].columns
+        ).intersection(
+            genexpr.columns
+        )
+        psis = {e: psis[e][common_samples].copy() for e in event_types}
+        genexpr = genexpr[common_samples].copy()
+        metadata = metadata.loc[metadata["run_accession"].isin(common_samples)]
+        
+        ## rename columns
+        psis = {
+            e: psis[e].rename(
+                columns=metadata.set_index("run_accession")["DepMap_ID"].to_dict()
+                ).copy() 
+            for e in event_types
+        }
+        genexpr = genexpr.rename(
+            columns=metadata.set_index("run_accession")["DepMap_ID"].to_dict()
+        ).copy()
+        
+        # save
+        print("Saving...")
+        ## metadata
+        metadata.to_csv(output.metadata, **SAVE_PARAMS)
+
+        ## PSIs
+        psis["EX"].reset_index().to_csv(output.psi_EX, **SAVE_PARAMS)
+        psis["ALTD"].reset_index().to_csv(output.psi_ALTD, **SAVE_PARAMS)
+        psis["ALTA"].reset_index().to_csv(output.psi_ALTA, **SAVE_PARAMS)
+        psis["INT"].reset_index().to_csv(output.psi_INT, **SAVE_PARAMS)
+        
+        ## TPMs
+        genexpr.reset_index().drop(columns='NAME').to_csv(output.genexpr, **SAVE_PARAMS)
+        
+        print("Done!")        
+        
+        
+    
+rule preprocess_encore:
+    input:
+        metadata = os.path.join(RAW_DIR,'ENCODE','ENCORE','metadata','ENCORE.tsv'),
+        psi = os.path.join(RAW_DIR,'ENCODE','ENCORE','vast_out','PSI-minN_1-minSD_0-noVLOW-min_ALT_use25-Tidy.tab.gz'),
+        genexpr = os.path.join(RAW_DIR,'ENCODE','ENCORE','vast_out','TPM-hg38-1097.tab.gz')
+    output:
+        metadata = os.path.join(PREP_DIR,'metadata','ENCORE.tsv.gz'),
+        psi_EX = os.path.join(PREP_DIR,'event_psi','ENCORE-EX.tsv.gz'),
+        psi_ALTA = os.path.join(PREP_DIR,'event_psi','ENCORE-ALTA.tsv.gz'),
+        psi_ALTD = os.path.join(PREP_DIR,'event_psi','ENCORE-ALTD.tsv.gz'),
+        psi_INT = os.path.join(PREP_DIR,'event_psi','ENCORE-INT.tsv.gz'),
+        genexpr = os.path.join(PREP_DIR,'genexpr_tpm','ENCORE.tsv.gz')
+    run:
+        import gc
+        import pandas as pd
+        import numpy as np
+        
+        # load
+        print("Loading data...")
+        metadata = pd.read_table(input.metadata)
+        psi = pd.read_table(input.psi, index_col=0)
+        genexpr = pd.read_table(input.genexpr, index_col=[0,1])
+        
+        gc.collect()
+        
+        # metadata
+        print("Processing metadata...")
+        ## sample names
+        metadata["sampleID"] = metadata["dbxrefs"].str.replace("SRA:","")
+        ## cell lines info
+        metadata["cell_line"] = metadata["Biosample term name"]
+        depmapids = {"K562":"ACH-000551", "HepG2":"ACH-000739"}
+        metadata["DepMap_ID"] = [depmapids[c] for c in metadata["cell_line"]]
+        ## KD info
+        metadata["KD_GENE"] = metadata["Experiment target"].str.replace("-human","")
+        gene_annot = genexpr.index.to_frame().rename(columns={"ID":"KD_ENSEMBL", "NAME":"KD_GENE"})
+        metadata = pd.merge(metadata, gene_annot, how="left", on="KD_GENE")
+        ## experiment
+        metadata["experiment"] = metadata["Experiment accession"]
+        ## replicate
+        metadata["replicate"] = metadata["Biological replicate(s)"]
+        
+        ## controls
+        ctls_exps = []
+        ctls_samps = []
+        for idx, row in metadata.iterrows():
+            if isinstance(row["Controlled by"], str):
+                # get file accession controls
+                accs = row["Controlled by"]\
+                        .replace("files","")\
+                        .replace("/","")\
+                        .replace(" ","")\
+                        .split(",")
+                idx = metadata["File accession"].isin(accs)
+
+                # get experiment accession
+                exps = metadata.loc[idx, "experiment"].unique()
+                
+                # get sample accession
+                samps = metadata.loc[idx, "sampleID"].unique()
+                
+                # save
+                exps = ','.join(np.sort(exps))
+                samps = ','.join(np.sort(samps))
+                ctls_exps.append(exps)
+                ctls_samps.append(samps)
+            else:
+                ctls_exps.append(np.nan)
+                ctls_samps.append(np.nan)
+        metadata["control_experiment"] = ctls_exps
+        metadata["control_samples"] = ctls_samps
+        
+        cols_oi = ['sampleID','cell_line', 'DepMap_ID', 'KD_GENE', 'KD_ENSEMBL', 'experiment', 
+                   'control_experiment', 'control_samples','replicate']
+        metadata = metadata[cols_oi].drop_duplicates()
+        
+        # PSI
+        print("Processing PSI matrix...")
+        ## drop empty rows
+        is_na = psi.isnull()
+        non_missing = is_na.shape[1] - is_na.sum(1)
+        to_keep = non_missing >= 1
+        psi = psi.loc[to_keep]
+        
+        ## remove vast-tools' suffix
+        psi.columns = [c.replace('_1','') for c in psi.columns]
+        
+        ## split by event type
+        event_types = ["EX","ALTA","ALTD","INT"]
+        psis = {e: psi.loc[psi.index.str.contains(e)] for e in event_types}
+        
+        # TPM
+        print("Processing TPM matrix...")
+        ## remove vast-tools' suffix
+        genexpr.columns = [c.replace('_1','') for c in genexpr.columns]
+        
+        # save
+        print("Saving...")
+        ## metadata
+        metadata.to_csv(output.metadata, **SAVE_PARAMS)
+        
+        ## PSIs
+        psis["EX"].reset_index().to_csv(output.psi_EX, **SAVE_PARAMS)
+        psis["ALTD"].reset_index().to_csv(output.psi_ALTD, **SAVE_PARAMS)
+        psis["ALTA"].reset_index().to_csv(output.psi_ALTA, **SAVE_PARAMS)
+        psis["INT"].reset_index().to_csv(output.psi_INT, **SAVE_PARAMS)
+        
+        ## TPMs
+        genexpr.reset_index().drop(columns='NAME').to_csv(output.genexpr, **SAVE_PARAMS)
+        
+        print("Done!")
+        
+
+rule diff_tpm_encore:
+    input:
+        metadata = os.path.join(PREP_DIR,'metadata','ENCORE.tsv.gz'),
+        genexpr = os.path.join(RAW_DIR,'ENCODE','ENCORE','vast_out','TPM-hg38-1097.tab.gz')
+    output:
+        diff_tpm = os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE','log2_fold_change_tpm.tsv.gz')
+    run:
+        import pandas as pd
+        import numpy as np
+        
+        metadata = pd.read_table(input.metadata)
+        genexpr = pd.read_table(input.genexpr, index_col=[0,1])
+        
+        # log transform
+        genexpr = np.log2(genexpr + 1)
+        genexpr.columns = [c.replace("_1","") for c in genexpr.columns]
+        
+        # as the difference between conditions and the mean of the conditions
+        diff_tpm = {}
+        for sample_oi in metadata["sampleID"]:
+            # get the controls of the sample
+            ctls = metadata.loc[metadata["sampleID"]==sample_oi, "control_samples"].values[0]
+            
+            # controls will be np.nan
+            if isinstance(ctls,str):
+                ctls = ctls.split(",")
+                tpm_ctls = genexpr[ctls].mean(axis=1)
+                
+                # compute log2 fold-change
+                dtpm = genexpr[sample_oi] - tpm_ctls
+                
+                diff_tpm[sample_oi] = dtpm
+                
+                del dtpm, tpm_ctls, ctls
+                
+        diff_tpm = pd.DataFrame(diff_tpm)
+        
+        # save
+        diff_tpm.reset_index().to_csv(output.diff_tpm, sep="\t", index=False, compression="gzip")
+        
+        print("Done!")
+        
+        
+rule delta_psi_encore:
+    input:
+        metadata = os.path.join(PREP_DIR,'metadata','ENCORE.tsv.gz'),
+        psi = os.path.join(PREP_DIR,'event_psi','ENCORE-{event_type}.tsv.gz')
+    output:
+        delta_psi = os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE','delta_psi-{event_type}.tsv.gz'),
+        delta_psi_rel = os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE','delta_psi_rel-{event_type}.tsv.gz')
+    run:
+        import pandas as pd
+        import numpy as np
+        
+        metadata = pd.read_table(input.metadata)
+        psi = pd.read_table(input.psi, index_col=0)
+        
+        # delta PSI as the difference between conditions and the mean of the conditions
+        delta_psi = {}
+        delta_psi_rel = {}
+        for sample_oi in metadata["sampleID"]:
+            # get the controls of the sample
+            ctls = metadata.loc[metadata["sampleID"]==sample_oi, "control_samples"].values[0]
+            
+            # controls will be np.nan
+            if isinstance(ctls,str):
+                ctls = ctls.split(",")
+                psi_ctls = psi[ctls].mean(axis=1)
+                
+                # compute delta PSI
+                dpsi = psi[sample_oi] - psi_ctls
+                
+                # compute relative delta PSI (% changed of possible change w.r.t control)
+                extreme_psi = dpsi.copy()
+                extreme_psi[dpsi < 0] = 0 - psi_ctls # if it has decreased, the minimum inclusion
+                extreme_psi[dpsi > 0] = 100 - psi_ctls # if it has increased, the maximum inclusion
+                extreme_psi[dpsi == 0] = 1 # no change (for completeness)
+                ## what percentage of the maximum possible change in inclusion has occured?
+                rel_dpsi = np.sign(dpsi) * (dpsi / extreme_psi) * 100
+                
+                delta_psi[sample_oi] = dpsi
+                delta_psi_rel[sample_oi] = rel_dpsi
+                
+                del dpsi, rel_dpsi, psi_ctls, ctls
+                
+        
+        delta_psi = pd.DataFrame(delta_psi)
+        delta_psi_rel = pd.DataFrame(delta_psi_rel)
+        
+        # save
+        delta_psi.reset_index().to_csv(output.delta_psi, sep="\t", index=False, compression="gzip")
+        delta_psi_rel.reset_index().to_csv(output.delta_psi_rel, sep="\t", index=False, compression="gzip")
+        
+        print("Done!")
+        
+        
+rule prepare_ground_truth_kd:
+    input:
+        metadata = os.path.join(PREP_DIR,'metadata','ENCORE.tsv.gz'),
+        dpsi = os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE','{dpsi_type}-{event_type}.tsv.gz'),
+    output:
+        dpsi = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE','{dpsi_type}-{event_type}.tsv.gz')
+    run:
+        import pandas as pd
+        
+        metadata = pd.read_table(input.metadata)
+        dpsi = pd.read_table(input.dpsi, index_col=0)
+        
+        # drop control samples
+        metadata = metadata.loc[~metadata["KD_ENSEMBL"].isnull()].copy()
+        
+        dpsis = []
+        for ensembl in metadata["KD_ENSEMBL"].unique():
+            samples_oi = metadata.loc[metadata["KD_ENSEMBL"]==ensembl, "sampleID"]
+            dpsi_avg = dpsi[samples_oi].mean(axis=1)
+            dpsi_avg.name = ensembl
+            dpsis.append(dpsi_avg)
+            
+        dpsis = pd.concat(dpsis, axis=1)
+        dpsis.reset_index().to_csv(output.dpsi, **SAVE_PARAMS)
+        
+        print("Done!")
+    
