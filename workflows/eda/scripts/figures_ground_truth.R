@@ -248,8 +248,8 @@ main = function(){
     
     # correlate genes together
     correls = rbind(
-        compute_correlations(dpsi_k562[,1:25], dpsi_hepg2[,1:25]) %>% mutate(data_type="dpsi"),
-        compute_correlations(rel_k562[,1:25], rel_hepg2[,1:25]) %>% mutate(data_type="rel_dpsi")
+        compute_correlations(dpsi_k562, dpsi_hepg2) %>% mutate(data_type="dpsi"),
+        compute_correlations(rel_k562, rel_hepg2) %>% mutate(data_type="rel_dpsi")
     )
     
     # plot

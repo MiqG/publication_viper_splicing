@@ -30,7 +30,7 @@ rule figures_ground_truth:
         rel_k562 = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE','K562','delta_psi_rel-EX.tsv.gz'),
         rel_hepg2 = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE','HepG2','delta_psi_rel-EX.tsv.gz')
     output:
-        figs_dir = directory(os.path.join(RESULTS_DIR,'figures','ground_truth'))
+        directory(os.path.join(RESULTS_DIR,'figures','ground_truth'))
     shell:
         """
         nice Rscript scripts/figures_ground_truth.R \
