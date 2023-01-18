@@ -24,7 +24,10 @@ rule all:
         
         # evaluation
         expand(os.path.join(RESULTS_DIR,"files","inference_evaluation","{method}-{cell_line}.tsv.gz"), method=METHODS_INFER, cell_line=CELL_LINES),
-        os.path.join(RESULTS_DIR,"files","inference_evaluation","merged.tsv.gz")
+        os.path.join(RESULTS_DIR,"files","inference_evaluation","merged.tsv.gz"),
+        
+        # make figures
+        os.path.join(RESULTS_DIR,'figures','target_inference')
         
 rule target_inference:
     input:
@@ -94,3 +97,14 @@ rule combine_inference_evaluations:
             
         print("Done!")
         
+rule figures_target_inference:
+    input:
+        evaluation = os.path.join(RESULTS_DIR,"files","inference_evaluation","merged.tsv.gz")
+    output:
+        directory(os.path.join(RESULTS_DIR,'figures','target_inference'))
+    shell:
+        """
+        nice Rscript scripts/figures_target_inference.R \
+                    --evaluation_file={input.evaluation} \
+                    --figs_dir={output}
+        """
