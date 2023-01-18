@@ -1,0 +1,42 @@
+"""
+Author: Miquel Anglada Girotto
+Contact: miquelangladagirotto [at] gmail [dot] com
+Last Update: 2021-01-12
+
+Workflow purpose
+--------------
+Preprocess raw data.
+"""
+
+import os
+
+# variables
+ROOT = os.path.dirname(os.path.dirname(os.getcwd()))
+RAW_DIR = os.path.join(ROOT,"data","raw")
+SRC_DIR = os.path.join(ROOT,"src")
+PREP_DIR = os.path.join(ROOT,"data","prep")
+RESULTS_DIR = os.path.join(ROOT,"results","eda")
+
+##### RULES #####
+rule all:
+    input:
+        # figures whether rel. delta PSI is better for ground truth
+        os.path.join(RESULTS_DIR,'figures','ground_truth')
+
+rule figures_ground_truth:
+    input:
+        dpsi_k562 = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE','K562','delta_psi-EX.tsv.gz'),
+        dpsi_hepg2 = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE','HepG2','delta_psi-EX.tsv.gz'),
+        rel_k562 = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE','K562','delta_psi_rel-EX.tsv.gz'),
+        rel_hepg2 = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE','HepG2','delta_psi_rel-EX.tsv.gz')
+    output:
+        figs_dir = directory(os.path.join(RESULTS_DIR,'figures','ground_truth'))
+    shell:
+        """
+        nice Rscript scripts/figures_ground_truth.R \
+                --dpsi_k562_file={input.dpsi_k562} \
+                --dpsi_hepg2_file={input.dpsi_hepg2} \
+                --rel_k562_file={input.rel_k562} \
+                --rel_hepg2_file={input.rel_hepg2} \
+                --figs_dir={output}          
+        """
