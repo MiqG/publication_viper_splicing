@@ -123,6 +123,9 @@ rule preprocess_ccle:
         ## remove vast-tools' suffix
         genexpr.columns = [c.replace('_1','') for c in genexpr.columns]
         
+        ## log-transform
+        genexpr = np.log2(genexpr + 1)
+        
         # subset
         ## find common samples
         common_samples = set(metadata["run_accession"]).intersection(
