@@ -11,22 +11,30 @@ require(ggpubr)
 require(cowplot)
 require(scattermore)
 require(optparse)
+require(ggrepel)
+require(extrafont)
 
-ROOT = here::here()
 
 # variables
 
+# formatting
+FONT_SIZE = 2
+FONT_FAMILY = "Arial"
+
 # Development
 # -----------
+# ROOT = here::here()
 # PREP_DIR = file.path(ROOT,'data','prep')
 # eclip_file = file.path(PREP_DIR,"eclip_peaks_mapped","merged.tsv.gz")
-# delta_psi_file = file.path(PREP_DIR,"kd_transcriptomes","ENCORE","delta_psi-EX.tsv.gz")
-# delta_psi_file = file.path(PREP_DIR,"kd_transcriptomes","ENCORE","delta_psi_rel-EX.tsv.gz")
+# delta_psi_hepg2_file = file.path(PREP_DIR,"ground_truth_kd","ENCORE","HepG2","delta_psi-EX.tsv.gz")
+# delta_psi_k562_file = file.path(PREP_DIR,"ground_truth_kd","ENCORE","K562","delta_psi-EX.tsv.gz")
+# delta_psi_hepg2_file = file.path(PREP_DIR,"ground_truth_kd","ENCORE","HepG2","delta_psi_rel-EX.tsv.gz")
+# delta_psi_k562_file = file.path(PREP_DIR,"ground_truth_kd","ENCORE","K562","delta_psi_rel-EX.tsv.gz")
 # metadata_file = file.path(PREP_DIR,'metadata','ENCORE.tsv.gz')
 # figs_dir = file.path(ROOT,'results','eda','figures','eda')
 
 ##### FUNCTIONS #####
-plot_comparison = function(eclip, dpsi){
+plot_comparison = function(eclip, binding_dpsi){
     plts = list()
     
     # do strong splicing changes occur where the RBP binds?
@@ -42,108 +50,39 @@ plot_comparison = function(eclip, dpsi){
         labs(x="log2(FC)", y="log10(p-value)")
     
     # distributions of delta PSI vs binds RBP or not
-    dpsi %>%
-        ggboxplot(x="binds_rbp", y="abs_deltaPSI") +
-        stat_compare_means(method="wilcox.test") +
-        facet_wrap(~KD_GENE+cell_line)
-    
-    dpsi %>% 
-        mutate(deltaPSI_binned = cut(abs_deltaPSI, breaks=seq(0,100,5))) %>%
-        drop_na() %>%
-        count(KD_GENE, cell_line, deltaPSI_binned, binds_rbp) %>%
-        group_by(KD_GENE, cell_line, binds_rbp) %>%
-        mutate(perc = n / sum(n)) %>%
-        ungroup() %>%
-        group_by(KD_GENE, cell_line, deltaPSI_binned) %>%
-        mutate(rel_perc = perc / sum(perc)) %>%
-        ungroup() %>%        
-        ggbarplot(x="deltaPSI_binned", y="rel_perc", fill="binds_rbp") +
-        facet_wrap(~KD_GENE+cell_line) +
-        theme_pubr(x.text.angle = 70)
-    
-    # KD_GENE PSI changes vs eCLIP peaks
-    X = eclip %>%
-        left_join(dpsi, by=c("EVENT","cell_line","rbp"="KD_GENE")) %>%
-        drop_na(deltaPSI)
-    
-    # does change in PSI correlate with eCLIP features?
-    plts[["comparison-dpsi_vs_fc"]] = X %>% 
-        ggplot(aes(x=deltaPSI, y=log2_fc)) +
-        geom_scattermore(pointsize=8, alpha=0.5) +
-        facet_wrap(~cell_line+bin_abs_distance_event_to_peak) +
-        stat_cor(method="spearman") +
+    plts[["comparison-dpsi_vs_rbp_binding-scatter"]] = binding_dpsi %>%
+        ggplot(aes(x=delta_abs_psi, y=-log10(p.adj))) +
+        geom_point(size=1) +
         theme_pubr() +
-        theme(aspect.ratio=1) +
-        labs(x="Delta PSI", y="log2(FC)")
-
-    plts[["comparison-dpsi_vs_pvalue"]] = X %>%
-        ggplot(aes(x=deltaPSI, y=log10_pvalue)) +
-        geom_scattermore(pointsize=8, alpha=0.5) +
         facet_wrap(~cell_line) +
-        stat_cor(method="spearman") +
-        theme_pubr() +
-        theme(aspect.ratio=1) +
-        labs(x="Delta PSI", y="log10(p-value)")
-    
-    plts[["comparison-abs_dpsi_vs_fc"]] = X %>%
-        ggplot(aes(x=abs(deltaPSI), y=log2_fc)) +
-        geom_scattermore(pointsize=8, alpha=0.5) +
-        facet_wrap(~cell_line) +
-        stat_cor(method="spearman") +
-        theme_pubr() +
-        theme(aspect.ratio=1) +
-        labs(x="|Delta PSI|", y="log2(FC)")
-
-    plts[["comparison-abs_dpsi_vs_pvalue"]] = X %>%
-        ggplot(aes(x=abs(deltaPSI), y=log10_pvalue)) +
-        geom_scattermore(pointsize=8, alpha=0.5) +
-        facet_wrap(~cell_line) +
-        stat_cor(method="spearman") +
-        theme_pubr() +
-        theme(aspect.ratio=1) +
-        labs(x="|Delta PSI|", y="log10(p-value)")
-
-    
-    # should we consider the distances to event splice sites?
-    X %>%
-        count(peak_position) %>%
-        ggbarplot(x="peak_position", y="n")
-    
-    plts[["comparison-distances"]] = X %>%
-        gghistogram(x="distance_event_to_peak") +
-        facet_wrap(~peak_position+cell_line, scales="free")
-    
-    # correlation between delta PSI and FC or p-value
-    x = X %>%
-        filter(abs(deltaPSI)>5) %>%
-        group_by(cell_line, rbp) %>%
-        summarize(correlation = cor(deltaPSI, log2_fc, method="spearman")) %>%
-        ungroup()
-    
-    plts[[""]] = x %>%
-        gghistogram(x="correlation") +
-        facet_wrap(~cell_line)
-    
-
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        geom_text_repel(
+            aes(label=KD_GENE),
+            . %>% group_by(cell_line) %>% slice_max(delta_abs_psi, n=1) %>% ungroup(),
+            size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        labs(x="|deltaPSI| Binding vs Not Binding", y="-log10(FDR)")
     
     return(plts)
 }
 
 
-make_plots = function(){
+make_plots = function(eclip, binding_dpsi){
     plts = list(
-        plot_model_selection(),
+        plot_comparison(eclip, binding_dpsi)
     )
     plts = do.call(c,plts)
     return(plts)
 }
 
 
-make_figdata = function(){
+make_figdata = function(eclip, binding_dpsi, dpsi){
 
     figdata = list(
-        "model_selection" = list(
-            "model_summaries"= models,
+        "eclip_vs_kd" = list(
+            "eclip" = eclip,
+            "binding_dpsi" = binding_dpsi,
+            "dpsi" = dpsi
         )
     )
     return(figdata)
@@ -166,8 +105,8 @@ save_plt = function(plts, plt_name, extension=".pdf",
 
 
 save_plots = function(plts, figs_dir){
-    # model selection
-    save_plt(plts, "model_sel-deps_sorted_vs_std_ctl_neg", ".pdf", figs_dir, width=5, height=5)
+    save_plt(plts, "comparison-fc_vs_pvalue", ".pdf", figs_dir, width=8, height=5)
+    save_plt(plts, "comparison-dpsi_vs_rbp_binding-scatter", ".pdf", figs_dir, width=8, height=5)    
 }
 
 
@@ -189,7 +128,9 @@ parseargs = function(){
     
     option_list = list( 
         make_option("--eclip_file", type="character"),
-        make_option("--delta_psi_file", type="character"),
+        make_option("--delta_psi_hepg2_file", type="character"),
+        make_option("--delta_psi_k562_file", type="character"),
+        make_option("--metadata_file", type="character"),
         make_option("--figs_dir", type="character")
     )
 
@@ -203,7 +144,8 @@ main = function(){
     args = parseargs()
     
     eclip_file = args[["eclip_file"]]
-    delta_psi_file = args[["delta_psi_file"]]
+    delta_psi_hepg2_file = args[["delta_psi_hepg2_file"]]
+    delta_psi_k562_file = args[["delta_psi_k562_file"]]
     metadata_file = args[["metadata_file"]]
     figs_dir = args[["figs_dir"]]
     
@@ -211,7 +153,8 @@ main = function(){
     
     # load
     eclip = read_tsv(eclip_file)
-    delta_psi = read_tsv(delta_psi_file)
+    delta_psi_hepg2 = read_tsv(delta_psi_hepg2_file)
+    delta_psi_k562 = read_tsv(delta_psi_k562_file)
     metadata = read_tsv(metadata_file)
     
     gc()
@@ -219,7 +162,8 @@ main = function(){
     # preprocess
     eclip = eclip %>%
         filter(str_detect(sample_id,"HepG2") | str_detect(sample_id,"K562")) %>%
-        separate(sample_id, into = c("rbp","cell_line","idr"), remove=FALSE)
+        separate(sample_id, into = c("rbp_GENE","cell_line","idr"), remove=FALSE) %>%
+        left_join(metadata %>% distinct(KD_GENE, KD_ENSEMBL), by=c("rbp_GENE"="KD_GENE"))
     
     # measure distances
     ## event coordinates vs peak
@@ -262,40 +206,59 @@ main = function(){
             bin_abs_distance_event_to_peak = cut(abs_distance_event_to_peak, breaks=seq(0,250,50))
         )
     
-    events_oi = eclip %>% distinct(EVENT) %>% pull()
-    samples_oi = metadata %>%
-        filter(KD_GENE %in% (eclip %>% pull(rbp))) %>%
-        filter(KD_GENE %in% c("AQR","SF3B1")) %>%
-        distinct(sampleID) %>%
-        pull(sampleID)
-    dpsi = delta_psi %>%
-        # only measured eCLIPs
-        dplyr::select(all_of(c("EVENT",samples_oi))) %>%
-        # drop all NA
-        filter(rowSums(!is.na(across(all_of(samples_oi)))) > 0) %>%
-        pivot_longer(-EVENT, names_to="sampleID", values_to="deltaPSI") %>%
-        drop_na() %>%
-        left_join(metadata %>% distinct(sampleID,cell_line,KD_GENE), by="sampleID") %>%
-        group_by(EVENT, cell_line, KD_GENE) %>%
-        summarize(deltaPSI = median(deltaPSI, na.rm=TRUE)) %>%
-        ungroup() %>%
-        drop_na(deltaPSI) %>%
+    # combine
+    dpsi = rbind(
+            delta_psi_hepg2 %>%
+            pivot_longer(-EVENT, names_to="KD_ENSEMBL", values_to="deltaPSI") %>%
+            drop_na() %>% mutate(cell_line="HepG2"),
+            delta_psi_k562 %>%
+            pivot_longer(-EVENT, names_to="KD_ENSEMBL", values_to="deltaPSI") %>%
+            drop_na() %>% mutate(cell_line="K562")
+        ) %>%  
         left_join(
             eclip %>% 
-            distinct(EVENT, cell_line, rbp) %>%
+            distinct(EVENT, cell_line, KD_ENSEMBL) %>%
             mutate(binds_rbp = TRUE), 
-            by=c("EVENT","cell_line","KD_GENE"="rbp")
+            by=c("EVENT","cell_line","KD_ENSEMBL")
+        ) %>%
+        left_join(
+            metadata %>% distinct(KD_GENE, KD_ENSEMBL), by="KD_ENSEMBL"
         ) %>%
         mutate(
             binds_rbp = replace_na(binds_rbp, FALSE),
             abs_deltaPSI = abs(deltaPSI)
         )
     
+    # compare |dPSI| of events binding vs not binding
+    kds_oi = dpsi %>% 
+        count(KD_ENSEMBL, cell_line) %>% 
+        count(KD_ENSEMBL) %>% 
+        filter(n>1) %>%
+        pull(KD_ENSEMBL)
+    tests = dpsi %>%
+        filter(KD_ENSEMBL %in% kds_oi) %>%
+        compare_means(
+            formula = abs_deltaPSI ~ binds_rbp,
+            method = "wilcox.test",
+            group.by = c("KD_ENSEMBL","cell_line"),
+            p.adjust.method = "fdr"
+        )
+    binding_dpsi = dpsi %>%
+        group_by(KD_GENE, KD_ENSEMBL, cell_line, binds_rbp) %>%
+        summarize(med_abs_dpsi = median(abs_deltaPSI, na.rm=TRUE)) %>%
+        ungroup() %>%
+        mutate(binds_rbp = ifelse(binds_rbp, "abs_psi_binding", "abs_psi_nobinding")) %>%
+        pivot_wider(names_from="binds_rbp", values_from="med_abs_dpsi") %>%
+        mutate(delta_abs_psi = abs_psi_binding - abs_psi_nobinding) %>%
+        left_join(
+            tests, by=c("KD_ENSEMBL","cell_line")
+        )
+    
     # plot
-    plts = make_plots()
+    plts = make_plots(eclip, binding_dpsi)
 
     # make figdata
-    figdata = make_figdata()
+    figdata = make_figdata(eclip, binding_dpsi, dpsi)
     
     # save
     save_plots(plts, figs_dir)

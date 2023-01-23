@@ -21,7 +21,10 @@ RESULTS_DIR = os.path.join(ROOT,"results","eda")
 rule all:
     input:
         # figures whether rel. delta PSI is better for ground truth
-        os.path.join(RESULTS_DIR,'figures','ground_truth')
+        os.path.join(RESULTS_DIR,'figures','ground_truth'),
+        
+        # figures comparing targets from eCLIP with targets from KD
+        os.path.join(ROOT,'results','eda','figures','eda')
 
 rule figures_ground_truth:
     input:
@@ -39,4 +42,22 @@ rule figures_ground_truth:
                 --rel_k562_file={input.rel_k562} \
                 --rel_hepg2_file={input.rel_hepg2} \
                 --figs_dir={output}          
+        """
+        
+rule figures_eclip_vs_kd:
+    input:
+        eclip = os.path.join(PREP_DIR,"eclip_peaks_mapped","merged.tsv.gz"),
+        delta_psi_hepg2 = os.path.join(PREP_DIR,"ground_truth_kd","ENCORE","HepG2","delta_psi-EX.tsv.gz"),
+        delta_psi_k562 = os.path.join(PREP_DIR,"ground_truth_kd","ENCORE","K562","delta_psi-EX.tsv.gz"),
+        metadata = os.path.join(PREP_DIR,'metadata','ENCORE.tsv.gz')
+    output:
+        directory(os.path.join(ROOT,'results','eda','figures','eda'))
+    shell:
+        """
+        nice Rscript scripts/figures_eclip_vs_kd.R \
+                    --eclip_file={input.eclip} \
+                    --delta_psi_hepg2_file={input.delta_psi_hepg2} \
+                    --delta_psi_k562_file={input.delta_psi_k562} \
+                    --metadata_file={input.metadata} \
+                    --figs_dir={output}
         """
