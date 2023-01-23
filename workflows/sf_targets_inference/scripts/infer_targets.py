@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 # variables
 N_JOBS = 1
-SAVE_PARAMS = {"sep":"\t", "compression":"gzip", "index":False}
+SAVE_PARAMS = {"sep": "\t", "compression": "gzip", "index": False}
 
 """
 Development
@@ -46,22 +46,29 @@ def load_data(splicing_file, genexpr_file, gene_sources_file):
     common_samples = set(splicing.columns).intersection(genexpr.columns)
     splicing = splicing[common_samples].copy()
     genexpr = genexpr[common_samples].copy()
-
+    
+    # drop events with no variation
+    splicing = splicing.loc[splicing.std(1) > 0]
+    
+    # normalize
+    splicing = (splicing - splicing.mean(1).values.reshape(-1,1)) / splicing.std(1).values.reshape(-1,1)
+    genexpr = (genexpr - genexpr.mean(1).values.reshape(-1,1)) / genexpr.std(1).values.reshape(-1,1)
+    
     gc.collect()
 
     return splicing, genexpr
 
 
-def compute_correlation_single(splicing, genexpr_single):
-    correl = splicing.T.corrwith(genexpr_single.T, method="spearman")
+def compute_correlation_single(splicing, genexpr_single, method):
+    correl = splicing.T.corrwith(genexpr_single.T, method=method)
     correl.name = genexpr_single.name
 
     return correl
 
 
-def compute_correlations(splicing, genexpr, n_jobs):
+def compute_correlations(splicing, genexpr, n_jobs, method):
     correls = Parallel(n_jobs=n_jobs)(
-        delayed(compute_correlation_single)(splicing, genexpr.loc[gene_oi])
+        delayed(compute_correlation_single)(splicing, genexpr.loc[gene_oi], method)
         for gene_oi in tqdm(genexpr.index)
     )
     result = pd.concat(correls, axis=1)
@@ -74,8 +81,11 @@ def compute_correlations(splicing, genexpr, n_jobs):
 
 def infer_targets(splicing, genexpr, method, n_jobs):
 
-    if method == "correlation":
-        result = compute_correlations(splicing, genexpr, n_jobs)
+    if method == "correlation_spearman":
+        result = compute_correlations(splicing, genexpr, n_jobs, "spearman")
+
+    elif method == "correlation_pearson":
+        result = compute_correlations(splicing, genexpr, n_jobs, "pearson")
 
     result = result.reset_index()
 

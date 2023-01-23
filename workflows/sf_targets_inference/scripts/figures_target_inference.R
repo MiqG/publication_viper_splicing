@@ -12,7 +12,6 @@ require(tidyverse)
 require(ggpubr)
 require(cowplot)
 require(scattermore)
-require(ggrepel)
 require(extrafont)
 
 # variables
@@ -39,22 +38,53 @@ plot_evaluation = function(evaluation){
     
     X = evaluation
     
-    n_kds = evaluation %>%
-        distinct(kd_cell_line, KD_ENSEMBL) %>%
-        count(kd_cell_line) %>%
+    n_kds = X %>%
+        distinct(sf_target_inference_method, kd_cell_line, KD_ENSEMBL) %>%
+        count(sf_target_inference_method, kd_cell_line) %>%
         mutate(label=sprintf("%s (n=%s)",kd_cell_line,n))
     
     plts[["evaluation-thresh_vs_prop_correct-line"]] = X %>%
-        left_join(n_kds, by="kd_cell_line") %>%
+        left_join(n_kds, by=c("sf_target_inference_method","kd_cell_line")) %>%
         ggplot(aes(x=threshold_classification, y=prop_correct, group=KD_ENSEMBL)) +
         geom_line(size=0.1, color="grey", alpha=0.5) +
         geom_smooth(aes(color=kd_cell_line, fill=kd_cell_line, group=kd_cell_line), 
                     se=FALSE, span=0.2, size=LINE_SIZE, linetype="dashed", alpha=0.5, method="loess") +
         color_palette("Dark2") +
         theme_pubr(legend="none") +
-        facet_wrap(~label) +
+        facet_wrap(~label+sf_target_inference_method) +
         theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
-        labs(x="Classification Threshold", y="Proportion Correct")
+        labs(x="Classification Threshold", y="Proportion Correct") +
+        lims(x=c(0,1), y=c(0,1))
+    
+    x = X %>%
+        left_join(n_kds, by=c("kd_cell_line","sf_target_inference_method")) %>% 
+        group_by(sf_target_inference_method, label, kd_cell_line, threshold_classification) %>%
+        summarize(
+            med_tpr=median(tpr, na.rm=TRUE), 
+            med_fpr=median(fpr, na.rm=TRUE),
+            med_recall=median(recall, na.rm=TRUE),
+            med_precision=median(precision, na.rm=TRUE)
+        )
+    plts[["evaluation-fpr_vs_tpr-line"]] = x %>%
+        arrange(threshold_classification) %>%
+        ggplot(aes(x=med_fpr, y=med_tpr)) +
+        geom_line(aes(color=sf_target_inference_method), size=LINE_SIZE, linetype="dashed") +
+        geom_point(aes(color=sf_target_inference_method), size=1) +
+        color_palette("Dark2") +
+        facet_wrap(~label) +
+        theme_pubr() + 
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="FPR", y="TPR", color="Inference Method")
+    
+    plts[["evaluation-recall_vs_precision-line"]] = x %>%
+        ggplot(aes(x=med_recall, y=med_precision)) +
+        geom_line(aes(color=sf_target_inference_method), size=LINE_SIZE, linetype="dashed") +
+        geom_point(aes(color=sf_target_inference_method), size=1) +
+        color_palette("Dark2") +
+        facet_wrap(~label) +
+        theme_pubr() + 
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Recall", y="Precision", color="Inference Method")
     
     return(plts)
 }
@@ -94,7 +124,9 @@ save_plt = function(plts, plt_name, extension='.pdf',
 
 
 save_plots = function(plts, figs_dir){
-    save_plt(plts, "evaluation-thresh_vs_prop_correct-line", '.pdf', figs_dir, width=8, height=5)
+    save_plt(plts, "evaluation-thresh_vs_prop_correct-line", '.pdf', figs_dir, width=8, height=8)
+    save_plt(plts, "evaluation-fpr_vs_tpr-line", '.pdf', figs_dir, width=8, height=6)
+    save_plt(plts, "evaluation-recall_vs_precision-line", '.pdf', figs_dir, width=8, height=6)
 }
 
 save_figdata = function(figdata, dir){

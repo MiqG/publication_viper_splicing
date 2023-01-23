@@ -117,7 +117,10 @@ def evaluate_prediction_kd(targets_true, targets_pred):
             
             # compute chi squared test
             tab = pd.crosstab(y_true, y_pred)
-            chisq_stat, chisq_pvalue, _, _ = stats.chi2_contingency(tab)
+            try:
+                chisq_stat, chisq_pvalue, _, _ = stats.chi2_contingency(tab)
+            except:
+                chisq_stat, chisq_pvalue = np.nan, np.nan
             
             # save
             eval_i = pd.Series(

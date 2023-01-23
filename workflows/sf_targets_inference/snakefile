@@ -13,7 +13,7 @@ PREP_DIR = os.path.join(ROOT,"data","prep")
 SUPPORT_DIR = os.path.join(ROOT,"support")
 RESULTS_DIR = os.path.join(ROOT,"results","sf_targets_inference")
 
-METHODS_INFER = ["correlation"]
+METHODS_INFER = ["correlation_pearson","correlation_spearman"]
 CELL_LINES = ["K562","HepG2"]
 
 ##### RULES #####
@@ -27,7 +27,7 @@ rule all:
         os.path.join(RESULTS_DIR,"files","inference_evaluation","merged.tsv.gz"),
         
         # make figures
-        os.path.join(RESULTS_DIR,'figures','target_inference')
+        #os.path.join(RESULTS_DIR,'figures','target_inference')
         
 rule target_inference:
     input:
