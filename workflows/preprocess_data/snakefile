@@ -26,6 +26,46 @@ SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
 
 EVENT_TYPES = ["EX"]
 CELL_LINES = ["K562","HepG2"]
+CANCER_TYPES = [
+    'ACC',
+    'BLCA',
+    'BRCA',
+    'CESC',
+    'CHOL',
+    'COAD',
+    'DLBC',
+    #'ESCA',
+    'GBM',
+    'HNSC',
+    'KICH',
+    'KIRC',
+    'KIRP',
+    #'LAML',
+    'LGG',
+    'LIHC',
+    'LUAD',
+    'LUSC',
+    'MESO',
+    #'OV',
+    'PAAD',
+    'PCPG',
+    'PRAD',
+    'READ',
+    'SARC',
+    'SKCM',
+    #'STAD',
+    'TGCT',
+    'THCA',
+    'THYM',
+    'UCEC',
+    'UCS',
+    'UVM'
+]
+
+tcga_metadata = pd.read_table(os.path.join(RAW_DIR,"TCGA","metadata","PANCAN.tsv.gz"))
+TCGA_N_SAMPLES = tcga_metadata["cancer_type"].value_counts().to_dict()
+
+DATASETS = ["CCLE"] #+ CANCER_TYPES
 
 ##### RULES #####
 rule all:
@@ -46,6 +86,14 @@ rule all:
         os.path.join(PREP_DIR,"event_psi","ENCORE-INT.tsv.gz"),
         os.path.join(PREP_DIR,"genexpr_tpm","ENCORE.tsv.gz"),    
 
+        # preprocess TCGA
+        expand(os.path.join(PREP_DIR,"metadata","{cancer}.tsv.gz"), cancer=CANCER_TYPES),
+        expand(os.path.join(PREP_DIR,"event_psi","{cancer}-EX.tsv.gz"), cancer=CANCER_TYPES),
+        expand(os.path.join(PREP_DIR,"event_psi","{cancer}-ALTA.tsv.gz"), cancer=CANCER_TYPES),
+        expand(os.path.join(PREP_DIR,"event_psi","{cancer}-ALTD.tsv.gz"), cancer=CANCER_TYPES),
+        expand(os.path.join(PREP_DIR,"event_psi","{cancer}-INT.tsv.gz"), cancer=CANCER_TYPES),
+        expand(os.path.join(PREP_DIR,'genexpr_tpm','{cancer}.tsv.gz'), cancer=CANCER_TYPES),
+        
         # ENCORE RBP KD SCREENS
         ## compute log FC TPM
         expand(os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE',"{cell_line}",'log2_fold_change_tpm.tsv.gz'), cell_line=CELL_LINES),
@@ -53,8 +101,12 @@ rule all:
         expand(os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE',"{cell_line}",'delta_psi-{event_type}.tsv.gz'), event_type=EVENT_TYPES, cell_line=CELL_LINES),
         expand(os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE',"{cell_line}",'delta_psi_rel-{event_type}.tsv.gz'), event_type=EVENT_TYPES, cell_line=CELL_LINES),
         ## simplify delta PSI
-        expand(os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'{dpsi_type}-{event_type}.tsv.gz'), event_type=EVENT_TYPES, dpsi_type=["delta_psi","delta_psi_rel"], cell_line=CELL_LINES)
+        expand(os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'{dpsi_type}-{event_type}.tsv.gz'), event_type=EVENT_TYPES, dpsi_type=["delta_psi","delta_psi_rel"], cell_line=CELL_LINES),
 
+        # impute event PSI
+        expand(os.path.join(PREP_DIR,'event_psi_imputed','{dataset}-{event_type}.tsv.gz'), dataset=DATASETS, event_type=EVENT_TYPES)
+        
+        
 rule preprocess_ccle:
     input:
         sample_info = os.path.join(RAW_DIR,"DepMap","achilles_ccle","sample_info.csv"),
@@ -164,8 +216,102 @@ rule preprocess_ccle:
         
         print("Done!")        
         
+
+rule preprocess_TCGA:
+    input:
+        metadata = os.path.join(RAW_DIR,"TCGA","metadata","{cancer}.tsv.gz"),
+        psi = os.path.join(RAW_DIR,"TCGA","{cancer}","vast_out",'PSI-minN_1-minSD_0-noVLOW-min_ALT_use25-Tidy.tab.gz'),
+        genexpr = lambda wildcards: os.path.join(RAW_DIR,"TCGA","{cancer}","vast_out",'TPM-hg38-{n_samples}.tab.gz').format(cancer='{cancer}', n_samples=TCGA_N_SAMPLES[wildcards.cancer])
+    output:
+        metadata = os.path.join(PREP_DIR,"metadata","{cancer}.tsv.gz"),
+        psi_EX = os.path.join(PREP_DIR,"event_psi","{cancer}-EX.tsv.gz"),
+        psi_ALTA = os.path.join(PREP_DIR,"event_psi","{cancer}-ALTA.tsv.gz"),
+        psi_ALTD = os.path.join(PREP_DIR,"event_psi","{cancer}-ALTD.tsv.gz"),
+        psi_INT = os.path.join(PREP_DIR,"event_psi","{cancer}-INT.tsv.gz"),
+        genexpr = os.path.join(PREP_DIR,'genexpr_tpm','{cancer}.tsv.gz')      
+    run:
+        import gc
+        import pandas as pd
+        import numpy as np
+
+        # load
+        print("Loading data...")
+        metadata = pd.read_table(input.metadata)
+        psi = pd.read_table(input.psi, index_col=0)
+        genexpr = pd.read_table(input.genexpr, index_col=[0,1])
+
+        gc.collect()
+
+        # preprocess metadata
+        ## drop FFPE samples
+        metadata = metadata.loc[~metadata["is_ffpe"],:].copy()
+
+        # PSI
+        print("Processing PSI matrix...")
+        ## drop empty rows
+        is_na = psi.isnull()
+        non_missing = is_na.shape[1] - is_na.sum(1)
+        to_keep = non_missing >= 1
+        psi = psi.loc[to_keep]
+
+        ## remove vast-tools' suffix
+        psi.columns = [c.replace("_1","") for c in psi.columns]
+
+        ## split by event type
+        event_types = ["EX","ALTA","ALTD","INT"]
+        psis = {e: psi.loc[psi.index.str.contains(e)] for e in event_types}        
         
-    
+        ## keep only the replicate with less missing values for each patient
+        duplicated_sampleIDs = metadata.loc[metadata.duplicated('sampleID'),'sampleID'].unique()
+        if len(duplicated_sampleIDs)>0:
+            duplicated_file_ids = metadata.set_index('sampleID').loc[duplicated_sampleIDs,'file_id']
+
+            # decide which sample to keep based on their missing values
+            nan_count = psi[duplicated_file_ids].isnull().sum()
+            file_ids_todrop = {sampleID: list(nan_count[duplicated_file_ids[sampleID]].sort_values().index[1:])
+                               for sampleID in duplicated_file_ids.index.unique()}
+            # drop samples
+            file_ids_todrop = sum(list(file_ids_todrop.values()),[]) # unlist
+            metadata = metadata.loc[~metadata['file_id'].isin(file_ids_todrop)]
+            
+        # subset
+        ## find common samples
+        common_samples = set(metadata["file_id"]).intersection(
+            psis["EX"].columns
+        ).intersection(
+            genexpr.columns
+        )
+        psis = {e: psis[e][common_samples].copy() for e in event_types}
+        genexpr = genexpr[common_samples].copy()
+        metadata = metadata.loc[metadata["file_id"].isin(common_samples)]
+        
+        ## rename columns
+        psis = {
+            e: psis[e].rename(
+                columns=metadata.set_index("file_id")["sampleID"].to_dict()
+                ).copy() 
+            for e in event_types
+        }
+        genexpr = genexpr.rename(
+            columns=metadata.set_index("file_id")["sampleID"].to_dict()
+        ).copy()        
+            
+        # save
+        print("Saving...")
+        ## metadata
+        metadata.to_csv(output.metadata, **SAVE_PARAMS)
+        ## PSIs
+        psis["EX"].reset_index().to_csv(output.psi_EX, **SAVE_PARAMS)
+        psis["ALTD"].reset_index().to_csv(output.psi_ALTD, **SAVE_PARAMS)
+        psis["ALTA"].reset_index().to_csv(output.psi_ALTA, **SAVE_PARAMS)
+        psis["INT"].reset_index().to_csv(output.psi_INT, **SAVE_PARAMS)
+        
+        ## TPMs
+        genexpr.reset_index().drop(columns='NAME').to_csv(output.genexpr, **SAVE_PARAMS)
+        
+        print("Done!")
+
+
 rule preprocess_encore:
     input:
         metadata = os.path.join(RAW_DIR,'ENCODE','ENCORE','metadata','ENCORE.tsv'),
@@ -420,3 +566,22 @@ rule prepare_ground_truth_kd:
         
         print("Done!")
     
+    
+rule impute_psi_tcga:
+    input:
+        os.path.join(PREP_DIR,'event_psi','{dataset}-{event_type}.tsv.gz')
+    output:
+        os.path.join(PREP_DIR,'event_psi_imputed','{dataset}-{event_type}.tsv.gz')
+    params:
+        method = 'knn',
+        method_kws = '\'{"n_neighbors":5}\'',
+        features_as_rows = True
+    shell:
+        """
+        python scripts/impute_nan.py \
+                    --input_file={input} \
+                    --output_file={output} \
+                    --method={params.method} \
+                    --method_kws={params.method_kws} \
+                    --features_as_rows={params.features_as_rows}
+        """
