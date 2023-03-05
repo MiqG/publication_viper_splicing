@@ -13,32 +13,72 @@ PREP_DIR = os.path.join(ROOT,"data","prep")
 SUPPORT_DIR = os.path.join(ROOT,"support")
 RESULTS_DIR = os.path.join(ROOT,"results","sf_targets_inference")
 
-METHODS_INFER = ["correlation_pearson","correlation_spearman"]
+METHODS_INFER = ["correlation_pearson","correlation_spearman","aracne"]
 CELL_LINES = ["K562","HepG2"]
+
+CANCER_TYPES = [
+    'ACC',
+    'BLCA',
+    'BRCA',
+    'CESC',
+    'CHOL',
+    'COAD',
+    'DLBC',
+    #'ESCA',
+    'GBM',
+    'HNSC',
+    'KICH',
+    'KIRC',
+    'KIRP',
+    #'LAML',
+    'LGG',
+    'LIHC',
+    'LUAD',
+    'LUSC',
+    'MESO',
+    #'OV',
+    'PAAD',
+    'PCPG',
+    'PRAD',
+    'READ',
+    'SARC',
+    'SKCM',
+    #'STAD',
+    'TGCT',
+    'THCA',
+    'THYM',
+    'UCEC',
+    'UCS',
+    'UVM'
+]
+DATASETS = ["CCLE"] #+ CANCER_TYPES
 
 ##### RULES #####
 rule all:
     input:
         # target inference
-        expand(os.path.join(RESULTS_DIR,"files","target_inference","{method}.tsv.gz"), method=METHODS_INFER),
+        expand(os.path.join(RESULTS_DIR,"files","target_inference","{method}","{dataset}.tsv.gz"), method=["correlation_pearson","correlation_spearman"], dataset=DATASETS),
+        expand(os.path.join(RESULTS_DIR,"files","target_inference","aracne","{dataset}.tsv.gz"), dataset=DATASETS),
         
         # evaluation
-        expand(os.path.join(RESULTS_DIR,"files","inference_evaluation","{method}-{cell_line}.tsv.gz"), method=METHODS_INFER, cell_line=CELL_LINES),
-        os.path.join(RESULTS_DIR,"files","inference_evaluation","merged.tsv.gz"),
+        #expand(os.path.join(RESULTS_DIR,"files","inference_evaluation","{method}-{cell_line}.tsv.gz"), method=METHODS_INFER, cell_line=CELL_LINES),
+        #os.path.join(RESULTS_DIR,"files","inference_evaluation","merged.tsv.gz"),
         
         # make figures
         #os.path.join(RESULTS_DIR,'figures','target_inference')
         
+ruleorder: target_inference_aracne > target_inference
+        
 rule target_inference:
     input:
-        splicing = os.path.join(PREP_DIR,"event_psi","CCLE-EX.tsv.gz"),
-        genexpr = os.path.join(PREP_DIR,"genexpr_tpm","CCLE.tsv.gz"),
+        splicing = os.path.join(PREP_DIR,"event_psi","{dataset}-EX.tsv.gz"),
+        genexpr = os.path.join(PREP_DIR,"genexpr_tpm","{dataset}.tsv.gz"),
         gene_sources = os.path.join(SUPPORT_DIR,"GOBP_RNA_SPLICING-ensembl.txt")
     output:
-        os.path.join(RESULTS_DIR,"files","target_inference","{method}.tsv.gz")
+        os.path.join(RESULTS_DIR,"files","target_inference","{method}","{dataset}.tsv.gz")
     params:
         method="{method}"
-    threads: 16
+    threads: 10
     shell:
         """
         nice python scripts/infer_targets.py \
@@ -51,6 +91,30 @@ rule target_inference:
         """
         
         
+rule target_inference_aracne:
+    input:
+        splicing = os.path.join(PREP_DIR,"event_psi_imputed","{dataset}-EX.tsv.gz"),
+        genexpr = os.path.join(PREP_DIR,"genexpr_tpm","{dataset}.tsv.gz"),
+        gene_sources = os.path.join(SUPPORT_DIR,"GOBP_RNA_SPLICING-ensembl.txt"),
+        spearman = os.path.join(RESULTS_DIR,"files","target_inference","correlation_spearman","{dataset}.tsv.gz")
+    output:
+        os.path.join(RESULTS_DIR,"files","target_inference","aracne","{dataset}.tsv.gz")
+    params:
+        method="aracne"
+    threads: 10
+    shell:
+        """
+        nice python scripts/infer_targets.py \
+                    --splicing_file={input.splicing} \
+                    --genexpr_file={input.genexpr} \
+                    --gene_sources_file={input.gene_sources} \
+                    --correlation_spearman_file={input.spearman} \
+                    --method={params.method} \
+                    --n_jobs={threads} \
+                    --output_file={output}
+        """
+
+
 rule inference_evaluation:
     input:
         inference = os.path.join(RESULTS_DIR,"files","target_inference","{method}.tsv.gz"),
