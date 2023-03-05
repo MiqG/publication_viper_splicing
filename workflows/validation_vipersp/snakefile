@@ -18,7 +18,21 @@ CELL_LINES = ["K562","HepG2"]
 THRESH_DELTA_PSI = 10
 THRESH_FDR = 0.05
 
-CANCER_TYPES = ['LIHC']
+CANCER_TYPES = [
+    #"BLCA",
+    #"BRCA",
+    #"COAD",
+    #"HNSC",
+    #"KICH",
+    #"KIRC",
+    #"KIRP",
+    "LIHC",
+    #"LUAD",
+    #"LUSC",
+    #"PRAD",
+    #"THCA",
+    #"UCEC"
+]
 
 ##### RULES #####
 rule all:
@@ -203,7 +217,7 @@ rule make_sf_regulons_tcga:
             result.loc[np.isfinite(result['pvalue']),'padj'] = fdr
             
             # filter out irrelevant splicing changes
-            result = result.loc[np.abs(result['median_diff']) > thresh_delta_psi].copy()
+            #result = result.loc[np.abs(result['median_diff']) > thresh_delta_psi].copy()
             
             # add SF
             result["splicing_factor"] = sf
