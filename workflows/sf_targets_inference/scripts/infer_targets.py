@@ -60,14 +60,17 @@ def load_data(
     # drop events and genes with no variation
     splicing = splicing.loc[splicing.std(1) > 0]
     genexpr = genexpr.loc[genexpr.std(1) > 0]
-
+    
+    # log-transform gene expression
+    genexpr = np.log2(genexpr + 1)
+    
     # normalize
-    splicing = (splicing - splicing.mean(1).values.reshape(-1, 1)) / splicing.std(
-        1
-    ).values.reshape(-1, 1)
-    genexpr = (genexpr - genexpr.mean(1).values.reshape(-1, 1)) / genexpr.std(
-        1
-    ).values.reshape(-1, 1)
+    #splicing = (splicing - splicing.mean(1).values.reshape(-1, 1)) / splicing.std(
+    #    1
+    #).values.reshape(-1, 1)
+    #genexpr = (genexpr - genexpr.mean(1).values.reshape(-1, 1)) / genexpr.std(
+    #    1
+    #).values.reshape(-1, 1)
 
     # load correlation spearman
     if correlation_spearman_file is not None:
@@ -203,8 +206,8 @@ def execute_aracne(
         do
         java -Xmx5G -jar {aracne_bin} \
                 --expfile_upstream {genexpr} \
-                --expfile_downstream {genexpr} \
                 --tfs {splicing_factors} \
+                --expfile_downstream {splicing} \
                 --output {output_dir} \
                 --pvalue 1E-8 \
                 --seed $i \
@@ -230,7 +233,7 @@ def execute_aracne(
                 --output {output_dir} \
                 --threads {n_jobs} \
                 --consolidate
-        """.format(
+         """.format(
             aracne_bin=aracne_bin, output_dir=tmpdirname, n_jobs=n_jobs
         )
         exit = os.system(cmd)
@@ -238,6 +241,8 @@ def execute_aracne(
 
         # load result
         result = pd.read_table(os.path.join(tmpdirname, "network.txt"))
+        
+        print("Shape result:", result.shape)
 
     # prepare regulon
     ## "splicing_factor" and "target" columns
