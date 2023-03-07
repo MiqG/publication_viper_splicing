@@ -100,9 +100,10 @@ rule all:
         ## compute delta PSI
         expand(os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE',"{cell_line}",'delta_psi-{event_type}.tsv.gz'), event_type=EVENT_TYPES, cell_line=CELL_LINES),
         expand(os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE',"{cell_line}",'delta_psi_rel-{event_type}.tsv.gz'), event_type=EVENT_TYPES, cell_line=CELL_LINES),
-        ## simplify delta PSI
+        ## simplify delta PSI and log FC TPM
         expand(os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'{dpsi_type}-{event_type}.tsv.gz'), event_type=EVENT_TYPES, dpsi_type=["delta_psi","delta_psi_rel"], cell_line=CELL_LINES),
-
+        expand(os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'log2_fold_change_tpm-{event_type}.tsv.gz'), event_type=EVENT_TYPES, cell_line=CELL_LINES),
+        
         # impute event PSI
         expand(os.path.join(PREP_DIR,'event_psi_imputed','{dataset}-{event_type}.tsv.gz'), dataset=DATASETS, event_type=EVENT_TYPES)
         
@@ -533,14 +534,14 @@ rule delta_psi_encore:
         print("Done!")
         
         
-rule prepare_ground_truth_kd:
+rule prepare_ground_truth_kd_dpsi:
     input:
         metadata = os.path.join(PREP_DIR,'metadata','ENCORE.tsv.gz'),
-        dpsi = os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE',"{cell_line}",'{dpsi_type}-{event_type}.tsv.gz')
+        dpsi = os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE',"{cell_line}",'{dpsi_type}-{event_type}.tsv.gz'),
     params:
         cell_line = "{cell_line}"
     output:
-        dpsi = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'{dpsi_type}-{event_type}.tsv.gz')
+        dpsi = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'{dpsi_type}-{event_type}.tsv.gz'),
     run:
         import pandas as pd
         
@@ -557,12 +558,50 @@ rule prepare_ground_truth_kd:
         dpsis = []
         for ensembl in metadata["KD_ENSEMBL"].unique():
             samples_oi = metadata.loc[metadata["KD_ENSEMBL"]==ensembl, "sampleID"]
+            
             dpsi_avg = dpsi[samples_oi].mean(axis=1)
             dpsi_avg.name = ensembl
             dpsis.append(dpsi_avg)
             
         dpsis = pd.concat(dpsis, axis=1)
+
         dpsis.reset_index().to_csv(output.dpsi, **SAVE_PARAMS)
+        
+        print("Done!")
+        
+        
+rule prepare_ground_truth_kd_logFCtpm:
+    input:
+        metadata = os.path.join(PREP_DIR,'metadata','ENCORE.tsv.gz'),
+        diff_tpm = os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE',"{cell_line}",'log2_fold_change_tpm.tsv.gz')
+    params:
+        cell_line = "{cell_line}"
+    output:
+        diff_tpm = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'log2_fold_change_tpm-{event_type}.tsv.gz')
+    run:
+        import pandas as pd
+        
+        metadata = pd.read_table(input.metadata)
+        diff_tpm = pd.read_table(input.diff_tpm, index_col=0).drop(columns=["NAME"])
+        cell_line = params.cell_line
+        
+        # drop control samples
+        metadata = metadata.loc[~metadata["KD_ENSEMBL"].isnull()].copy()
+        
+        # subset by cell line
+        metadata = metadata.loc[metadata["cell_line"]==cell_line].copy()
+        
+        diff_tpms = []
+        for ensembl in metadata["KD_ENSEMBL"].unique():
+            samples_oi = metadata.loc[metadata["KD_ENSEMBL"]==ensembl, "sampleID"]
+            
+            diff_tpm_avg = diff_tpm[samples_oi].mean(axis=1)
+            diff_tpm_avg.name = ensembl
+            diff_tpms.append(diff_tpm_avg)
+            
+        diff_tpms = pd.concat(diff_tpms, axis=1)
+
+        diff_tpms.reset_index().to_csv(output.diff_tpm, **SAVE_PARAMS)
         
         print("Done!")
     
