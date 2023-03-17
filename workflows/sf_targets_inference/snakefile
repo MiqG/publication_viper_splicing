@@ -162,6 +162,10 @@ rule target_inference_arache_java_prep_inputs:
         regulators = os.path.join(RESULTS_DIR,"files","target_inference","aracne","{omic}","{dataset}","upstream_regs.tsv"),
         regulators_oi = os.path.join(RESULTS_DIR,"files","target_inference","aracne","{omic}","{dataset}","upstream_regulators.txt"),
         targets = os.path.join(RESULTS_DIR,"files","target_inference","aracne","{omic}","{dataset}","targets.tsv")
+    threads: 1
+    resources:
+        runtime = 3600*1, # h (event PSI needs more time)
+        memory = 20, #GB
     run:
         import pandas as pd
         
@@ -213,7 +217,7 @@ rule target_inference_aracne_java_threshold:
         random_seed = 1,
         output_dir = os.path.join(RESULTS_DIR,"files","target_inference","aracne","{omic}","{dataset}"),
         mi_pvalue_thresh = "1E-8"
-    threads: 24
+    threads: 12
     resources:
         runtime = 3600*12, # h (event PSI needs more time)
         memory = 15,
@@ -270,7 +274,7 @@ rule target_inference_aracne_java_consolidation:
         aracne_bin = "~/repositories/ARACNe-AP/dist/aracne.jar",
         output_dir = os.path.join(RESULTS_DIR,"files","target_inference","aracne","{omic}","{dataset}"),
         consolidate_pvalue = 1.1
-    threads: 24
+    threads: 12
     resources:
         runtime = 3600*12, # h (event PSI needs more time)
         memory = 15,
@@ -292,7 +296,7 @@ rule target_inference_aracne_java_prep_output:
         regulons = os.path.join(RESULTS_DIR,"files","target_inference","aracne","{omic}","{dataset}","regulons.tsv.gz")
     resources:
         runtime = 3600*12, # h (event PSI needs more time)
-        memory = 15,
+        memory = 15, #GB
     run:
         import pandas as pd
         
