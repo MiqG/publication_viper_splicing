@@ -16,13 +16,14 @@ from scipy import stats
 from statsmodels.stats import multitest
 import tempfile
 import os
+from aracne import ARACNe, FindThreshold
 
 # variables
 N_JOBS = 1
 THRESH_FDR = 0.05
 SAVE_PARAMS = {"sep": "\t", "compression": "gzip", "index": False}
 ARACNE_BIN = "~/repositories/ARACNe-AP/dist/aracne.jar"
-N_ARACNE_BOOTSTRAPS = 10 ##########
+N_ARACNE_BOOTSTRAPS = 5  # 100
 
 """
 Development
@@ -32,45 +33,38 @@ ROOT = '/home/miquel/projects/publication_viper_splicing'
 RAW_DIR = os.path.join(ROOT,'data','raw')
 PREP_DIR = os.path.join(ROOT,'data','prep')
 SUPPORT_DIR = os.path.join(ROOT,"support")
-splicing_file = os.path.join(PREP_DIR,"event_psi_imputed","CCLE-EX.tsv.gz")
-genexpr_file = os.path.join(PREP_DIR,"genexpr_tpm","CCLE.tsv.gz")
-gene_sources_file = os.path.join(SUPPORT_DIR,"GOBP_RNA_SPLICING-ensembl.txt")
+targets_file = os.path.join(PREP_DIR,"event_psi_imputed","CCLE-EX.tsv.gz")
+upstream_regs_file = os.path.join(PREP_DIR,"genexpr_tpm","CCLE.tsv.gz")
+upstream_regs_oi_file = os.path.join(SUPPORT_DIR,"GOBP_RNA_SPLICING-ensembl.txt")
 correlation_spearman_file = None
 n_jobs = 10
-method = "correlation_spearman"
+method = "aracne_py"
 """
 ##### FUNCTIONS #####
 def load_data(
-    splicing_file, genexpr_file, gene_sources_file, correlation_spearman_file
+    targets_file, upstream_regs_file, upstream_regs_oi_file, correlation_spearman_file
 ):
     # read
-    splicing = pd.read_table(splicing_file, index_col=0)
-    genexpr = pd.read_table(genexpr_file, index_col=0)
-    gene_sources = list(pd.read_table(gene_sources_file, header=None)[0])
+    targets = pd.read_table(targets_file, index_col=0)
+    upstream_regs = pd.read_table(upstream_regs_file, index_col=0)
+    upstream_regs_oi = list(pd.read_table(upstream_regs_oi_file, header=None)[0])
+
+    # index names
+    targets.index.name = "target"
+    upstream_regs.index.name = "upstream_regulator"
 
     # subset
-    genes_oi = set(gene_sources).intersection(genexpr.index)
-    genexpr = genexpr.loc[genes_oi].copy()
+    genes_oi = set(upstream_regs_oi).intersection(upstream_regs.index)
+    upstream_regs = upstream_regs.loc[genes_oi].copy()
 
     # check order
-    common_samples = set(splicing.columns).intersection(genexpr.columns)
-    splicing = splicing[common_samples].copy()
-    genexpr = genexpr[common_samples].copy()
+    common_samples = set(targets.columns).intersection(upstream_regs.columns)
+    targets = targets[common_samples].copy()
+    upstream_regs = upstream_regs[common_samples].copy()
 
     # drop events and genes with no variation
-    splicing = splicing.loc[splicing.std(1) > 0]
-    genexpr = genexpr.loc[genexpr.std(1) > 0]
-    
-    # log-transform gene expression
-    genexpr = np.log2(genexpr + 1)
-    
-    # normalize
-    #splicing = (splicing - splicing.mean(1).values.reshape(-1, 1)) / splicing.std(
-    #    1
-    #).values.reshape(-1, 1)
-    #genexpr = (genexpr - genexpr.mean(1).values.reshape(-1, 1)) / genexpr.std(
-    #    1
-    #).values.reshape(-1, 1)
+    targets = targets.loc[targets.std(1) > 1]
+    upstream_regs = upstream_regs.loc[upstream_regs.std(1) > 1]
 
     # load correlation spearman
     if correlation_spearman_file is not None:
@@ -80,7 +74,7 @@ def load_data(
 
     gc.collect()
 
-    return splicing, genexpr, correlation_spearman
+    return targets, upstream_regs, correlation_spearman
 
 
 def corr(a, b, method):
@@ -117,9 +111,11 @@ def corr(a, b, method):
     return result
 
 
-def compute_correlation_single(splicing, genexpr_single, method):
-    correl = splicing.apply(lambda x: corr(x, genexpr_single, method), axis=1).dropna()
-    correl["GENE"] = genexpr_single.name
+def compute_correlation_single(targets, upstream_reg_single, method):
+    correl = targets.apply(
+        lambda x: corr(x, upstream_reg_single, method), axis=1
+    ).dropna()
+    correl["upstream_regulator"] = upstream_reg_single.name
     correl = correl.reset_index()
 
     # prepare regulon
@@ -127,35 +123,107 @@ def compute_correlation_single(splicing, genexpr_single, method):
     correl["likelihood"] = np.abs(correl["statistic"])
     ## tfmode
     correl["tfmode"] = correl["statistic"]
-    ## "splicing_factor" and "target" columns
-    correl["splicing_factor"] = correl["GENE"]
-    correl["target"] = correl["EVENT"]
     ## keep only significant correlations
     correl["padj"] = np.nan
     _, fdr, _, _ = multitest.multipletests(
         correl.loc[np.isfinite(correl["pvalue"]), "pvalue"], method="fdr_bh"
     )
     correl.loc[np.isfinite(correl["pvalue"]), "padj"] = fdr
-    ## filter out irrelevant splicing changes
+    ## filter out irrelevant associations
     correl = correl.loc[correl["padj"] < THRESH_FDR].copy()
 
     return correl
 
 
-def compute_correlations(splicing, genexpr, n_jobs, method):
+def compute_correlations(targets, upstream_regs, n_jobs, method):
     correls = Parallel(n_jobs=n_jobs)(
-        delayed(compute_correlation_single)(
-            splicing, genexpr.loc[gene_oi], method
-        )
-        for gene_oi in tqdm(genexpr.index)
+        delayed(compute_correlation_single)(targets, upstream_regs.loc[reg_oi], method)
+        for reg_oi in tqdm(upstream_regs.index)
     )
     result = pd.concat(correls)
+    result = result.reset_index()
 
     return result
 
 
-def execute_aracne(
-    splicing, genexpr, aracne_bin, n_jobs, n_bootstraps, correlation_spearman
+def execute_aracne(targets, upstream_regs, aracne_bin, n_jobs, output_dir, step, random_seed):
+    # write aracne inputs
+    upstream_regs_file = os.path.join(output_dir, "upstream_regs.tsv")
+    upstream_regulators_file = os.path.join(output_dir, "upstream_regulators.txt")
+    targets_file = os.path.join(output_dir, "targets.tsv")
+
+    if (
+        (not os.path.isfile(upstream_regs_file))
+        | (not os.path.isfile(upstream_regulators_file))
+        | (not os.path.isfile(targets_file))
+    ):
+        print("Writing inputs in", output_dir, "...")
+        ## SF gene expression
+        upstream_regs.reset_index().to_csv(upstream_regs_file, sep="\t", index=None)
+        ## list of SFs
+        pd.DataFrame(upstream_regs.index).to_csv(
+            upstream_regulators_file, sep="\t", index=None, header=False
+        )
+        ## event PSI (imputed)
+        targets.dropna().reset_index().to_csv(targets_file, sep="\t", index=None)
+
+    # run aracne
+    if step=="aracne_threshold":
+        ## find MI threshold
+        print("Finding MI threshold...")
+        cmd = """
+        java -Xmx5G -jar {aracne_bin} \
+                --expfile_upstream {upstream_regs} \
+                --tfs {upstream_regulators} \
+                --expfile_downstream {targets} \
+                --output {output_dir} \
+                --pvalue 1E-8 \
+                --seed {random_seed} \
+                --threads {n_jobs} \
+                --calculateThreshold
+        """.format(
+            aracne_bin=aracne_bin,
+            upstream_regs=os.path.join(output_dir, "upstream_regs.tsv"),
+            upstream_regulators=os.path.join(output_dir, "upstream_regulators.txt"),
+            targets=os.path.join(output_dir, "targets.tsv"),
+            output_dir=output_dir,
+            n_jobs=n_jobs,
+            random_seed=random_seed
+        )
+        exit = os.system(cmd)
+        assert exit == 0
+    
+    elif step=="aracne_bootstrap":
+        ## run aracne with boostraps
+        print("Running ARACNE bootstraps..")
+        cmd = """
+        java -Xmx5G -jar {aracne_bin} \
+                --expfile_upstream {upstream_regs} \
+                --tfs {upstream_regulators} \
+                --expfile_downstream {targets} \
+                --output {output_dir} \
+                --pvalue 1E-8 \
+                --seed {random_seed} \
+                --threads {n_jobs}
+        """.format(
+            aracne_bin=aracne_bin,
+            upstream_regs=os.path.join(output_dir, "upstream_regs.tsv"),
+            upstream_regulators=os.path.join(output_dir, "upstream_regulators.txt"),
+            targets=os.path.join(output_dir, "targets.tsv"),
+            output_dir=output_dir,
+            n_jobs=n_jobs,
+            random_seed=random_seed,
+        )
+        print(cmd)
+        exit = os.system(cmd)
+        assert exit == 0
+        
+    
+    return None
+
+
+def execute_aracne_full(
+    targets, upstream_regs, aracne_bin, n_jobs, n_bootstraps, correlation_spearman
 ):
     with tempfile.TemporaryDirectory() as tmpdirname:
         print("created temporary directory", tmpdirname)
@@ -163,16 +231,19 @@ def execute_aracne(
         # write aracne inputs
         print("Writing inputs in", tmpdirname, "...")
         ## SF gene expression
-        genexpr.reset_index().to_csv(
-            os.path.join(tmpdirname, "genexpr.tsv"), sep="\t", index=None
+        upstream_regs.reset_index().to_csv(
+            os.path.join(tmpdirname, "upstream_regs.tsv"), sep="\t", index=None
         )
         ## list of SFs
-        pd.DataFrame(genexpr.index).to_csv(
-            os.path.join(tmpdirname,"splicing_factors.txt"), sep="\t", index=None, header=False
+        pd.DataFrame(upstream_regs.index).to_csv(
+            os.path.join(tmpdirname, "upstream_regulators.txt"),
+            sep="\t",
+            index=None,
+            header=False,
         )
         ## event PSI (imputed)
-        splicing.dropna().reset_index().to_csv(
-            os.path.join(tmpdirname, "splicing.tsv"), sep="\t", index=None
+        targets.dropna().reset_index().to_csv(
+            os.path.join(tmpdirname, "targets.tsv"), sep="\t", index=None
         )
 
         # run aracne
@@ -180,9 +251,9 @@ def execute_aracne(
         print("Finding MI threshold...")
         cmd = """
         java -Xmx5G -jar {aracne_bin} \
-                --expfile_upstream {genexpr} \
-                --tfs {splicing_factors} \
-                --expfile_downstream {splicing} \
+                --expfile_upstream {upstream_regs} \
+                --tfs {upstream_regulators} \
+                --expfile_downstream {targets} \
                 --output {output_dir} \
                 --pvalue 1E-8 \
                 --seed 1 \
@@ -190,9 +261,9 @@ def execute_aracne(
                 --calculateThreshold
         """.format(
             aracne_bin=aracne_bin,
-            genexpr=os.path.join(tmpdirname, "genexpr.tsv"),
-            splicing_factors=os.path.join(tmpdirname, "splicing_factors.txt"),
-            splicing=os.path.join(tmpdirname, "splicing.tsv"),
+            upstream_regs=os.path.join(tmpdirname, "upstream_regs.tsv"),
+            upstream_regulators=os.path.join(tmpdirname, "upstream_regulators.txt"),
+            targets=os.path.join(tmpdirname, "targets.tsv"),
             output_dir=tmpdirname,
             n_jobs=n_jobs,
         )
@@ -205,9 +276,9 @@ def execute_aracne(
         while [ $i -le {n_bootstraps} ]
         do
         java -Xmx5G -jar {aracne_bin} \
-                --expfile_upstream {genexpr} \
-                --tfs {splicing_factors} \
-                --expfile_downstream {splicing} \
+                --expfile_upstream {upstream_regs} \
+                --tfs {upstream_regulators} \
+                --expfile_downstream {targets} \
                 --output {output_dir} \
                 --pvalue 1E-8 \
                 --seed $i \
@@ -216,12 +287,12 @@ def execute_aracne(
         done
         """.format(
             aracne_bin=aracne_bin,
-            genexpr=os.path.join(tmpdirname, "genexpr.tsv"),
-            splicing_factors=os.path.join(tmpdirname, "splicing_factors.txt"),
-            splicing=os.path.join(tmpdirname, "splicing.tsv"),
+            upstream_regs=os.path.join(tmpdirname, "upstream_regs.tsv"),
+            upstream_regulators=os.path.join(tmpdirname, "upstream_regulators.txt"),
+            targets=os.path.join(tmpdirname, "targets.tsv"),
             output_dir=tmpdirname,
             n_jobs=n_jobs,
-            n_bootstraps=n_bootstraps
+            n_bootstraps=n_bootstraps,
         )
         print(cmd)
         exit = os.system(cmd)
@@ -241,20 +312,20 @@ def execute_aracne(
 
         # load result
         result = pd.read_table(os.path.join(tmpdirname, "network.txt"))
-        
+
         print("Shape result:", result.shape)
 
     # prepare regulon
-    ## "splicing_factor" and "target" columns
-    result["splicing_factor"] = result["Regulator"]
+    ## "upstream_regulator" and "target" columns
+    result["upstream_regulator"] = result["Regulator"]
     result["target"] = result["Target"]
     ## likelihood
     result["likelihood"] = result["MI"]
     ## tfmode
     result = pd.merge(
         result,
-        correlation_spearman[["splicing_factor", "target", "tfmode"]],
-        on=["splicing_factor", "target"],
+        correlation_spearman[["upstream_regulator", "target", "tfmode"]],
+        on=["upstream_regulator", "target"],
         how="left",
     )
     result.loc[result["tfmode"].isnull(), "tfmode"] = 0
@@ -262,36 +333,69 @@ def execute_aracne(
     return result
 
 
-def infer_targets(splicing, genexpr, method, n_jobs, aracne_bin, correlation_spearman):
+def run_aracne_py(targets, upstream_regs, n_jobs):
+
+    arac = ARACNe(
+        n_jobs=n_jobs,
+        seed=RANDOM_SEED,
+        n_iterations=10,  ######
+        consolidate_threshold=1.1,
+        # threshold_class = FindThreshold
+    )
+    regulons = arac.fit_transform(upstream_regs, targets)
+
+    # prepare regulon
+    ## likelihood
+    result["likelihood"] = result["mutual_information_ap"]
+    ## tfmode
+    result["tfmode"] = result["spearman_correlation"]
+
+    return regulons
+
+
+def infer_targets(
+    targets, upstream_regs, method, n_jobs, aracne_bin, correlation_spearman, output_dir, random_seed
+):
 
     if method == "correlation_spearman":
-        result = compute_correlations(splicing, genexpr, n_jobs, "correlation_spearman")
+        result = compute_correlations(
+            targets, upstream_regs, n_jobs, "correlation_spearman"
+        )
 
     elif method == "correlation_pearson":
-        result = compute_correlations(splicing, genexpr, n_jobs, "correlation_pearson")
+        result = compute_correlations(
+            targets, upstream_regs, n_jobs, "correlation_pearson"
+        )
 
-    elif method == "aracne":
+    elif method == "aracne_ap":
         assert correlation_spearman is not None
 
-        result = execute_aracne(
-            splicing,
-            genexpr,
+        result = execute_aracne_full(
+            targets,
+            upstream_regs,
             aracne_bin,
             n_jobs,
             N_ARACNE_BOOTSTRAPS,
             correlation_spearman,
         )
 
-    result = result.reset_index()
+    elif method == "aracne_py":
+        result = run_aracne_py(targets, upstream_regs, n_jobs)
+
+    elif method == "aracne_threshold":
+        result = execute_aracne(targets, upstream_regs, aracne_bin, n_jobs, output_dir, method, random_seed)
+        
+    elif method == "aracne_bootstrap":
+        result = execute_aracne(targets, upstream_regs, aracne_bin, n_jobs, output_dir, method, random_seed)
 
     return result
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--splicing_file", type=str)
-    parser.add_argument("--genexpr_file", type=str)
-    parser.add_argument("--gene_sources_file", type=str)
+    parser.add_argument("--targets_file", type=str)
+    parser.add_argument("--upstream_regs_file", type=str)
+    parser.add_argument("--upstream_regs_oi_file", type=str)
     parser.add_argument(
         "--correlation_spearman_file",
         type=str,
@@ -299,8 +403,10 @@ def parse_args():
         help="only for method=aracne",
     )
     parser.add_argument("--method", type=str)
+    parser.add_argument("--random_seed", type=str)
     parser.add_argument("--n_jobs", type=int, default=N_JOBS)
-    parser.add_argument("--output_file", type=str)
+    parser.add_argument("--output_file", type=str, default=None)
+    parser.add_argument("--output_dir", type=str, default=None)
     parser.add_argument("--aracne_bin", type=str, default=ARACNE_BIN)
 
     args = parser.parse_args()
@@ -310,31 +416,44 @@ def parse_args():
 
 def main():
     args = parse_args()
-    splicing_file = args.splicing_file
-    genexpr_file = args.genexpr_file
-    gene_sources_file = args.gene_sources_file
+    targets_file = args.targets_file
+    upstream_regs_file = args.upstream_regs_file
+    upstream_regs_oi_file = args.upstream_regs_oi_file
     method = args.method
     n_jobs = args.n_jobs
     output_file = args.output_file
+    output_dir = args.output_dir
     aracne_bin = args.aracne_bin
+    random_seed = args.random_seed
     correlation_spearman_file = args.correlation_spearman_file
-
+    
     print(args)
 
     # load
     print("Loading data...")
-    splicing, genexpr, correlation_spearman = load_data(
-        splicing_file, genexpr_file, gene_sources_file, correlation_spearman_file
+    targets, upstream_regs, correlation_spearman = load_data(
+        targets_file,
+        upstream_regs_file,
+        upstream_regs_oi_file,
+        correlation_spearman_file,
     )
-
+    
     print("Inferring targets...")
     result = infer_targets(
-        splicing, genexpr, method, n_jobs, aracne_bin, correlation_spearman
+        targets.iloc[:100],
+        upstream_regs.iloc[:100],
+        method,
+        n_jobs,
+        aracne_bin,
+        correlation_spearman,
+        output_dir = output_dir,
+        random_seed = random_seed
     )
 
     # save
-    print("Saving data...")
-    result.to_csv(output_file, **SAVE_PARAMS)
+    if result is not None:
+        print("Saving data...")
+        result.to_csv(output_file, **SAVE_PARAMS)
 
 
 ##### SCRIPT #####

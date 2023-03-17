@@ -27,45 +27,45 @@ SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
 EVENT_TYPES = ["EX"]
 CELL_LINES = ["K562","HepG2"]
 CANCER_TYPES = [
-    'ACC',
-    'BLCA',
-    'BRCA',
-    'CESC',
-    'CHOL',
-    'COAD',
-    'DLBC',
-    #'ESCA',
-    'GBM',
-    'HNSC',
-    'KICH',
-    'KIRC',
-    'KIRP',
-    #'LAML',
-    'LGG',
-    'LIHC',
-    'LUAD',
-    'LUSC',
-    'MESO',
-    #'OV',
-    'PAAD',
-    'PCPG',
-    'PRAD',
-    'READ',
-    'SARC',
-    'SKCM',
-    #'STAD',
-    'TGCT',
-    'THCA',
-    'THYM',
-    'UCEC',
-    'UCS',
-    'UVM'
+#     'ACC',
+#     'BLCA',
+#     'BRCA',
+#     'CESC',
+#     'CHOL',
+#     'COAD',
+#     'DLBC',
+#     #'ESCA',
+#     'GBM',
+#     'HNSC',
+#     'KICH',
+#     'KIRC',
+#     'KIRP',
+#     #'LAML',
+#     'LGG',
+     'LIHC',
+#     'LUAD',
+#     'LUSC',
+#     'MESO',
+#     #'OV',
+#     'PAAD',
+#     'PCPG',
+#     'PRAD',
+#     'READ',
+#     'SARC',
+#     'SKCM',
+#     #'STAD',
+#     'TGCT',
+#     'THCA',
+#     'THYM',
+#     'UCEC',
+#     'UCS',
+#     'UVM'
 ]
 
 tcga_metadata = pd.read_table(os.path.join(RAW_DIR,"TCGA","metadata","PANCAN.tsv.gz"))
 TCGA_N_SAMPLES = tcga_metadata["cancer_type"].value_counts().to_dict()
 
-DATASETS = ["CCLE"] #+ CANCER_TYPES
+DATASETS = ["CCLE"] + CANCER_TYPES
 
 ##### RULES #####
 rule all:
@@ -102,7 +102,7 @@ rule all:
         expand(os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE',"{cell_line}",'delta_psi_rel-{event_type}.tsv.gz'), event_type=EVENT_TYPES, cell_line=CELL_LINES),
         ## simplify delta PSI and log FC TPM
         expand(os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'{dpsi_type}-{event_type}.tsv.gz'), event_type=EVENT_TYPES, dpsi_type=["delta_psi","delta_psi_rel"], cell_line=CELL_LINES),
-        expand(os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'log2_fold_change_tpm-{event_type}.tsv.gz'), event_type=EVENT_TYPES, cell_line=CELL_LINES),
+        expand(os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'log2_fold_change_tpm.tsv.gz'), cell_line=CELL_LINES),
         
         # impute event PSI
         expand(os.path.join(PREP_DIR,'event_psi_imputed','{dataset}-{event_type}.tsv.gz'), dataset=DATASETS, event_type=EVENT_TYPES)
@@ -257,7 +257,7 @@ rule preprocess_TCGA:
 
         ## remove vast-tools' suffix
         psi.columns = [c.replace("_1","") for c in psi.columns]
-
+        
         ## split by event type
         event_types = ["EX","ALTA","ALTD","INT"]
         psis = {e: psi.loc[psi.index.str.contains(e)] for e in event_types}        
@@ -274,6 +274,14 @@ rule preprocess_TCGA:
             # drop samples
             file_ids_todrop = sum(list(file_ids_todrop.values()),[]) # unlist
             metadata = metadata.loc[~metadata['file_id'].isin(file_ids_todrop)]
+            
+        # TPM
+        print("Processing TPM matrix...")
+        ## remove vast-tools' suffix
+        genexpr.columns = [c.replace('_1','') for c in genexpr.columns]
+        
+        ## log-transform
+        genexpr = np.log2(genexpr + 1)
             
         # subset
         ## find common samples
@@ -577,7 +585,7 @@ rule prepare_ground_truth_kd_logFCtpm:
     params:
         cell_line = "{cell_line}"
     output:
-        diff_tpm = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'log2_fold_change_tpm-{event_type}.tsv.gz')
+        diff_tpm = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'log2_fold_change_tpm.tsv.gz')
     run:
         import pandas as pd
         
