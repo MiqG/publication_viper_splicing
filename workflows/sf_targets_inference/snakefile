@@ -51,7 +51,7 @@ CANCER_TYPES = [
 #     'UCS',
 #     'UVM'
 ]
-DATASETS = CANCER_TYPES #+ ["CCLE"]
+DATASETS = ["CCLE"] + CANCER_TYPES
 
 TARGETS_FILES = {
     "event_psi_imputed": os.path.join(PREP_DIR,"event_psi_imputed","{dataset}-EX.tsv.gz"),
@@ -65,95 +65,45 @@ SIGNATURE_FILES = {
 }
 
 
-N_SAMPLES = {"LIHC": 423}#, "CCLE": 1015}
-OMICS = ["event_psi"]#,"genexpr_tpm"]
-N_BOOTSTRAPS = 2
+OMICS = ["event_psi","genexpr_tpm"]
+N_BOOTSTRAPS = 100
 BOOTSTRAPS = list(range(N_BOOTSTRAPS))
 ##### RULES #####
 rule all:
     input:
-        # prep inputs aracne
+        # run ARACNe
+        ## prep inputs aracne
         expand(os.path.join(RESULTS_DIR,"files","target_inference","aracne","{omic}","{dataset}","upstream_regs.tsv"), omic=OMICS, dataset=DATASETS),
         expand(os.path.join(RESULTS_DIR,"files","target_inference","aracne","{omic}","{dataset}","upstream_regulators.txt"), omic=OMICS, dataset=DATASETS),
         expand(os.path.join(RESULTS_DIR,"files","target_inference","aracne","{omic}","{dataset}","targets.tsv"), omic=OMICS, dataset=DATASETS),
-        # infer threshold
+        ## infer threshold
         expand(os.path.join(RESULTS_DIR,"files","target_inference","aracne","{omic}","{dataset}",".done_threshold"), omic=OMICS, dataset=DATASETS),
-        # bootstrap
+        ## bootstrap
         expand(os.path.join(RESULTS_DIR,"files","target_inference","aracne","{omic}","{dataset}",".done_bootstrap_{boot_i}"), omic=OMICS, dataset=DATASETS, boot_i=BOOTSTRAPS),
-        # consolidate
-        expand(os.path.join(RESULTS_DIR,"files","target_inference","aracne","{omic}","{dataset}",".done_consolidation"), omic=OMICS, dataset=DATASETS),
-        # prep outputs for viper
-        expand(os.path.join(RESULTS_DIR,"files","target_inference","aracne","{omic}","{dataset}","regulons.tsv.gz"), omic=OMICS, dataset=DATASETS)
-        
+        ## consolidate
+        expand(os.path.join(RESULTS_DIR,"files","target_inference","aracne","{omic}","{dataset}","network.txt"), omic=OMICS, dataset=DATASETS),
+        ## prep outputs for viper
+        expand(os.path.join(RESULTS_DIR,"files","target_inference","aracne","{omic}","{dataset}","regulons.tsv.gz"), omic=OMICS, dataset=DATASETS),
+
+        # infer activities with VIPER
+        expand(os.path.join(RESULTS_DIR,'files','validations','{method}','{omic}','ENCORE','{cell_line}-{dataset}_regulons.tsv.gz'), method=["aracne"], omic=OMICS, cell_line=CELL_LINES, dataset=DATASETS),
+
+        # make figures
+        #expand(os.path.join(RESULTS_DIR,'figures','validations',"{cell_line}","{omic}","{dataset}"), cell_line=CELL_LINES, omic=OMICS, dataset=DATASETS)
+
         # target inference
         ## correlations
         #expand(os.path.join(RESULTS_DIR,"files","target_inference","{method}","{omic}","{dataset}.tsv.gz"), method=["correlation_spearman"], dataset=DATASETS, omic=OMICS),
         ## aracne
         #expand(os.path.join(RESULTS_DIR,"files","target_inference","aracne_py","{omic}","{dataset}.tsv.gz"), dataset=DATASETS, omic=OMICS),
-        
-        
-        # infer activities with VIPER
-        #expand(os.path.join(RESULTS_DIR,'files','validations','{method}','{omic}','ENCORE','{cell_line}-regulon_{dataset}.tsv.gz'), method=METHODS_INFER, omic=OMICS, cell_line=CELL_LINES, dataset=DATASETS),
-
-        # make figures
-        #expand(os.path.join(RESULTS_DIR,'figures','validations',"{cell_line}","{omic}","{dataset}"), cell_line=CELL_LINES, omic=OMICS, dataset=DATASETS)
 
         # evaluation
         #expand(os.path.join(RESULTS_DIR,"files","inference_evaluation","{method}-{cell_line}.tsv.gz"), method=METHODS_INFER, cell_line=CELL_LINES),
         #os.path.join(RESULTS_DIR,"files","inference_evaluation","merged.tsv.gz"),
         
         
-#ruleorder: target_inference_aracne_py > target_inference
-        
-rule target_inference:
-    input:
-        targets = lambda wildcards: TARGETS_FILES[wildcards.omic],
-        upstream_regs = os.path.join(PREP_DIR,"genexpr_tpm","{dataset}.tsv.gz"),
-        upstream_regs_oi = os.path.join(SUPPORT_DIR,"GOBP_RNA_SPLICING-ensembl.txt")
-    output:
-        os.path.join(RESULTS_DIR,"files","target_inference","{method}","{omic}","{dataset}.tsv.gz")
-    params:
-        method="{method}"
-    threads: 12
-    shell:
-        """
-        nice python scripts/infer_targets.py \
-                    --targets_file={input.targets} \
-                    --upstream_regs_file={input.upstream_regs} \
-                    --upstream_regs_oi_file={input.upstream_regs_oi} \
-                    --method={params.method} \
-                    --n_jobs={threads} \
-                    --output_file={output}
-        """
-        
-        
-# rule target_inference_aracne_java:
-#     input:
-#         targets = lambda wildcards: TARGETS_FILES[wildcards.omic] if wildcards.omic!="event_psi" else TARGETS_FILES[wildcards.omic+"_imputed"],
-#         upstream_regs = os.path.join(PREP_DIR,"genexpr_tpm","{dataset}.tsv.gz"),
-#         upstream_regs_oi = os.path.join(SUPPORT_DIR,"GOBP_RNA_SPLICING-ensembl.txt"),
-#         spearman = os.path.join(RESULTS_DIR,"files","target_inference","correlation_spearman","{omic}","{dataset}.tsv.gz")
-#     output:
-#         os.path.join(RESULTS_DIR,"files","target_inference","aracne","{omic}","{dataset}.tsv.gz")
-#     params:
-#         method="aracne"
-#     threads: 24
-#     resources:
-#         runtime = 3600*12, # h (event PSI needs more time)
-#         memory = 15
-#     shell:
-#         """
-#         nice python scripts/infer_targets.py \
-#                     --targets_file={input.targets} \
-#                     --upstream_regs_file={input.upstream_regs} \
-#                     --upstream_regs_oi_file={input.upstream_regs_oi} \
-#                     --correlation_spearman_file={input.spearman} \
-#                     --method={params.method} \
-#                     --n_jobs={threads} \
-#                     --output_file={output}
-#         """
 
-rule target_inference_arache_java_prep_inputs:
+rule target_inference_aracne_java_prep_inputs:
     input:
         regulators = os.path.join(PREP_DIR,"genexpr_tpm","{dataset}.tsv.gz"),
         regulators_oi = os.path.join(SUPPORT_DIR,"GOBP_RNA_SPLICING-ensembl.txt"),
@@ -172,7 +122,7 @@ rule target_inference_arache_java_prep_inputs:
         # load
         regulators = pd.read_table(input.regulators, index_col=0)
         regulators_oi = list(pd.read_table(input.regulators_oi, header=None)[0])
-        targets = pd.read_table(input.regulators, index_col=0)
+        targets = pd.read_table(input.targets, index_col=0)
         
         # indices
         regulators.index.name = "regulator"
@@ -187,13 +137,13 @@ rule target_inference_arache_java_prep_inputs:
         targets = targets[common_samples].copy()
         regulators = regulators[common_samples].copy()
 
-        # drop events and genes with no variation
-        targets = targets.loc[targets.std(1) > 1]
-        regulators = regulators.loc[regulators.std(1) > 1]
+        # drop events and genes with little variation (less than 1%)
+        targets = targets.loc[(targets.std(1) / targets.mean(1)) > 0.01]
+        regulators = regulators.loc[(regulators.std(1) / regulators.mean(1)) > 0.01]
         
         # DEV #########
-        regulators = regulators.iloc[:100]
-        targets = targets.iloc[:100]
+        #regulators = regulators.iloc[:100]
+        #targets = targets.iloc[:100]
         
         # save
         regulators.reset_index().to_csv(output.regulators, sep="\t", index=None)
@@ -223,7 +173,7 @@ rule target_inference_aracne_java_threshold:
         memory = 15,
     shell:
         """
-        java -Xmx5G -jar {params.aracne_bin} \
+        java -Xmx{resources.memory}G -jar {params.aracne_bin} \
                 --expfile_upstream {input.regulators} \
                 --tfs {input.regulators_oi} \
                 --expfile_downstream {input.targets} \
@@ -249,11 +199,11 @@ rule target_inference_aracne_java_bootstrap:
         random_seed = "{boot_i}"
     threads: 12
     resources:
-        runtime = 3600*12, # h (event PSI needs more time)
-        memory = 15,
+        runtime = 3600*2, # h (event PSI needs more time)
+        memory = 10,
     shell:
         """
-        java -Xmx5G -jar {params.aracne_bin} \
+        java -Xmx{resources.memory}G -jar {params.aracne_bin} \
                 --expfile_upstream {input.regulators} \
                 --tfs {input.regulators_oi} \
                 --expfile_downstream {input.targets} \
@@ -277,10 +227,10 @@ rule target_inference_aracne_java_consolidation:
     threads: 12
     resources:
         runtime = 3600*12, # h (event PSI needs more time)
-        memory = 15,
+        memory = 30,
     shell:
         """
-        java -Xmx5G -jar {params.aracne_bin} \
+        java -Xmx{resources.memory}G -jar {params.aracne_bin} \
                 --output {params.output_dir} \
                 --threads {threads} \
                 --consolidatepvalue {params.consolidate_pvalue} \
@@ -291,7 +241,8 @@ rule target_inference_aracne_java_consolidation:
 rule target_inference_aracne_java_prep_output:
     input:
         regulons = os.path.join(RESULTS_DIR,"files","target_inference","aracne","{omic}","{dataset}","network.txt"),
-        spearman = os.path.join(RESULTS_DIR,"files","target_inference","correlation_spearman","{omic}","{dataset}.tsv.gz")
+        regulators = os.path.join(RESULTS_DIR,"files","target_inference","aracne","{omic}","{dataset}","upstream_regs.tsv"),
+        targets = os.path.join(RESULTS_DIR,"files","target_inference","aracne","{omic}","{dataset}","targets.tsv")
     output:
         regulons = os.path.join(RESULTS_DIR,"files","target_inference","aracne","{omic}","{dataset}","regulons.tsv.gz")
     resources:
@@ -302,32 +253,64 @@ rule target_inference_aracne_java_prep_output:
         
         # load
         regulons = pd.read_table(input.regulons)
-        spearman = pd.read_table(input.spearman)
-        
+        regulators = pd.read_table(input.regulators, index_col=0)
+        targets = pd.read_table(input.targets, index_col=0)
         
         # prepare regulon
+        ## filter out non-significant regulator-targets
+        regulons = regulons.loc[regulons["pvalue"] < 0.05].copy()
+        
         ## "upstream_regulator" and "target" columns
-        regulons["upstream_regulator"] = regulons["Regulator"]
+        regulons["regulator"] = regulons["Regulator"]
         regulons["target"] = regulons["Target"]
         
         ## likelihood
         regulons["likelihood"] = regulons["MI"]
         
-        ## tfmode
-        regulons = pd.merge(
-            regulons,
-            spearman[["upstream_regulator", "target", "tfmode"]],
-            on=["upstream_regulator", "target"],
-            how="left",
+        # compute spearman correlation for each pair
+        regulons["tfmode"] = regulons.apply(
+            lambda row: regulators.loc[row["regulator"]].corr(targets.loc[row["target"]], method="spearman"), axis=1
         )
         
-        regulons.loc[regulons["tfmode"].isnull(), "tfmode"] = 0
-        
         # save
-        regulons.reset_index().to_csv(output.regulons, sep="\t", index=None, compression="gzip")
+        regulons.to_csv(output.regulons, sep="\t", index=None, compression="gzip")
+        
+        print("Done!")
 
 
 
+rule run_viper:
+    input:
+        signature = lambda wildcards: SIGNATURE_FILES[wildcards.omic],
+        regulons = os.path.join(RESULTS_DIR,"files","target_inference","{method}","{omic}","{dataset}","regulons.tsv.gz")
+    output:
+        os.path.join(RESULTS_DIR,'files','validations','{method}','{omic}','ENCORE','{cell_line}-{dataset}_regulons.tsv.gz')
+    shell:
+        """
+        Rscript scripts/run_viper.R \
+                    --signature_file={input.signature} \
+                    --regulons_file={input.regulons} \
+                    --output_file={output}
+        """
+        
+
+rule figures_target_inference:
+    input:
+        viper_result = os.path.join(RESULTS_DIR,'files','validations','aracne','{omic}','ENCORE','{cell_line}-{dataset}_regulons.tsv.gz'),
+        regulons = os.path.join(RESULTS_DIR,"files","target_inference","aracne","{omic}","{dataset}","regulons.tsv.gz"),
+        encore_logfc = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'log2_fold_change_tpm.tsv.gz')
+    output:
+        directory(os.path.join(RESULTS_DIR,'figures','validations',"{cell_line}","{omic}","{dataset}"))
+    shell:
+        """
+        nice Rscript scripts/figures_target_inference.R \
+                    --viper_result_file={input.viper_result} \
+                    --encore_logfc_file={input.encore_logfc} \
+                    --regulons_file={input.regulons} \
+                    --figs_dir={output}
+        """
+
+        
 # rule target_inference_aracne_py:
 #     input:
 #         targets = lambda wildcards: TARGETS_FILES[wildcards.omic] if wildcards.omic!="event_psi" else TARGETS_FILES[wildcards.omic+"_imputed"],
@@ -352,53 +335,72 @@ rule target_inference_aracne_java_prep_output:
 #                     --output_file={output}
 #         """
 
+        
+# rule inference_evaluation:
+#     input:
+#         inference = os.path.join(RESULTS_DIR,"files","target_inference","{method}.tsv.gz"),
+#         ground_truth_kd_dpsi = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'delta_psi-EX.tsv.gz'),
+#         ground_truth_kd_rel = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'delta_psi_rel-EX.tsv.gz')
+#     output:
+#         os.path.join(RESULTS_DIR,"files","inference_evaluation","{method}-{cell_line}.tsv.gz")
+#     threads: 16
+#     shell:
+#         """
+#         nice python scripts/evaluate_inference.py \
+#                     --inference_file={input.inference} \
+#                     --ground_truth_kd_dpsi_file={input.ground_truth_kd_dpsi} \
+#                     --ground_truth_kd_rel_file={input.ground_truth_kd_rel} \
+#                     --n_jobs={threads} \
+#                     --output_file={output}
+#         """
 
-rule run_viper:
-    input:
-        signature = lambda wildcards: SIGNATURE_FILES[wildcards.omic],
-        regulons = os.path.join(RESULTS_DIR,"files","target_inference","aracne","{omic}","{dataset}.tsv.gz")
-    output:
-        os.path.join(RESULTS_DIR,'files','validations','{method}','{omic}','ENCORE','{cell_line}-regulon_{dataset}.tsv.gz')
-    shell:
-        """
-        Rscript scripts/run_viper.R \
-                    --signature_file={input.signature} \
-                    --regulons_file={input.regulons} \
-                    --output_file={output}
-        """
+
+#ruleorder: target_inference_aracne_py > target_inference
+        
+# rule target_inference:
+#     input:
+#         targets = lambda wildcards: TARGETS_FILES[wildcards.omic],
+#         upstream_regs = os.path.join(PREP_DIR,"genexpr_tpm","{dataset}.tsv.gz"),
+#         upstream_regs_oi = os.path.join(SUPPORT_DIR,"GOBP_RNA_SPLICING-ensembl.txt")
+#     output:
+#         os.path.join(RESULTS_DIR,"files","target_inference","{method}","{omic}","{dataset}.tsv.gz")
+#     params:
+#         method="{method}"
+#     threads: 12
+#     shell:
+#         """
+#         nice python scripts/infer_targets.py \
+#                     --targets_file={input.targets} \
+#                     --upstream_regs_file={input.upstream_regs} \
+#                     --upstream_regs_oi_file={input.upstream_regs_oi} \
+#                     --method={params.method} \
+#                     --n_jobs={threads} \
+#                     --output_file={output}
+#         """
         
         
-rule inference_evaluation:
-    input:
-        inference = os.path.join(RESULTS_DIR,"files","target_inference","{method}.tsv.gz"),
-        ground_truth_kd_dpsi = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'delta_psi-EX.tsv.gz'),
-        ground_truth_kd_rel = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'delta_psi_rel-EX.tsv.gz')
-    output:
-        os.path.join(RESULTS_DIR,"files","inference_evaluation","{method}-{cell_line}.tsv.gz")
-    threads: 16
-    shell:
-        """
-        nice python scripts/evaluate_inference.py \
-                    --inference_file={input.inference} \
-                    --ground_truth_kd_dpsi_file={input.ground_truth_kd_dpsi} \
-                    --ground_truth_kd_rel_file={input.ground_truth_kd_rel} \
-                    --n_jobs={threads} \
-                    --output_file={output}
-        """
-
-
-rule figures_target_inference:
-    input:
-        viper_result = os.path.join(RESULTS_DIR,"files","validations","aracne","{omic}","ENCORE","{cell_line}-regulon_{dataset}.tsv.gz"),
-        regulons = os.path.join(RESULTS_DIR,"files","target_inference","aracne","{omic}","{dataset}.tsv.gz"),
-        encore_logfc = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'log2_fold_change_tpm.tsv.gz')
-    output:
-        directory(os.path.join(RESULTS_DIR,'figures','validations',"{cell_line}","{omic}","{dataset}"))
-    shell:
-        """
-        nice Rscript scripts/figures_target_inference.R \
-                    --viper_result_file={input.viper_result} \
-                    --encore_logfc_file={input.encore_logfc} \
-                    --regulons_file={input.regulons} \
-                    --figs_dir={output}
-        """
+# rule target_inference_aracne_java:
+#     input:
+#         targets = lambda wildcards: TARGETS_FILES[wildcards.omic] if wildcards.omic!="event_psi" else TARGETS_FILES[wildcards.omic+"_imputed"],
+#         upstream_regs = os.path.join(PREP_DIR,"genexpr_tpm","{dataset}.tsv.gz"),
+#         upstream_regs_oi = os.path.join(SUPPORT_DIR,"GOBP_RNA_SPLICING-ensembl.txt"),
+#         spearman = os.path.join(RESULTS_DIR,"files","target_inference","correlation_spearman","{omic}","{dataset}.tsv.gz")
+#     output:
+#         os.path.join(RESULTS_DIR,"files","target_inference","aracne","{omic}","{dataset}.tsv.gz")
+#     params:
+#         method="aracne"
+#     threads: 24
+#     resources:
+#         runtime = 3600*12, # h (event PSI needs more time)
+#         memory = 15
+#     shell:
+#         """
+#         nice python scripts/infer_targets.py \
+#                     --targets_file={input.targets} \
+#                     --upstream_regs_file={input.upstream_regs} \
+#                     --upstream_regs_oi_file={input.upstream_regs_oi} \
+#                     --correlation_spearman_file={input.spearman} \
+#                     --method={params.method} \
+#                     --n_jobs={threads} \
+#                     --output_file={output}
+#         """

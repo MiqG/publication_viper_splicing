@@ -23,10 +23,10 @@ require(tidyverse)
 ##### FUNCTIONS #####
 prep_regulons = function(regulons){
     
-    uregs = regulons[['upstream_regulator']] %>% unique()
+    uregs = regulons[['regulator']] %>% unique()
     reg = sapply(uregs, function(ureg){
             X = regulons %>%
-                filter(upstream_regulator %in% ureg)
+                filter(regulator %in% ureg)
             X = list(
                 tfmode = setNames(X[['tfmode']], X[['target']]),
                 likelihood = X[['likelihood']]
@@ -77,7 +77,7 @@ main = function(){
         verbose=FALSE
     ) %>% 
     as.data.frame() %>%
-    rownames_to_column('upstream_regulator')
+    rownames_to_column('regulator')
     
     
     # save
