@@ -27,39 +27,39 @@ SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
 EVENT_TYPES = ["EX"]
 CELL_LINES = ["K562","HepG2"]
 CANCER_TYPES = [
-#     'ACC',
-#     'BLCA',
-#     'BRCA',
-#     'CESC',
-#     'CHOL',
-#     'COAD',
-#     'DLBC',
-#     #'ESCA',
-#     'GBM',
-#     'HNSC',
-#     'KICH',
-#     'KIRC',
-#     'KIRP',
-#     #'LAML',
-#     'LGG',
+    'ACC',
+    'BLCA',
+    'BRCA',
+    'CESC',
+    'CHOL',
+    'COAD',
+    'DLBC',
+    #'ESCA',
+    'GBM',
+    'HNSC',
+    'KICH',
+    'KIRC',
+    'KIRP',
+    #'LAML',
+    'LGG',
      'LIHC',
-#     'LUAD',
-#     'LUSC',
-#     'MESO',
-#     #'OV',
-#     'PAAD',
-#     'PCPG',
-#     'PRAD',
-#     'READ',
-#     'SARC',
-#     'SKCM',
-#     #'STAD',
-#     'TGCT',
-#     'THCA',
-#     'THYM',
-#     'UCEC',
-#     'UCS',
-#     'UVM'
+    'LUAD',
+    'LUSC',
+    'MESO',
+    #'OV',
+    'PAAD',
+    'PCPG',
+    'PRAD',
+    'READ',
+    'SARC',
+    'SKCM',
+    #'STAD',
+    'TGCT',
+    'THCA',
+    'THYM',
+    'UCEC',
+    'UCS',
+    'UVM'
 ]
 
 tcga_metadata = pd.read_table(os.path.join(RAW_DIR,"TCGA","metadata","PANCAN.tsv.gz"))
@@ -105,7 +105,7 @@ rule all:
         expand(os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'log2_fold_change_tpm.tsv.gz'), cell_line=CELL_LINES),
         
         # impute event PSI
-        expand(os.path.join(PREP_DIR,'event_psi_imputed','{dataset}-{event_type}.tsv.gz'), dataset=DATASETS, event_type=EVENT_TYPES)
+        #expand(os.path.join(PREP_DIR,'event_psi_imputed','{dataset}-{event_type}.tsv.gz'), dataset=DATASETS, event_type=EVENT_TYPES)
         
         
 rule preprocess_ccle:
