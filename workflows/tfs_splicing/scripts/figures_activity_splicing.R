@@ -43,46 +43,44 @@ plot_correlations = function(correlations){
     plts = list()
     
     X = correlations %>%
-        arrange(spearman_correlation) %>%
+        distinct(event_gene, median_correlation, impact) %>%
+        arrange(median_correlation) %>%
         mutate(ranking = row_number())
     
-    # extreme associations
+    # Are there any extreme associations?
     x = X %>%
-        slice_max(spearman_correlation, n=3) %>%
+        slice_max(median_correlation, n=3) %>%
         bind_rows(
             X %>%
-            slice_max(-spearman_correlation, n=3)
+            slice_max(-median_correlation, n=3)
         )
     plts[["correlations-ranking-scatter"]] = X %>%
-        ggscatter(x="ranking", y="spearman_correlation", size=0.5) +
+        ggscatter(x="ranking", y="median_correlation", size=0.5, color="black") +
         geom_text_repel(
-            aes(label=event_gene),
+            aes(label=event_gene, color=impact),
             x,
             max.overlaps=50, segment.size=0.1,
             size=FONT_SIZE, family=FONT_FAMILY
         ) +
-        labs(x="Ranking", y="Spearman Correlation")
+        color_palette("jco") +
+        theme(aspect.ratio=1) +
+        labs(x="Ranking", y="median(Spearman Correlation)", color="Splicing Impact")
     
-    plts[["correlations-protein_impact_all-bar"]] = X %>%
-        count(impact) %>%
-        ggbarplot(x="impact", y="n", color=NA, fill="impact", 
-                  lab.hjust=0, lab.vjust=0,
-                  lab.size=FONT_SIZE, lab.family=FONT_FAMILY,
-                  palette=get_palette("Dark2", 14), label=TRUE) +
-        guides(fill="none") +
-        labs(x="Splicing Impact", y="Count") +
-        coord_flip()
-
-    plts[["correlations-protein_impact_high-bar"]] = X %>%
-        filter(abs(spearman_correlation) > 0.5) %>%
-        count(impact) %>%
-        ggbarplot(x="impact", y="n", color=NA, fill="impact", 
-                  lab.hjust=0, lab.vjust=0,
-                  lab.size=FONT_SIZE, lab.family=FONT_FAMILY,
-                  palette=get_palette("Dark2", 14), label=TRUE) +
-        guides(fill="none") +
-        labs(x="Splicing Impact", y="Count") +
-        coord_flip()
+    # what are the correlation distributions of the extreme associations?
+    X = correlations %>%
+        filter(event_gene %in% x[["event_gene"]]) %>%
+        arrange(median_correlation)
+    plts[["correlations-top-box"]] = X %>%
+        ggstripchart(x="event_gene", y="spearman_correlation", color="cancer_type", size=1) +
+        geom_boxplot(width=0.1, outlier.shape=NA, color="black", fill=NA) +
+        color_palette(get_palette("Paired", 19)) +
+        geom_text(
+            aes(label=label, y=1),
+            . %>% count(event_gene) %>% mutate(label=sprintf("n=%s",n)),
+            size=FONT_SIZE, family=FONT_FAMILY,
+        ) +
+        labs(x="Event & Gene", y="Spearman Correlation", color="Cancer Type") +
+        theme_pubr(x.text.angle = 70)
     
     return(plts)
 }
@@ -122,9 +120,8 @@ save_plt = function(plts, plt_name, extension='.pdf',
 
 
 save_plots = function(plts, figs_dir){
-    save_plt(plts, "correlations-ranking-scatter", '.pdf', figs_dir, width=4, height=4)
-    save_plt(plts, "correlations-protein_impact_all-bar", '.pdf', figs_dir, width=12, height=6)
-    save_plt(plts, "correlations-protein_impact_high-bar", '.pdf', figs_dir, width=10, height=5)
+    save_plt(plts, "correlations-ranking-scatter", '.pdf', figs_dir, width=25, height=6.5)
+    save_plt(plts, "correlations-top-box", '.pdf', figs_dir, width=5, height=10)
 }
 
 save_figdata = function(figdata, dir){
@@ -145,6 +142,8 @@ parseargs = function(){
     
     option_list = list( 
         make_option("--correlations_file", type="character"),
+        make_option("--protein_impact_file", type="character"),
+        make_option("--event_annotation_file", type="character"),
         make_option("--figs_dir", type="character")
     )
 
@@ -158,6 +157,7 @@ main = function(){
     
     correlations_file = args[["correlations_file"]]
     protein_impact_file = args[["protein_impact_file"]]
+    event_annotation_file = args[["event_annotation_file"]]
     figs_dir = args[["figs_dir"]]
     
     dir.create(figs_dir, recursive = TRUE)
@@ -173,7 +173,14 @@ main = function(){
         left_join(event_annot, by=c("ENSEMBL","EVENT")) %>%
         mutate(event_gene = paste0(EVENT,"_",GENE)) %>%
         left_join(protein_impact, by="EVENT") %>%
-        filter(spearman_n_obs > 20)
+        filter(spearman_n_obs > 20) %>%
+        group_by(ENSEMBL, EVENT) %>%
+        mutate(
+            median_correlation = median(spearman_correlation),
+            n_cancer_types = n()
+        ) %>%
+        ungroup() %>%
+        filter(n_cancer_types > 10)
     
     # plot
     plts = make_plots(correlations)

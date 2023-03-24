@@ -51,7 +51,7 @@ CANCER_TYPES = [
 #     'UCS',
 #     'UVM'
 ]
-DATASETS = ["CCLE"] + CANCER_TYPES
+DATASETS = CANCER_TYPES + ["CCLE"]
 
 TARGETS_FILES = {
     "event_psi_imputed": os.path.join(PREP_DIR,"event_psi_imputed","{dataset}-EX.tsv.gz"),
@@ -60,12 +60,13 @@ TARGETS_FILES = {
 }
 
 SIGNATURE_FILES = {
-    "event_psi": os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'delta_psi-EX.tsv.gz'),
+    #"event_psi": os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'delta_psi-EX.tsv.gz'),
+    "event_psi": os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'delta_psi_rel-EX-masked.tsv.gz'),
     "genexpr_tpm": os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'log2_fold_change_tpm.tsv.gz')
 }
 
 
-OMICS = ["event_psi","genexpr_tpm"]
+OMICS = ["event_psi"]#,"genexpr_tpm"]
 N_BOOTSTRAPS = 100
 BOOTSTRAPS = list(range(N_BOOTSTRAPS))
 ##### RULES #####
@@ -89,7 +90,7 @@ rule all:
         expand(os.path.join(RESULTS_DIR,'files','validations','{method}','{omic}','ENCORE','{cell_line}-{dataset}_regulons.tsv.gz'), method=["aracne"], omic=OMICS, cell_line=CELL_LINES, dataset=DATASETS),
 
         # make figures
-        #expand(os.path.join(RESULTS_DIR,'figures','validations',"{cell_line}","{omic}","{dataset}"), cell_line=CELL_LINES, omic=OMICS, dataset=DATASETS)
+        expand(os.path.join(RESULTS_DIR,'figures','validations',"{cell_line}","{omic}","{dataset}"), cell_line=CELL_LINES, omic=OMICS, dataset=DATASETS)
 
         # target inference
         ## correlations
@@ -112,6 +113,8 @@ rule target_inference_aracne_java_prep_inputs:
         regulators = os.path.join(RESULTS_DIR,"files","target_inference","aracne","{omic}","{dataset}","upstream_regs.tsv"),
         regulators_oi = os.path.join(RESULTS_DIR,"files","target_inference","aracne","{omic}","{dataset}","upstream_regulators.txt"),
         targets = os.path.join(RESULTS_DIR,"files","target_inference","aracne","{omic}","{dataset}","targets.tsv")
+    params:
+        omic = "{omic}"
     threads: 1
     resources:
         runtime = 3600*1, # h (event PSI needs more time)
@@ -123,6 +126,7 @@ rule target_inference_aracne_java_prep_inputs:
         regulators = pd.read_table(input.regulators, index_col=0)
         regulators_oi = list(pd.read_table(input.regulators_oi, header=None)[0])
         targets = pd.read_table(input.targets, index_col=0)
+        omic = params.omic
         
         # indices
         regulators.index.name = "regulator"
@@ -140,6 +144,10 @@ rule target_inference_aracne_java_prep_inputs:
         # drop events and genes with little variation (less than 1%)
         targets = targets.loc[(targets.std(1) / targets.mean(1)) > 0.01]
         regulators = regulators.loc[(regulators.std(1) / regulators.mean(1)) > 0.01]
+        
+        # add regulators to targets matrix for correct DPI, when different omics
+        if omic != "genexpr_tpm":
+            targets = pd.concat([targets,regulators])
         
         # DEV #########
         #regulators = regulators.iloc[:100]
@@ -234,6 +242,7 @@ rule target_inference_aracne_java_consolidation:
                 --output {params.output_dir} \
                 --threads {threads} \
                 --consolidatepvalue {params.consolidate_pvalue} \
+                --nobonferroni \
                 --consolidate
         """
         
@@ -244,21 +253,41 @@ rule target_inference_aracne_java_prep_output:
         regulators = os.path.join(RESULTS_DIR,"files","target_inference","aracne","{omic}","{dataset}","upstream_regs.tsv"),
         targets = os.path.join(RESULTS_DIR,"files","target_inference","aracne","{omic}","{dataset}","targets.tsv")
     output:
-        regulons = os.path.join(RESULTS_DIR,"files","target_inference","aracne","{omic}","{dataset}","regulons.tsv.gz")
+        regulons = os.path.join(RESULTS_DIR,"files","target_inference","aracne","{omic}","{dataset}","regulons.tsv.gz"),
+        interactions_regulators = os.path.join(RESULTS_DIR,"files","target_inference","aracne","{omic}","{dataset}","interactions_regulators.tsv.gz")
+    threads: 12
     resources:
         runtime = 3600*12, # h (event PSI needs more time)
         memory = 15, #GB
+    params:
+        padj_method = "fdr_bh",
+        padj_threshold = 0.05
     run:
         import pandas as pd
+        from statsmodels.stats.multitest import multipletests
+        from joblib import Parallel, delayed
+        from tqdm import tqdm
         
         # load
         regulons = pd.read_table(input.regulons)
         regulators = pd.read_table(input.regulators, index_col=0)
         targets = pd.read_table(input.targets, index_col=0)
+        padj_method = params.padj_method
+        padj_threshold = params.padj_threshold
+        n_jobs = threads
+        
+        # split regulator-target interactions from regulator-regulator interactions
+        is_reg_reg = regulons["Target"].isin(regulators.index)
+        interactions_regulators = regulons.loc[is_reg_reg].copy()
+        regulons = regulons.loc[~is_reg_reg].copy()
         
         # prepare regulon
+        ## multiple test correction
+        _, regulons["padj"], _, _ = multipletests(
+            regulons["pvalue"], method=padj_method
+        )
         ## filter out non-significant regulator-targets
-        regulons = regulons.loc[regulons["pvalue"] < 0.05].copy()
+        regulons = regulons.loc[regulons["padj"] < padj_threshold].copy()
         
         ## "upstream_regulator" and "target" columns
         regulons["regulator"] = regulons["Regulator"]
@@ -268,12 +297,29 @@ rule target_inference_aracne_java_prep_output:
         regulons["likelihood"] = regulons["MI"]
         
         # compute spearman correlation for each pair
-        regulons["tfmode"] = regulons.apply(
-            lambda row: regulators.loc[row["regulator"]].corr(targets.loc[row["target"]], method="spearman"), axis=1
-        )
+        def correlate(reg, tar, reg_name, tar_name, method="spearman"):
+            corr = reg.corr(tar, method=method)
+            corr = pd.Series({"regulator": reg_name, "target": tar_name, "tfmode": corr})
+            return corr
         
+        tfmodes = Parallel(n_jobs=n_jobs)(
+            delayed(correlate)(
+                regulators.loc[regulator],
+                targets.loc[target],
+                regulator,
+                target
+            ) for regulator, target in tqdm(regulons[["regulator","target"]].values)
+        )
+        tfmodes = pd.DataFrame(tfmodes)
+        regulons = pd.merge(regulons, tfmodes, on=["regulator","target"], how="left")
+        
+        #         regulons["tfmode"] = regulons.apply(
+        #             lambda row: regulators.loc[row["regulator"]].corr(targets.loc[row["target"]], method="spearman"), axis=1
+        #         )
+
         # save
         regulons.to_csv(output.regulons, sep="\t", index=None, compression="gzip")
+        interactions_regulators.to_csv(output.interactions_regulators, sep="\t", index=None, compression="gzip")
         
         print("Done!")
 
@@ -298,7 +344,8 @@ rule figures_target_inference:
     input:
         viper_result = os.path.join(RESULTS_DIR,'files','validations','aracne','{omic}','ENCORE','{cell_line}-{dataset}_regulons.tsv.gz'),
         regulons = os.path.join(RESULTS_DIR,"files","target_inference","aracne","{omic}","{dataset}","regulons.tsv.gz"),
-        encore_logfc = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'log2_fold_change_tpm.tsv.gz')
+        encore_logfc = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'log2_fold_change_tpm.tsv.gz'),
+        event_info = os.path.join(RAW_DIR,"VastDB","EVENT_INFO-hg38_noseqs.tsv")
     output:
         directory(os.path.join(RESULTS_DIR,'figures','validations',"{cell_line}","{omic}","{dataset}"))
     shell:
@@ -307,6 +354,7 @@ rule figures_target_inference:
                     --viper_result_file={input.viper_result} \
                     --encore_logfc_file={input.encore_logfc} \
                     --regulons_file={input.regulons} \
+                    --event_info_file={input.event_info} \
                     --figs_dir={output}
         """
 

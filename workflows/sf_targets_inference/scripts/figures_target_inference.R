@@ -31,15 +31,15 @@ PAL_DUAL = c("darkgreen","#7570B3") # '#1B9E77''#7570B3'
 # RAW_DIR = file.path(ROOT,'data','raw')
 # PREP_DIR = file.path(ROOT,'data','prep')
 # RESULTS_DIR = file.path(ROOT,"results","sf_targets_inference")
+# SUPPORT_DIR = file.path(ROOT,"support")
 
 #evaluation_file = file.path(RESULTS_DIR,"files","inference_evaluation","merged.tsv.gz")
 
 # viper_result_file = file.path(RESULTS_DIR,"files","validations","aracne","event_psi","ENCORE","HepG2-LIHC_regulons.tsv.gz")
 # regulons_file = file.path(RESULTS_DIR,"files","target_inference","aracne","event_psi","LIHC","regulons.tsv.gz")
-
 # encore_logfc_file = file.path(PREP_DIR,'ground_truth_kd','ENCORE',"HepG2",'log2_fold_change_tpm.tsv.gz')
-
 # event_info_file = file.path(RAW_DIR,"VastDB","EVENT_INFO-hg38_noseqs.tsv")
+# sf_info_file = file.path(SUPPORT_DIR,"Rodolska2022-suptab1-splicing_factors.tsv")
 
 # figs_dir = file.path(RESULTS_DIR,'figures','validations')
 
@@ -100,7 +100,7 @@ PAL_DUAL = c("darkgreen","#7570B3") # '#1B9E77''#7570B3'
 #     return(plts)
 # }
 
-prep_encore_logfc = function(encore_logfc, thresh=0.1){
+prep_encore_logfc = function(encore_logfc, thresh_sign=0.1, thresh_log2fc=1){
     
     encore_pvalues = encore_logfc %>%
         column_to_rownames("ID") %>%
@@ -112,7 +112,13 @@ prep_encore_logfc = function(encore_logfc, thresh=0.1){
         })
         
     is_significant = sapply(colnames(encore_pvalues), function(KD){
-        is_significant = encore_pvalues[KD,KD] < thresh
+        logfc = encore_logfc %>%
+            filter(ID==KD) %>%
+            dplyr::select(all_of(KD)) %>%
+            pull() %>%
+            abs()
+        pval = encore_pvalues[KD,KD]
+        is_significant = (pval < thresh_sign) & (logfc > thresh_log2fc)
         if (is.na(is_significant)){
             is_significant = FALSE
         }
@@ -123,6 +129,7 @@ prep_encore_logfc = function(encore_logfc, thresh=0.1){
     
     return(encore_logfc)
 }
+
 
 plot_regulons = function(regulons){
     plts = list()
@@ -150,7 +157,7 @@ plot_regulons = function(regulons){
             sf_type = ifelse(regulator %in% c("ENSG00000177679","ENSG00000139767"), 
                             "Short", "Long")
         ) %>% # SRRM3, SRRM4
-        distinct(sf_type, target_event_length) %>%
+        distinct(sf_type, target, target_event_length) %>%
         ggviolin(x="sf_type", y="target_event_length", fill="sf_type", color=NA, trim=TRUE) +
         geom_boxplot(width=0.1, fill=NA, outlier.size=0.1) +
         fill_palette(PAL_DUAL) +
@@ -168,28 +175,39 @@ plot_regulons = function(regulons){
 }
 
 
-plot_viper_activities = function(viper_result, encore_logfc){
+plot_viper_activities = function(viper_result, encore_logfc, sf_info){
     plts = list()
     
     X = viper_result %>%
         pivot_longer(
-            -c(regulator), 
+            -regulator, 
             names_to="KD", 
             values_to="viper_activity"
         ) %>%
-        group_by(KD) %>%
-        mutate(
-            # rank viper activity
-            viper_activity_ranking = rank(viper_activity),
-            # mark if upstream regulator was experimentally validated
-            is_validated = regulator == KD
-        ) %>%
-        ungroup() %>%
         left_join(
             encore_logfc %>%
             pivot_longer(-ID, names_to="KD", values_to="log2_fc"),
             by = c("regulator"="ID","KD")
-        )
+        ) %>%
+        left_join(
+            encore_logfc %>%
+            mutate_if(is.numeric, rank) %>%
+            pivot_longer(-ID, names_to="KD", values_to="log2_fc_ranking"),
+            by = c("regulator"="ID","KD")
+        ) %>%
+        drop_na() %>%
+        group_by(KD) %>%
+        mutate(
+            viper_activity_ranking = rank(viper_activity)
+        ) %>%
+        ungroup() %>%
+        left_join(
+            sf_info %>% 
+            distinct(ENSEMBL, CLASS, SYMBOL),
+            by = c("KD"="ENSEMBL")
+        ) %>%
+        drop_na(CLASS)
+        
     
     # randomize selection of the same N
     x_validated = X %>% filter(is_validated)
@@ -229,17 +247,17 @@ plot_viper_activities = function(viper_result, encore_logfc){
     
     # does predicted activity correlate with experimental logFC?
     plts[["viper_activities-fc_kds_vs_activity-scatter"]] = X %>%
+        filter(is_validated) %>%
         ggplot(aes(x=log2_fc, y=viper_activity)) +
         geom_scattermore(
-            aes(color=is_validated),
+            aes(color=CLASS),
             pixels = c(1000,1000), pointsize=10, alpha=0.8) +
-        color_palette(PAL_DUAL) +
+        color_palette(get_palette("Paired",20)) +
         theme_pubr() +
-        facet_wrap(~is_validated, scales="free_x") +
+        facet_wrap(~is_validated, scales="free") +
         theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         stat_cor(method="spearman", size=FONT_SIZE, family=FONT_FAMILY) +
-        #geom_smooth(method="lm", linetype="dashed", color="black", size=LINE_SIZE) +
-        guides(color="none") +
+        geom_smooth(method="lm", linetype="dashed", color="black", size=LINE_SIZE) +
         labs(x="Log2FC KD vs WT", y="Viper Activity")
     
     plts[["viper_activities-fc_kds_vs_activity_ranking-scatter"]] = X %>%
@@ -252,25 +270,25 @@ plot_viper_activities = function(viper_result, encore_logfc){
         facet_wrap(~is_validated, scales="free_x") +
         theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         stat_cor(method="spearman", size=FONT_SIZE, family=FONT_FAMILY) +
-        #geom_smooth(method="lm", linetype="dashed", color="black", size=LINE_SIZE) +
+        geom_smooth(method="lm", linetype="dashed", color="black", size=LINE_SIZE) +
         guides(color="none") +
         labs(x="Log2FC KD vs WT", y="Viper Activity Ranking")
-    
+
     return(plts)
 }
 
 
-make_plots = function(viper_result, encore_logfc, regulons){
+make_plots = function(viper_result, encore_logfc, regulons, sf_info){
     plts = list(
-        plot_viper_activities(viper_result, encore_logfc),
-        plot_regulons(regulons)
+        plot_viper_activities(viper_result, encore_logfc, sf_info),
+        plot_regulons(regulons, sf_info)
     )
     plts = do.call(c,plts)
     return(plts)
 }
 
 
-make_figdata = function(viper_result, encore_logfc, regulons){
+make_figdata = function(viper_result, encore_logfc, regulons, sf_info){
     figdata = list(
         "target_inference" = list(
             "viper_result" = viper_result
@@ -329,6 +347,7 @@ parseargs = function(){
         make_option("--viper_result_file", type="character"),
         make_option("--encore_logfc_file", type="character"),
         make_option("--regulons_file", type="character"),
+        make_option("--event_info_file", type="character"),
         make_option("--figs_dir", type="character")
     )
 
@@ -343,6 +362,8 @@ main = function(){
     viper_result_file = args[["viper_result_file"]]
     encore_logfc_file = args[["encore_logfc_file"]]
     regulons_file = args[["regulons_file"]]
+    event_info_file = args[["event_info_file"]]
+    sf_info_file = args[["sf_info_file"]]
     figs_dir = args[["figs_dir"]]
     
     dir.create(figs_dir, recursive = TRUE)
@@ -352,6 +373,7 @@ main = function(){
     encore_logfc = read_tsv(encore_logfc_file)
     regulons = read_tsv(regulons_file)
     event_info = read_tsv(event_info_file)
+    sf_info = read_tsv(sf_info_file)
     
     # prep
     ## select significant KDs
@@ -374,7 +396,7 @@ main = function(){
         filter(regulator %in% regulators_oi)
     
     # plot
-    plts = make_plots(viper_result, encore_logfc, regulons)
+    plts = make_plots(viper_result, encore_logfc, regulons, sf_info)
     
     # make figdata
     figdata = make_figdata(viper_result, encore_logfc, regulons)
