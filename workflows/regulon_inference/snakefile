@@ -107,21 +107,21 @@ rule all:
         ## split regulators
         expand(os.path.join(RESULTS_DIR,"files","inputs","{dataset}","genexpr_tpm-splicing_factors-{sf}.tsv"), dataset=DATASETS, sf=SPLICING_FACTORS),
 
-        #         ## compute associations for each splicing factor
-        #         ### SF vs exon
-        #         expand(
-        #             os.path.join(RESULTS_DIR,"files","associations","{dataset}","{omic}","{method}","{sf}.tsv.gz").format(
-        #                 dataset="{dataset}", omic="genexpr_vs_psi_imputed", method="{method}", sf="{sf}"
-        #             ),
-        #             dataset=DATASETS, method=METHODS_ASSOC, sf=SPLICING_FACTORS
-        #         ),
-        #         ### SF vs SF
-        #         expand(
-        #             os.path.join(RESULTS_DIR,"files","associations","{dataset}","{omic}","{method}.tsv.gz").format(
-        #                 dataset="{dataset}", omic="genexpr_vs_genexpr", method="{method}"
-        #             ),
-        #             dataset=DATASETS, method=METHODS_ASSOC
-        #         )
+        ## compute associations for each splicing factor
+        ### SF vs exon
+        expand(
+            os.path.join(RESULTS_DIR,"files","associations","{dataset}","{omic}","{method}","{sf}.tsv.gz").format(
+                dataset="{dataset}", omic="genexpr_vs_psi_imputed", method="{method}", sf="{sf}"
+            ),
+            dataset=DATASETS, method=METHODS_ASSOC, sf=SPLICING_FACTORS
+        ),
+        ### SF vs SF
+        expand(
+            os.path.join(RESULTS_DIR,"files","associations","{dataset}","{omic}","{method}.tsv.gz").format(
+                dataset="{dataset}", omic="genexpr_vs_genexpr", method="{method}"
+            ),
+            dataset=DATASETS, method=METHODS_ASSOC
+        )
         
         
         ### mutual information - with ARACNe
@@ -334,10 +334,12 @@ rule prep_inputs_regulon_inference:
         # drop events and genes with little variation
         to_keep = (targets.quantile(0.75, axis=1) - targets.quantile(0.25, axis=1)) >= 1
         targets = targets.loc[to_keep]
+        
         to_keep = (targets_imputed.quantile(0.75, axis=1) - targets_imputed.quantile(0.25, axis=1)) >= 1
         targets_imputed = targets_imputed.loc[to_keep]
-        to_keep = (regulators.quantile(0.75, axis=1) - regulators.quantile(0.25, axis=1)) >= 1
-        regulators = regulators.loc[to_keep]
+        
+        #to_keep = (regulators.quantile(0.75, axis=1) - regulators.quantile(0.25, axis=1)) >= 1
+        #regulators = regulators.loc[to_keep]
         
         # subset targets
         common_targets = set(targets.index).intersection(targets_imputed.index)
