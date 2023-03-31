@@ -1,0 +1,77 @@
+"""
+Author: Miquel Anglada Girotto
+Contact: miquelangladagirotto [at] gmail [dot] com
+
+Outline
+-------
+1. Do associations recapitulate CLIP networks?
+
+"""
+
+
+import os
+import pandas as pd
+
+# variables
+ROOT = os.path.dirname(os.path.dirname(os.getcwd()))
+RAW_DIR = os.path.join(ROOT,"data","raw")
+PREP_DIR = os.path.join(ROOT,"data","prep")
+SUPPORT_DIR = os.path.join(ROOT,"support")
+RESULTS_DIR = os.path.join(ROOT,"results","regulon_evaluation")
+REGINF_DIR = os.path.join(ROOT,"results","regulon_inference")
+SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
+
+# splicing factors for which we have experiments
+SPLICING_FACTORS = pd.read_table(os.path.join(SUPPORT_DIR,"20230324-splicing_factors.tsv"))
+SPLICING_FACTORS = SPLICING_FACTORS.loc[SPLICING_FACTORS["in_postar3"] & SPLICING_FACTORS["in_encore_kd"]]
+SPLICING_FACTORS = SPLICING_FACTORS["ENSEMBL"].to_list()
+
+DATASETS = ["CCLE", "LIHC"]
+METHODS_ASSOC = ["aracne","correlation_spearman","linear_model"]
+
+
+##### RULES #####
+rule all:
+    input:
+        ## combine associations of interest
+        expand(os.path.join(RESULTS_DIR,"files","associations","{dataset}","genexpr_vs_psi_imputed","{method}.tsv.gz"), dataset=DATASETS, method=METHODS_ASSOC)
+        
+        #         # evaluation
+        #         #expand(os.path.join(RESULTS_DIR,"files","inference_evaluation","{method}-{cell_line}.tsv.gz"), method=METHODS_INFER, cell_line=CELL_LINES),
+        #         #os.path.join(RESULTS_DIR,"files","inference_evaluation","merged.tsv.gz"),
+
+rule combine_associations:
+    input:
+        assocs = [
+            os.path.join(REGINF_DIR,"files","associations","{dataset}","genexpr_vs_psi_imputed","{method}",sf+".tsv.gz")
+            for sf in SPLICING_FACTORS            
+        ]
+    output:
+        os.path.join(RESULTS_DIR,"files","associations","{dataset}","genexpr_vs_psi_imputed","{method}.tsv.gz")
+    run:
+        import pandas as pd
+        
+        assocs = pd.concat([pd.read_table(f) for f in input.assocs])
+        
+        assocs.to_csv(output[0], **SAVE_PARAMS)
+        
+        print("Done!")
+        
+        
+# rule inference_evaluation:
+#     input:
+#         inference = os.path.join(RESULTS_DIR,"files","target_inference","{method}.tsv.gz"),
+#         ground_truth_kd_dpsi = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'delta_psi-EX.tsv.gz'),
+#         ground_truth_kd_rel = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'delta_psi_rel-EX.tsv.gz')
+#     output:
+#         os.path.join(RESULTS_DIR,"files","inference_evaluation","{method}-{cell_line}.tsv.gz")
+#     threads: 16
+#     shell:
+#         """
+#         nice python scripts/evaluate_inference.py \
+#                     --inference_file={input.inference} \
+#                     --ground_truth_kd_dpsi_file={input.ground_truth_kd_dpsi} \
+#                     --ground_truth_kd_rel_file={input.ground_truth_kd_rel} \
+#                     --n_jobs={threads} \
+#                     --output_file={output}
+#         """
