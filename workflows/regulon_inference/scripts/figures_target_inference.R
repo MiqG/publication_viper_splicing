@@ -44,62 +44,6 @@ PAL_DUAL = c("darkgreen","#7570B3") # '#1B9E77''#7570B3'
 # figs_dir = file.path(RESULTS_DIR,'figures','validations')
 
 ##### FUNCTIONS #####
-# plot_evaluation = function(evaluation){
-#     plts = list()
-    
-#     X = evaluation
-    
-#     n_kds = X %>%
-#         distinct(sf_target_inference_method, kd_cell_line, KD_ENSEMBL) %>%
-#         count(sf_target_inference_method, kd_cell_line) %>%
-#         mutate(label=sprintf("%s (n=%s)",kd_cell_line,n))
-    
-#     plts[["evaluation-thresh_vs_prop_correct-line"]] = X %>%
-#         left_join(n_kds, by=c("sf_target_inference_method","kd_cell_line")) %>%
-#         ggplot(aes(x=threshold_classification, y=prop_correct, group=KD_ENSEMBL)) +
-#         geom_line(size=0.1, color="grey", alpha=0.5) +
-#         geom_smooth(aes(color=kd_cell_line, fill=kd_cell_line, group=kd_cell_line), 
-#                     se=FALSE, span=0.2, size=LINE_SIZE, linetype="dashed", alpha=0.5, method="loess") +
-#         color_palette("Dark2") +
-#         theme_pubr(legend="none") +
-#         facet_wrap(~label+sf_target_inference_method) +
-#         theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
-#         labs(x="Classification Threshold", y="Proportion Correct") +
-#         lims(x=c(0,1), y=c(0,1))
-    
-#     x = X %>%
-#         left_join(n_kds, by=c("kd_cell_line","sf_target_inference_method")) %>% 
-#         group_by(sf_target_inference_method, label, kd_cell_line, threshold_classification) %>%
-#         summarize(
-#             med_tpr=median(tpr, na.rm=TRUE), 
-#             med_fpr=median(fpr, na.rm=TRUE),
-#             med_recall=median(recall, na.rm=TRUE),
-#             med_precision=median(precision, na.rm=TRUE)
-#         )
-#     plts[["evaluation-fpr_vs_tpr-line"]] = x %>%
-#         arrange(threshold_classification) %>%
-#         ggplot(aes(x=med_fpr, y=med_tpr)) +
-#         geom_line(aes(color=sf_target_inference_method), size=LINE_SIZE, linetype="dashed") +
-#         geom_point(aes(color=sf_target_inference_method), size=1) +
-#         color_palette("Dark2") +
-#         facet_wrap(~label) +
-#         theme_pubr() + 
-#         theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
-#         labs(x="FPR", y="TPR", color="Inference Method")
-    
-#     plts[["evaluation-recall_vs_precision-line"]] = x %>%
-#         ggplot(aes(x=med_recall, y=med_precision)) +
-#         geom_line(aes(color=sf_target_inference_method), size=LINE_SIZE, linetype="dashed") +
-#         geom_point(aes(color=sf_target_inference_method), size=1) +
-#         color_palette("Dark2") +
-#         facet_wrap(~label) +
-#         theme_pubr() + 
-#         theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
-#         labs(x="Recall", y="Precision", color="Inference Method")
-    
-#     return(plts)
-# }
-
 prep_encore_logfc = function(encore_logfc, thresh_sign=0.1, thresh_log2fc=1){
     
     encore_pvalues = encore_logfc %>%
