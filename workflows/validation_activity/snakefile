@@ -1,0 +1,35 @@
+"""
+Author: Miquel Anglada Girotto
+Contact: miquelangladagirotto [at] gmail [dot] com
+"""
+
+
+import os
+import pandas as pd
+
+# variables
+ROOT = os.path.dirname(os.path.dirname(os.getcwd()))
+RAW_DIR = os.path.join(ROOT,"data","raw")
+PREP_DIR = os.path.join(ROOT,"data","prep")
+SUPPORT_DIR = os.path.join(ROOT,"support")
+RESULTS_DIR = os.path.join(ROOT,"results","validation_activity")
+SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
+
+CELL_LINES = ["K562","HepG2"]
+
+SIGNATURE_FILES = {
+    #"event_psi": os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'delta_psi-EX.tsv.gz'),
+    "event_psi": os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'delta_psi_rel-EX-masked.tsv.gz'),
+    "genexpr_tpm": os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'log2_fold_change_tpm.tsv.gz')
+}
+
+
+##### RULES #####
+rule all:
+    input:
+        #         # infer activities with VIPER
+        #         expand(os.path.join(RESULTS_DIR,'files','validations','{method}','{omic}','ENCORE','{cell_line}-{dataset}_regulons.tsv.gz'), method=["aracne"], omic=OMICS, cell_line=CELL_LINES, dataset=DATASETS),
+
+        #         # make figures
+        #         expand(os.path.join(RESULTS_DIR,'figures','validations',"{cell_line}","{omic}","{dataset}"), cell_line=CELL_LINES, omic=OMICS, dataset=DATASETS)
+        
