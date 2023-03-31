@@ -26,41 +26,42 @@ SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
 
 EVENT_TYPES = ["EX"]
 CELL_LINES = ["K562","HepG2"]
+DPSI_TYPES = ["delta_psi","delta_psi_rel"]
 CANCER_TYPES = [
-    'ACC',
-    'BLCA',
-    'BRCA',
-    'CESC',
-    'CHOL',
-    'COAD',
-    'DLBC',
-    #'ESCA',
-    'GBM',
-    'HNSC',
-    'KICH',
-    'KIRC',
-    'KIRP',
-    #'LAML',
-    'LGG',
-     'LIHC',
-    'LUAD',
-    'LUSC',
-    'MESO',
-    #'OV',
-    'PAAD',
-    'PCPG',
-    'PRAD',
-    'READ',
-    'SARC',
-    'SKCM',
-    #'STAD',
-    'TGCT',
-    'THCA',
-    'THYM',
-    'UCEC',
-    'UCS',
-    'UVM'
-]
+#     'ACC',
+#     'BLCA',
+#     'BRCA',
+#     'CESC',
+#     'CHOL',
+#     'COAD',
+#     'DLBC',
+#     #'ESCA',
+#     'GBM',
+#     'HNSC',
+#     'KICH',
+#     'KIRC',
+#     'KIRP',
+#     #'LAML',
+#     'LGG',
+      'LIHC',
+#     'LUAD',
+#     'LUSC',
+#     'MESO',
+#     #'OV',
+#     'PAAD',
+#     'PCPG',
+#     'PRAD',
+#     'READ',
+#     'SARC',
+#     'SKCM',
+#     #'STAD',
+#     'TGCT',
+#     'THCA',
+#     'THYM',
+#     'UCEC',
+#     'UCS',
+#     'UVM'
+ ]
 
 tcga_metadata = pd.read_table(os.path.join(RAW_DIR,"TCGA","metadata","PANCAN.tsv.gz"))
 TCGA_N_SAMPLES = tcga_metadata["cancer_type"].value_counts().to_dict()
@@ -101,14 +102,20 @@ rule all:
         expand(os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE',"{cell_line}",'delta_psi-{event_type}.tsv.gz'), event_type=EVENT_TYPES, cell_line=CELL_LINES),
         expand(os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE',"{cell_line}",'delta_psi_rel-{event_type}.tsv.gz'), event_type=EVENT_TYPES, cell_line=CELL_LINES),
         ## mask delta PSI
-        expand(os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'delta_psi_rel-{event_type}-masked.tsv.gz'), event_type=EVENT_TYPES, cell_line=CELL_LINES),
+        expand(os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'{dpsi_type}-{event_type}-masked.tsv.gz'), event_type=EVENT_TYPES, cell_line=CELL_LINES, dpsi_type=DPSI_TYPES),
         ## simplify delta PSI and log FC TPM
-        expand(os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'{dpsi_type}-{event_type}.tsv.gz'), event_type=EVENT_TYPES, dpsi_type=["delta_psi","delta_psi_rel"], cell_line=CELL_LINES),
+        expand(os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'{dpsi_type}-{event_type}.tsv.gz'), event_type=EVENT_TYPES, dpsi_type=DPSI_TYPES, cell_line=CELL_LINES),
         expand(os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'log2_fold_change_tpm.tsv.gz'), cell_line=CELL_LINES),
         
         # impute event PSI
         #expand(os.path.join(PREP_DIR,'event_psi_imputed','{dataset}-{event_type}.tsv.gz'), dataset=DATASETS, event_type=EVENT_TYPES)
         
+        # preprocess POSTAR3
+        os.path.join(PREP_DIR,"clip_peaks_mapped","POSTAR3.tsv.gz"),
+        
+        # compute summary stats
+        expand(os.path.join(PREP_DIR,"summary_stats","event_psi_imputed","{dataset}-EX.tsv.gz"), dataset=DATASETS),
+        expand(os.path.join(PREP_DIR,"summary_stats","genexpr_tpm","{dataset}.tsv.gz"), dataset=DATASETS)
         
 rule preprocess_ccle:
     input:
@@ -584,9 +591,9 @@ rule prepare_ground_truth_kd_dpsi:
 rule mask_dpsi_rel:
     input:
         delta_psi = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE','{cell_line}','delta_psi-{event_type}.tsv.gz'),
-        delta_psi_rel = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE','{cell_line}','delta_psi_rel-{event_type}.tsv.gz')
+        delta_psi_tomask = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE','{cell_line}','{dpsi_type}-{event_type}.tsv.gz')
     output:
-        os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'delta_psi_rel-{event_type}-masked.tsv.gz')
+        os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'{dpsi_type}-{event_type}-masked.tsv.gz')
     params:
         thresh = 10
     run:
@@ -595,14 +602,14 @@ rule mask_dpsi_rel:
         
         # load
         delta_psi = pd.read_table(input.delta_psi, index_col=0)
-        delta_psi_rel = pd.read_table(input.delta_psi_rel, index_col=0)
+        delta_psi_tomask = pd.read_table(input.delta_psi_tomask, index_col=0)
         thresh = params.thresh
         
         # mask
-        delta_psi_rel[np.abs(delta_psi) > thresh] = np.nan
+        delta_psi_tomask[np.abs(delta_psi) > thresh] = np.nan
         
         # save
-        delta_psi_rel.reset_index().to_csv(output[0], **SAVE_PARAMS)
+        delta_psi_tomask.reset_index().to_csv(output[0], **SAVE_PARAMS)
         
         print("Done!")
         
@@ -661,3 +668,153 @@ rule impute_psi_tcga:
                     --method_kws={params.method_kws} \
                     --features_as_rows={params.features_as_rows}
         """
+        
+        
+rule map_clip_peaks_to_exons:
+    input:
+        peaks = os.path.join(RAW_DIR,'POSTAR3','human.txt.gz'),
+        event_info = os.path.join(RAW_DIR,"VastDB","EVENT_INFO-hg38_noseqs.tsv")
+    output:
+        os.path.join(PREP_DIR,"clip_peaks_mapped","POSTAR3.tsv.gz")
+    params:
+        margin = 500
+    run:
+        import pandas as pd
+        import pyranges as pr
+        
+        # load
+        ## read peaks file
+        col_names = [
+            "Chromosome",
+            "Start",
+            "End",
+            "peak_id",
+            "Strand",
+            "RBP",
+            "experiment_method",
+            "experiment_model",
+            "experiment_id"
+        ]
+        peaks = pd.read_table(
+            input.peaks,
+            header=None,
+            names=col_names
+        )
+        ## read vastdb events
+        events = pd.read_table(input.event_info)
+        ## params
+        margin = params.margin
+        
+        # assign exons to peaks if a peak falls on the exon or one of its neighboring introns
+        ## only event type of interest
+        events = events.loc[events["EVENT"].str.contains("EX")].copy()
+        ## process event coordinates
+        events["Chromosome"] = (
+            events["COORD_o"].str.split(":").str[0]
+        )
+        events["EVENT_start"] = (
+            events["COORD_o"].str.split(":").str[1].str.split("-").str[0]
+        ).astype("int")
+        events["EVENT_end"] = (
+            events["COORD_o"].str.split(":").str[1].str.split("-").str[1].astype("int")
+        )
+        events["Strand"] = (
+            events["REF_CO"].str.split(":").str[2]
+        )
+        #         ## start and end will be the next splice site junctions
+        #         events["Start"] = events["CO_C1"].str.split(":").str[1].str.split("-").str[1]
+        #         events["End"] = events["CO_C2"].str.split(":").str[1].str.split("-").str[0]
+        events["Start"] = events["EVENT_start"]
+        events["End"] = events["EVENT_end"]
+        
+        # intersect
+        ## prepare
+        X = pr.PyRanges(
+            events[["EVENT", "Chromosome", "Start", "End", "Strand"]],
+            int64=True,
+        )
+        Y = pr.PyRanges(peaks, int64=True)
+        ## join
+        mapping = X.join(Y, slack=margin, how="left", report_overlap=True)
+               
+        # prepare outputs
+        ## drop unmapped
+        mapping = mapping.df.loc[~mapping.df["peak_id"].isin(["-1"])]
+        ## rename
+        mapping = mapping.rename(columns={
+            "Start_b":"peak_start",
+            "End_b":"peak_end"
+        })
+        
+        # save
+        mapping.to_csv(output[0], sep="\t", compression="gzip", index=False)
+        
+        print("Done!")
+        
+        
+rule make_summary_stats_splicing:
+    input:
+        omic = os.path.join(PREP_DIR,"event_psi_imputed","{dataset}-EX.tsv.gz")
+    output:
+        os.path.join(PREP_DIR,"summary_stats","event_psi_imputed","{dataset}-EX.tsv.gz")
+    run:
+        import pandas as pd
+        from scipy import stats
+        
+        def get_summary_stats(df, label):
+            summary_stats = {
+                label + "_mean": df.mean(axis=1),
+                label + "_median": df.median(axis=1),
+                label + "_std": df.std(axis=1),
+                label + "_std_ddof0": df.std(axis=1, ddof=0),
+                label + "_mad": df.apply(stats.median_abs_deviation, axis=1),
+                label + "_q25": df.quantile(0.25, axis=1),
+                label + "_q75": df.quantile(0.75, axis=1),
+            }
+            return summary_stats
+        
+        # load
+        omic = pd.read_table(input.omic, index_col=0)
+        
+        # get summary stats
+        summary_stats = pd.DataFrame(get_summary_stats(omic, "EVENT"))
+        
+        # save
+        summary_stats.reset_index().to_csv(output[0], **SAVE_PARAMS)
+        
+        print("Done!")
+        
+
+rule make_summary_stats_genexpr:
+    input:
+        omic = os.path.join(PREP_DIR,"genexpr_tpm","{dataset}.tsv.gz")
+    output:
+        os.path.join(PREP_DIR,"summary_stats","genexpr_tpm","{dataset}.tsv.gz")
+    run:
+        import pandas as pd
+        from scipy import stats
+        
+        def get_summary_stats(df, label):
+            summary_stats = {
+                label + "_mean": df.mean(axis=1),
+                label + "_median": df.median(axis=1),
+                label + "_std": df.std(axis=1),
+                label + "_std_ddof0": df.std(axis=1, ddof=0),
+                label + "_mad": df.apply(stats.median_abs_deviation, axis=1),
+                label + "_q25": df.quantile(0.25, axis=1),
+                label + "_q75": df.quantile(0.75, axis=1),
+            }
+            return summary_stats
+        
+        # load
+        omic = pd.read_table(input.omic, index_col=0)
+        
+        # get summary stats
+        summary_stats = pd.DataFrame(get_summary_stats(omic, "ENSEMBL"))
+        
+        # save
+        summary_stats.reset_index().to_csv(output[0], **SAVE_PARAMS)
+        
+        print("Done!")
+        
+        
