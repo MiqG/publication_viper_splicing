@@ -122,26 +122,6 @@ plot_assocs = function(assocs){
         theme(aspect.ratio=1) +
         labs(x="Mutual Information", y="-log10(Spearman p-value)")
     
-    # p-values vs corresponding assoc
-#     plts[[]] = X %>%
-#         left_join(
-#             regulons_pert %>%
-#             filter(abs(delta_psi)>10) %>%
-#             distinct(regulator,target) %>%
-#             mutate(is_inter = TRUE),
-#             by = c("regulator", "target")
-#         ) %>%
-#         filter(abs(log_lm_coef)<0.2 & lm_pvalue < 1e-6) %>%
-#         mutate(is_inter = replace_na(is_inter, FALSE)) %>%
-#         drop_na(log_lm_pvalue) %>%
-#         ggplot(aes(x=log_lm_coef, y=log_lm_pvalue)) +
-#         geom_scattermore(aes(color=is_inter), pixels=c(1000,1000), pointsize=1, alpha=0.5) +
-#         facet_wrap(~is_inter, scales="free_x") +
-#         theme_pubr() +
-#         stat_cor(method="spearman", size=FONT_SIZE, family=FONT_FAMILY) +
-#         theme(aspect.ratio=1) +
-#         labs(x="log10(LM Coefficient+1)", y="-log10(LM p-value)")
-    
     # pull out some examples SF genexpr vs exon PSI (TODO)
     ## low MI and high spearman
     edge_oi = X %>%
@@ -173,57 +153,7 @@ plot_assocs = function(assocs){
             hjust=0, vjust=0, size=FONT_SIZE, family=FONT_FAMILY
         ) +
         theme(aspect.ratio=1) +
-        labs(x=sprintf("%s log2(TPM+1)", sf_oi), y=sprintf("%s PSI", exon_oi))
-    
-    ## low LR-test p-value
-    edge_oi = X %>%
-        slice_min(lm_pvalue, n=1)
-    sf_oi = edge_oi %>% pull(regulator)
-    exon_oi = edge_oi %>% pull(target)
-    gene_oi = "ENSG00000005893"
-    
-    x = regulators %>% filter(regulator %in% sf_oi) %>% pivot_longer(-regulator, values_to="reg_genexpr")
-    y = targets %>% filter(target %in% exon_oi) %>% pivot_longer(-target, values_to="target_psi")
-    z = genexpr %>% filter(ID %in% gene_oi) %>% pivot_longer(-ID, values_to="target_genexpr")
-    
-    ## high LR-test coefficient
-    edge_oi = X %>%
-        left_join(summary_stats_splicing, by=c("target"="EVENT")) %>%
-        slice_min(iqr, n=1) %>%
-        tail(1)
-    sf_oi = edge_oi %>% pull(regulator)
-    exon_oi = edge_oi %>% pull(target)
-    gene_oi = "ENSG00000172845"
-    
-    x = regulators %>% filter(regulator %in% sf_oi) %>% pivot_longer(-regulator, values_to="reg_genexpr")
-    y = targets %>% filter(target %in% exon_oi) %>% pivot_longer(-target, values_to="target_psi")
-    z = genexpr %>% filter(ID %in% gene_oi) %>% pivot_longer(-ID, values_to="target_genexpr")
-    
-    df = x %>%
-        left_join(y, by="name") %>%
-        left_join(z, by="name") %>%
-        left_join(edge_oi, by=c("regulator","target")) %>%
-        mutate(
-            label = sprintf(
-                "MI=%s | Spear. Coef.=%s | Spear. p-value=%s | LM Coef.=%s | LM p-value=%s",
-                signif(mutual_information,2), signif(spear_coef,2), signif(spear_pvalue,2), 
-                signif(lm_coef,2), signif(lm_pvalue,2)),
-            x = min(reg_genexpr), 
-            y = max(target_psi),
-            event_gene = sprintf("%s_vs_%s", regulator, target)
-        )
-    
-    plts[["assocs-example-low_mi_vs_high_spear-scatter"]] = df %>% 
-        mutate(target_psi = target_psi) %>% 
-        ggscatter(x="reg_genexpr", y="target_psi", size=1) +
-        geom_text(
-            aes(x=x, y=y, label=label),
-            . %>% distinct(x,y,label),
-            hjust=0, vjust=0, size=FONT_SIZE, family=FONT_FAMILY
-        ) +
-        facet_wrap(~event_gene) +
-        theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) 
-    
+        labs(x=sprintf("%s log2(TPM+1)", sf_oi), y=sprintf("%s PSI", exon_oi))  
     
     return(plts)
 }
@@ -527,9 +457,7 @@ plot_eval_pert = function(){
         labs(x="|Delta PSI Rel.|", y="-log10(Spearman p-value)")
          
     plts[["eval_pert-delta_psi_rel_vs_lm_coef-scatter"]] = X %>%
-        filter(abs(delta_psi)>10) %>%
-        mutate(log_lm_coef = ifelse(delta_psi_rel<0, -log_lm_coef, log_lm_coef)) %>%
-        ggplot(aes(x=abs(delta_psi_rel), y=log_lm_coef)) +
+        ggplot(aes(x=delta_psi_rel, y=log_lm_coef)) +
         geom_scattermore(aes(color=cell_line), pixels=c(1000,1000), pointsize=1, alpha=0.1) +
         color_palette("Dark2") +
         theme_pubr() +
@@ -541,7 +469,7 @@ plot_eval_pert = function(){
         guides(color="none") +
         labs(x="Delta PSI Rel.", y="log10(LM Coefficient+1)")
     
-    plts[["eval_pert-delta_psi_rel_vs_lm_coef_-scatter"]] = X %>%
+    plts[["eval_pert-delta_psi_rel_vs_lm_coef_custom-scatter"]] = X %>%
         filter(abs(delta_psi)>10) %>%
         mutate(log_lm_coef = ifelse(delta_psi_rel<0, -log_lm_coef, log_lm_coef)) %>%
         ggplot(aes(x=abs(delta_psi_rel), y=log_lm_coef)) +
@@ -567,224 +495,373 @@ plot_eval_pert = function(){
         guides(color="none") +
         labs(x="|Delta PSI Rel.|", y="-log10(LM p-value)")
     
-    print("Hello")
-    
     dpsi_thresh = 10
-    dpsi_threshs = c(10,20,30)
     set.seed(RANDOM_SEED)
     
-    for (dpsi_thresh in dpsi_threshs){
-        
-        X = X %>%
-            mutate(is_inter = abs(delta_psi) > dpsi_thresh) # define interactions based on dpsi threshold
-        
-        print(sprintf("Total interactions: %s (Thresh = %s)", 
-                      X %>% filter(is_inter) %>% count(cell_line, is_inter) %>% pull(n), dpsi_thresh))
-        
-        eval_pert = X
-        eval_pert = eval_pert %>%
+    X = X %>%
+        mutate(is_inter = abs(delta_psi) > dpsi_thresh) # define interactions based on dpsi threshold
+
+    print(sprintf("Total interactions: %s (Thresh = %s)", 
+                  X %>% filter(is_inter) %>% count(cell_line, is_inter) %>% pull(n), dpsi_thresh))
+
+    eval_pert = X
+    eval_pert = eval_pert %>%
+        group_by(cell_line) %>%
+        arrange(-abs(mutual_information)) %>%
+        mutate(
+            ranking = row_number(),
+            ranking_ratio = ranking / n(),
+            cumsum_is_inter = cumsum(is_inter) / sum(is_inter),
+            ranking_var = "mutual_information"
+        ) %>%
+        filter(ranking %in% round(quantile(ranking, seq(0,1,0.1)))) %>%
+        ungroup() %>%
+        bind_rows(
+            eval_pert %>%
             group_by(cell_line) %>%
-            arrange(-abs(mutual_information)) %>%
+            arrange(abs(lm_coef)) %>%
             mutate(
                 ranking = row_number(),
                 ranking_ratio = ranking / n(),
                 cumsum_is_inter = cumsum(is_inter) / sum(is_inter),
-                ranking_var = "mutual_information"
+                ranking_var = "lm_coef"
             ) %>%
             filter(ranking %in% round(quantile(ranking, seq(0,1,0.1)))) %>%
-            ungroup() %>%
-            bind_rows(
-                eval_pert %>%
-                group_by(cell_line) %>%
-                arrange(-abs(lm_coef)) %>%
-                mutate(
-                    ranking = row_number(),
-                    ranking_ratio = ranking / n(),
-                    cumsum_is_inter = cumsum(is_inter) / sum(is_inter),
-                    ranking_var = "lm_coef"
-                ) %>%
-                filter(ranking %in% round(quantile(ranking, seq(0,1,0.1)))) %>%
-                ungroup()
-            ) %>%
-            bind_rows(
-                eval_pert %>%
-                group_by(cell_line) %>%
-                arrange(lm_pvalue) %>%
-                mutate(
-                    ranking = row_number(),
-                    ranking_ratio = ranking / n(),
-                    cumsum_is_inter = cumsum(is_inter) / sum(is_inter),
-                    ranking_var = "lm_pvalue"
-                ) %>%
-                filter(ranking %in% round(quantile(ranking, seq(0,1,0.1)))) %>%
-                ungroup()
-            ) %>%
-            bind_rows(
-                eval_pert %>%
-                group_by(cell_line) %>%
-                arrange(-abs(spear_coef)) %>%
-                mutate(
-                    ranking = row_number(),
-                    ranking_ratio = ranking / n(),
-                    cumsum_is_inter = cumsum(is_inter) / sum(is_inter),
-                    ranking_var = "spear_coef"
-                ) %>%
-                filter(ranking %in% round(quantile(ranking, seq(0,1,0.1)))) %>%
-                ungroup()
-            ) %>%
-            bind_rows(
-                eval_pert %>%
-                group_by(cell_line) %>%
-                arrange(spear_pvalue) %>%
-                mutate(
-                    ranking = row_number(),
-                    ranking_ratio = ranking / n(),
-                    cumsum_is_inter = cumsum(is_inter) / sum(is_inter),
-                    ranking_var = "spear_pvalue"
-                ) %>%
-                filter(ranking %in% round(quantile(ranking, seq(0,1,0.1)))) %>%
-                ungroup()
-            ) %>%
-            bind_rows(
-                eval_pert %>%
-                group_by(cell_line) %>%
-                arrange(-is_inter) %>% 
-                mutate(
-                    ranking = row_number(),
-                    ranking_ratio = ranking / n(),
-                    cumsum_is_inter = cumsum(is_inter) / sum(is_inter),
-                    ranking_var = "ground_truth"
-                ) %>%
-                filter(ranking %in% round(quantile(ranking, seq(0,1,0.1)))) %>%
-                ungroup()
-            ) %>%
-            bind_rows(
-                eval_pert %>%
-                group_by(cell_line) %>%
-                sample_frac(1L) %>% 
-                mutate(
-                    ranking = row_number(),
-                    ranking_ratio = ranking / n(),
-                    cumsum_is_inter = cumsum(is_inter) / sum(is_inter),
-                    ranking_var = "random"
-                ) %>%
-                filter(ranking %in% round(quantile(ranking, seq(0,1,0.1)))) %>%
-                ungroup()
-            )
-
-        # calculate auc
-        eval_pert = eval_pert %>%
-            group_by(cell_line, ranking_var) %>%
-            mutate(auc = sum(diff(ranking_ratio) * (head(cumsum_is_inter,-1)+tail(cumsum_is_inter,-1)))/2) %>%
             ungroup()
+        ) %>%
+        bind_rows(
+            eval_pert %>%
+            group_by(cell_line) %>%
+            arrange(lm_pvalue) %>%
+            mutate(
+                ranking = row_number(),
+                ranking_ratio = ranking / n(),
+                cumsum_is_inter = cumsum(is_inter) / sum(is_inter),
+                ranking_var = "lm_pvalue"
+            ) %>%
+            filter(ranking %in% round(quantile(ranking, seq(0,1,0.1)))) %>%
+            ungroup()
+        ) %>%
+        bind_rows(
+            eval_pert %>%
+            group_by(cell_line) %>%
+            arrange(-abs(spear_coef)) %>%
+            mutate(
+                ranking = row_number(),
+                ranking_ratio = ranking / n(),
+                cumsum_is_inter = cumsum(is_inter) / sum(is_inter),
+                ranking_var = "spear_coef"
+            ) %>%
+            filter(ranking %in% round(quantile(ranking, seq(0,1,0.1)))) %>%
+            ungroup()
+        ) %>%
+        bind_rows(
+            eval_pert %>%
+            group_by(cell_line) %>%
+            arrange(spear_pvalue) %>%
+            mutate(
+                ranking = row_number(),
+                ranking_ratio = ranking / n(),
+                cumsum_is_inter = cumsum(is_inter) / sum(is_inter),
+                ranking_var = "spear_pvalue"
+            ) %>%
+            filter(ranking %in% round(quantile(ranking, seq(0,1,0.1)))) %>%
+            ungroup()
+        ) %>%
+        bind_rows(
+            eval_pert %>%
+            group_by(cell_line) %>%
+            arrange(-is_inter) %>% 
+            mutate(
+                ranking = row_number(),
+                ranking_ratio = ranking / n(),
+                cumsum_is_inter = cumsum(is_inter) / sum(is_inter),
+                ranking_var = "ground_truth"
+            ) %>%
+            filter(ranking %in% round(quantile(ranking, seq(0,1,0.1)))) %>%
+            ungroup()
+        ) %>%
+        bind_rows(
+            eval_pert %>%
+            group_by(cell_line) %>%
+            sample_frac(1L) %>% 
+            mutate(
+                ranking = row_number(),
+                ranking_ratio = ranking / n(),
+                cumsum_is_inter = cumsum(is_inter) / sum(is_inter),
+                ranking_var = "random"
+            ) %>%
+            filter(ranking %in% round(quantile(ranking, seq(0,1,0.1)))) %>%
+            ungroup()
+        )
 
-        # do clip interactions tend to have large association values?
-        plts[[sprintf("eval_pert-rankings_by_var-scatter-thresh%s",dpsi_thresh)]] = eval_pert %>%
-            ggplot(aes(x=ranking_ratio, y=cumsum_is_inter)) +
-            geom_line(aes(color=ranking_var), size=LINE_SIZE) +
-            geom_point(aes(color=ranking_var), size=1) +
-            color_palette("simpsons") +
-            theme_pubr() +
-            geom_text(
-                aes(x=x, y=y, label=auc_lab, color=ranking_var),
-                . %>% 
-                    group_by(cell_line) %>%
-                    distinct(cell_line, auc, ranking_var) %>% 
-                    arrange(auc) %>%
-                    mutate(
-                        auc_lab = sprintf("AUC(%s)=%s",ranking_var,round(auc,2)),
-                        x=0.58, 
-                        y=seq(0,0.25,length.out=7)
-                    ) %>%
-                    ungroup(),
-                hjust=0, size=FONT_SIZE, family=FONT_FAMILY
-            ) +
-            facet_wrap(~cell_line) +
-            theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
-            labs(x="Ranking Ratio Association", 
-                 y=sprintf("Cumulative TPR (|dPSI|>%s)", dpsi_thresh), color="Association")
+    # calculate auc
+    eval_pert = eval_pert %>%
+        group_by(cell_line, ranking_var) %>%
+        mutate(auc = sum(diff(ranking_ratio) * (head(cumsum_is_inter,-1)+tail(cumsum_is_inter,-1)))/2) %>%
+        ungroup()
 
-#         plts[[sprintf("eval_pert-is_inter_vs_mi-box-thresh%s",dpsi_thresh)]] = X %>%
-#             ggplot(aes(x=is_inter, y=mutual_information)) +
-#             geom_boxplot(aes(fill=is_inter), outlier.size=0.1) +
-#             geom_text(
-#                 aes(label=label, y=-0.05),
-#                 . %>% count(is_inter) %>% mutate(label=sprintf("n=%s",n)),
-#                 size=FONT_SIZE, family=FONT_FAMILY
-#             ) +
-#             stat_compare_means(method="wilcox.test", size=FONT_SIZE, family=FONT_FAMILY) +
-#             theme_pubr() +
-#             fill_palette(PAL_DUAL) +
-#             guides(fill="none") +
-#             theme(aspect.ratio=1) +
-#             labs(x="CLIP Interaction", y="Mutual Information")
+    # do clip interactions tend to have large association values?
+    plts[[sprintf("eval_pert-rankings_by_var-scatter-thresh%s",dpsi_thresh)]] = eval_pert %>%
+        ggplot(aes(x=ranking_ratio, y=cumsum_is_inter)) +
+        geom_line(aes(color=ranking_var), size=LINE_SIZE) +
+        geom_point(aes(color=ranking_var), size=1) +
+        color_palette("simpsons") +
+        theme_pubr() +
+        geom_text(
+            aes(x=x, y=y, label=auc_lab, color=ranking_var),
+            . %>% 
+                group_by(cell_line) %>%
+                distinct(cell_line, auc, ranking_var) %>% 
+                arrange(auc) %>%
+                mutate(
+                    auc_lab = sprintf("AUC(%s)=%s",ranking_var,round(auc,2)),
+                    x=0.58, 
+                    y=seq(0,0.25,length.out=7)
+                ) %>%
+                ungroup(),
+            hjust=0, size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        facet_wrap(~cell_line) +
+        theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Ranking Ratio Association", 
+             y=sprintf("Cumulative TPR (|dPSI|>%s)", dpsi_thresh), color="Association")
 
-#         plts[[sprintf("eval_pert-is_inter_vs_spear_coef-box-thresh%s",dpsi_thresh)]] = X %>%
-#             ggplot(aes(x=is_inter, y=abs(spear_coef))) +
-#             geom_boxplot(aes(fill=is_inter), outlier.size=0.1) +
-#             geom_text(
-#                 aes(label=label, y=-0.01),
-#                 . %>% count(is_inter) %>% mutate(label=sprintf("n=%s",n)),
-#                 size=FONT_SIZE, family=FONT_FAMILY
-#             ) +
-#             stat_compare_means(method="wilcox.test", size=FONT_SIZE, family=FONT_FAMILY) +
-#             theme_pubr() +
-#             fill_palette(PAL_DUAL) +
-#             guides(fill="none") +
-#             theme(aspect.ratio=1) +
-#             labs(x="CLIP Interaction", y="|Spearman Coef.|")
+    plts[[sprintf("eval_pert-is_inter_vs_mi-box-thresh%s",dpsi_thresh)]] = X %>%
+        ggplot(aes(x=is_inter, y=mutual_information)) +
+        geom_boxplot(aes(fill=is_inter), outlier.size=0.1) +
+        geom_text(
+            aes(label=label, y=-0.05),
+            . %>% count(is_inter) %>% mutate(label=sprintf("n=%s",n)),
+            size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        stat_compare_means(method="wilcox.test", size=FONT_SIZE, family=FONT_FAMILY) +
+        theme_pubr() +
+        fill_palette(PAL_DUAL) +
+        guides(fill="none") +
+        theme(aspect.ratio=1) +
+        labs(x="CLIP Interaction", y="Mutual Information")
 
-#         plts[[sprintf("eval_pert-is_inter_vs_spear_pvalue-box-thresh%s",dpsi_thresh)]] = X %>%
-#             ggplot(aes(x=is_inter, y=-log10(spear_pvalue))) +
-#             geom_boxplot(aes(fill=is_inter), outlier.size=0.1) +
-#             geom_text(
-#                 aes(label=label, y=-1),
-#                 . %>% count(is_inter) %>% mutate(label=sprintf("n=%s",n)),
-#                 size=FONT_SIZE, family=FONT_FAMILY
-#             ) +
-#             stat_compare_means(method="wilcox.test", size=FONT_SIZE, family=FONT_FAMILY) +
-#             theme_pubr() +
-#             fill_palette(PAL_DUAL) +
-#             guides(fill="none") +
-#             theme(aspect.ratio=1) +
-#             labs(x="CLIP Interaction", y="-log10(Spearman p-value)")
+    plts[[sprintf("eval_pert-is_inter_vs_spear_coef-box-thresh%s",dpsi_thresh)]] = X %>%
+        ggplot(aes(x=is_inter, y=abs(spear_coef))) +
+        geom_boxplot(aes(fill=is_inter), outlier.size=0.1) +
+        geom_text(
+            aes(label=label, y=-0.01),
+            . %>% count(is_inter) %>% mutate(label=sprintf("n=%s",n)),
+            size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        stat_compare_means(method="wilcox.test", size=FONT_SIZE, family=FONT_FAMILY) +
+        theme_pubr() +
+        fill_palette(PAL_DUAL) +
+        guides(fill="none") +
+        theme(aspect.ratio=1) +
+        labs(x="CLIP Interaction", y="|Spearman Coef.|")
 
-#         plts[[sprintf("eval_pert-is_inter_vs_lm_coef-box-thresh%s",dpsi_thresh)]] = X %>%
-#             ggplot(aes(x=is_inter, y=abs(log_lm_coef))) +
-#             geom_boxplot(aes(fill=is_inter), outlier.size=0.1) +
-#             geom_text(
-#                 aes(label=label, y=-0.1),
-#                 . %>% count(is_inter) %>% mutate(label=sprintf("n=%s",n)),
-#                 size=FONT_SIZE, family=FONT_FAMILY
-#             ) +
-#             stat_compare_means(method="wilcox.test", size=FONT_SIZE, family=FONT_FAMILY) +
-#             theme_pubr() +
-#             fill_palette(PAL_DUAL) +
-#             guides(fill="none") +
-#             theme(aspect.ratio=1) +
-#             labs(x="CLIP Interaction", y="|log10(LM Coefficient+1)|")
-#             # here it is higher in the FALSE class!
+    plts[[sprintf("eval_pert-is_inter_vs_spear_pvalue-box-thresh%s",dpsi_thresh)]] = X %>%
+        ggplot(aes(x=is_inter, y=-log10(spear_pvalue))) +
+        geom_boxplot(aes(fill=is_inter), outlier.size=0.1) +
+        geom_text(
+            aes(label=label, y=-1),
+            . %>% count(is_inter) %>% mutate(label=sprintf("n=%s",n)),
+            size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        stat_compare_means(method="wilcox.test", size=FONT_SIZE, family=FONT_FAMILY) +
+        theme_pubr() +
+        fill_palette(PAL_DUAL) +
+        guides(fill="none") +
+        theme(aspect.ratio=1) +
+        labs(x="CLIP Interaction", y="-log10(Spearman p-value)")
 
-#         plts[[sprintf("eval_pert-is_inter_vs_lm_pvalue-box-thresh%s",dpsi_thresh)]] = X %>%
-#             ggplot(aes(x=is_inter, y=-log10(lm_pvalue))) +
-#             geom_boxplot(aes(fill=is_inter), outlier.size=0.1) +
-#             geom_text(
-#                 aes(label=label, y=-1),
-#                 . %>% count(is_inter) %>% mutate(label=sprintf("n=%s",n)),
-#                 size=FONT_SIZE, family=FONT_FAMILY
-#             ) +
-#             stat_compare_means(method="wilcox.test", size=FONT_SIZE, family=FONT_FAMILY) +
-#             theme_pubr() +
-#             fill_palette(PAL_DUAL) +
-#             guides(fill="none") +
-#             theme(aspect.ratio=1) +
-#             labs(x="CLIP Interaction", y="-log10(LM p-value)")        
-    }
+    plts[[sprintf("eval_pert-is_inter_vs_lm_coef-box-thresh%s",dpsi_thresh)]] = X %>%
+        ggplot(aes(x=is_inter, y=abs(log_lm_coef))) +
+        geom_boxplot(aes(fill=is_inter), outlier.size=0.1) +
+        geom_text(
+            aes(label=label, y=-0.1),
+            . %>% count(is_inter) %>% mutate(label=sprintf("n=%s",n)),
+            size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        stat_compare_means(method="wilcox.test", size=FONT_SIZE, family=FONT_FAMILY) +
+        theme_pubr() +
+        fill_palette(PAL_DUAL) +
+        guides(fill="none") +
+        theme(aspect.ratio=1) +
+        labs(x="CLIP Interaction", y="|log10(LM Coefficient+1)|")
+        # here it is higher in the FALSE class!
+
+    plts[[sprintf("eval_pert-is_inter_vs_lm_pvalue-box-thresh%s",dpsi_thresh)]] = X %>%
+        ggplot(aes(x=is_inter, y=-log10(lm_pvalue))) +
+        geom_boxplot(aes(fill=is_inter), outlier.size=0.1) +
+        geom_text(
+            aes(label=label, y=-1),
+            . %>% count(is_inter) %>% mutate(label=sprintf("n=%s",n)),
+            size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        stat_compare_means(method="wilcox.test", size=FONT_SIZE, family=FONT_FAMILY) +
+        theme_pubr() +
+        fill_palette(PAL_DUAL) +
+        guides(fill="none") +
+        theme(aspect.ratio=1) +
+        labs(x="CLIP Interaction", y="-log10(LM p-value)")        
     
+    # do signs coincide?
+    eval_signs = X %>% 
+        filter(abs(delta_psi)>10) %>%
+        mutate(
+            delta_psi = -sign(delta_psi),
+            lm_coef = sign(lm_coef),
+            spear_coef = sign(spear_coef)
+        ) %>% 
+        pivot_longer(c(lm_coef, spear_coef))
     
+    tests = eval_signs %>%
+        group_by(cell_line, name) %>%
+        summarize(
+            contingency = list(table(delta_psi, value))
+        ) %>%
+        mutate(
+            fisher_test = map(contingency, fisher.test),
+            p_value = map_dbl(fisher_test, pluck, "p.value"),
+            odds_ratio = map_dbl(fisher_test, pluck, "estimate")
+        ) %>% 
+        ungroup()
+        
+    plts[["eval_pert-delta_psi_sign_vs_coefs_sign-bar"]] = eval_signs %>%
+        count(cell_line, name, delta_psi, value) %>%
+        mutate(label = sprintf("Delta PSI = %s & Coef. = %s", delta_psi, value)) %>%
+        ggbarplot(x="label", y="n", fill="name", position=position_dodge(0.9)) +
+        facet_wrap(~cell_line) +
+        theme_pubr(x.text.angle = 70) +
+        labs(x="Sign Combination", y="Count")
+    
+    # do changes coincide?
+    eval_changes = X %>% 
+        pivot_longer(c(lm_pvalue, spear_pvalue)) %>%
+        mutate(
+            delta_psi = abs(delta_psi) > 10,
+            value = value < 0.05
+        )
+    
+    tests = eval_changes %>%
+        group_by(cell_line, name) %>%
+        summarize(
+            contingency = list(table(delta_psi, value))
+        ) %>%
+        mutate(
+            fisher_test = map(contingency, fisher.test, alternative="less"), # TRUE & TRUE
+            p_value = map_dbl(fisher_test, pluck, "p.value"),
+            odds_ratio = map_dbl(fisher_test, pluck, "estimate")
+        ) %>% 
+        ungroup()
+    
+    plts[["eval_pert-delta_psi_vs_coefs_pvalue-bar"]] = eval_changes %>%
+        count(cell_line, name, delta_psi, value) %>%
+        mutate(label = sprintf("Delta PSI High = %s & p-value = %s", delta_psi, value)) %>%
+        ggbarplot(x="label", y="n", fill="name", position=position_dodge(0.9)) +
+        facet_wrap(~cell_line) +
+        theme_pubr(x.text.angle = 70) +
+        labs(x="Significant Combination", y="Count")    
+        
     
     return(plts)
 }
+
+
+plot_clip_vs_pert = function(){
+    plts = list()
+    
+    X = regulons_pert %>% 
+        filter(cell_line != "merged") %>%
+        left_join(
+            regulons_clip %>%
+            mutate(in_clip = TRUE),
+            by=c("regulator"="ENSEMBL","target")
+        ) %>%
+        mutate(in_clip=replace_na(in_clip, FALSE)) %>%
+        drop_na(cell_line) %>%
+        distinct(cell_line, regulator, target, delta_psi, delta_psi_rel, in_clip)
+    
+    # do exons with CLIP signal change more?
+    plts[["clip_vs_pert-delta_psi-boxplot"]] = X %>%
+        ggplot(aes(x=in_clip, y=abs(delta_psi))) +
+        geom_boxplot(aes(fill=in_clip), outlier.size=0.1) +
+        stat_compare_means(method="wilcox.test", size=FONT_SIZE, family=FONT_FAMILY) +
+        theme_pubr() +
+        fill_palette(PAL_DUAL) +
+        guides(fill="none") +
+        theme(aspect.ratio=1) +
+        labs(x="CLIP Interaction", y="|Delta PSI|") 
+    
+    plts[["clip_vs_pert-delta_psi_rel-boxplot"]] = X %>%
+        ggplot(aes(x=in_clip, y=abs(delta_psi_rel))) +
+        geom_boxplot(aes(fill=in_clip), outlier.size=0.1) +
+        stat_compare_means(method="wilcox.test", size=FONT_SIZE, family=FONT_FAMILY) +
+        theme_pubr() +
+        fill_palette(PAL_DUAL) +
+        guides(fill="none") +
+        theme(aspect.ratio=1) +
+        labs(x="CLIP Interaction", y="|Delta PSI Rel.|")
+    
+    # predictive power of delta PSI and delta PSI rel.
+    evaluation = X %>%
+        group_by(cell_line) %>%
+        arrange(-abs(delta_psi)) %>%
+        mutate(
+            ranking = row_number(),
+            ranking_ratio = ranking / n(),
+            cumsum_in_clip = cumsum(in_clip) / sum(in_clip),
+            ranking_var = "delta_psi"
+        ) %>%
+        filter(ranking %in% round(quantile(ranking, seq(0,1,0.1)))) %>%
+        ungroup() %>%
+        bind_rows(
+            X %>%
+            group_by(cell_line) %>%
+            arrange(-abs(delta_psi_rel)) %>%
+            mutate(
+                ranking = row_number(),
+                ranking_ratio = ranking / n(),
+                cumsum_in_clip = cumsum(in_clip) / sum(in_clip),
+                ranking_var = "delta_psi_rel"
+            ) %>%
+            filter(ranking %in% round(quantile(ranking, seq(0,1,0.1)))) %>%
+            ungroup()
+        )
+    
+    # calculate auc
+    evaluation = evaluation %>%
+        group_by(cell_line, ranking_var) %>%
+        mutate(auc = sum(diff(ranking_ratio) * (head(cumsum_in_clip,-1)+tail(cumsum_in_clip,-1)))/2) %>%
+        ungroup()
+    
+    # do clip interactions tend to have large association values?
+    plts[["clip_vs_pert-tpr-scatter"]] = evaluation %>%
+        ggplot(aes(x=ranking_ratio, y=cumsum_in_clip)) +
+        geom_line(aes(color=ranking_var), size=LINE_SIZE) +
+        geom_point(aes(color=ranking_var), size=1) +
+        color_palette("simpsons") +
+        theme_pubr() +
+        geom_text(
+            aes(x=x, y=y, label=auc_lab, color=ranking_var),
+            . %>% 
+                group_by(cell_line) %>%
+                distinct(cell_line, auc, ranking_var) %>% 
+                arrange(auc) %>%
+                mutate(
+                    auc_lab = sprintf("AUC(%s)=%s",ranking_var,signif(auc,2)),
+                    x=0.58, 
+                    y=seq(0,0.05,length.out=2)
+                ) %>%
+                ungroup(),
+            hjust=0, size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        facet_wrap(~cell_line) +
+        theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Ranking Ratio Association", 
+             y=sprintf("Cumulative TPR (|dPSI|>%s)", dpsi_thresh), color="Association")
+    
+    return(plts)
+}
+
 
 # plot_evaluation = function(evaluation){
 #     plts = list()
@@ -942,7 +1019,7 @@ main = function(){
     gc()
     
     # prep
-    ## high-variant exons
+    ## high-variant exons (TO REMOVE)
     summary_stats_splicing = summary_stats_splicing %>% 
         mutate(cv = EVENT_std / EVENT_mean, 
                iqr = EVENT_q75 - EVENT_q25) %>%
@@ -988,6 +1065,19 @@ main = function(){
             by = c("regulator","target","cell_line")
         ) %>%
         filter(target %in% events_oi)
+    
+    regulons_pert = regulons_pert %>%
+        bind_rows(
+            regulons_pert %>% 
+            group_by(cell_line) %>%
+            ungroup() %>%
+            mutate(cell_line = "merged") %>%
+            group_by(regulator, target) %>%
+            filter(abs(delta_psi) == max(abs(delta_psi))) %>%
+            filter(abs(delta_psi_rel) == max(abs(delta_psi_rel))) %>%
+            ungroup() %>%
+            distinct()
+        )
     
     ## add regulons to assocs
     assocs = assocs %>%
