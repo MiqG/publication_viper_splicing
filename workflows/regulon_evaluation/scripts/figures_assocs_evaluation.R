@@ -49,6 +49,7 @@ PAL_CONTRAST = c("darkgrey","darkred")
 
 # summary_stats_genexpr_file = file.path(PREP_DIR,"summary_stats","genexpr_tpm","LIHC.tsv.gz")
 # summary_stats_splicing_file = file.path(PREP_DIR,"summary_stats","event_psi_imputed","LIHC-EX.tsv.gz")
+# event_annot_file = file.path(RAW_DIR,"VastDB","event_annotation-Hs2.tsv.gz")
 
 # figs_dir = file.path(RESULTS_DIR,'figures','assocs_evaluation')
 
@@ -56,8 +57,12 @@ PAL_CONTRAST = c("darkgrey","darkred")
 plot_assocs = function(assocs){
     plts = list()
     
-    X = assocs
-
+    X = assocs %>%
+        left_join(
+            summary_stats,
+            by=c("target"="EVENT")
+        )
+    
     # distributions of p-values
     plts[["assocs-coefs-lm_pvalue-distr"]] = X %>%
         gghistogram(x="lm_pvalue", bins=50, fill=PAL_DARK, color=NA) +
@@ -76,10 +81,10 @@ plot_assocs = function(assocs){
         labs(x="Mutual Information", y="Count")
     
     plts[["assocs-coefs-lm_coef-distr"]] = X %>%
-        drop_na(log_lm_coef) %>%
-        gghistogram(x="log_lm_coef", bins=50, fill=PAL_DARK, color=NA) +
+        drop_na(lm_coef) %>%
+        gghistogram(x="lm_coef", bins=50, fill=PAL_DARK, color=NA) +
         theme(aspect.ratio=1) +
-        labs(x="log10(LM Coefficient+1)", y="Count")
+        labs(x="LM Coefficient", y="Count")
 
     plts[["assocs-coefs-spear_coef-distr"]] = X %>%
         gghistogram(x="spear_coef", bins=50, fill=PAL_DARK, color=NA) +
@@ -88,12 +93,12 @@ plot_assocs = function(assocs){
     
     # how do associations compare to each other?
     plts[["assocs-coefs-mi_vs_lm"]] = X %>%
-        ggplot(aes(x=mutual_information, y=abs(log_lm_coef))) +
+        ggplot(aes(x=mutual_information, y=abs(lm_coef))) +
         geom_scattermore(color=PAL_DARK, pixels=c(1000,1000), pointsize=1, alpha=0.5) +
         theme_pubr() +
         stat_cor(method="spearman", size=FONT_SIZE, family=FONT_FAMILY) +
         theme(aspect.ratio=1) +
-        labs(x="Mutual Information", y="|log10(LM Coefficient+1)|")
+        labs(x="Mutual Information", y="|LM Coefficient|")
 
     plts[["assocs-coefs-mi_vs_spear"]] = X %>%
         ggplot(aes(x=mutual_information, y=abs(spear_coef))) +
@@ -102,6 +107,14 @@ plot_assocs = function(assocs){
         stat_cor(method="spearman", size=FONT_SIZE, family=FONT_FAMILY) +
         theme(aspect.ratio=1) +
         labs(x="Mutual Information", y="|Spearman Coef.|")
+    
+    plts[["assocs-coefs-lm_vs_spear"]] = X %>%
+        ggplot(aes(x=lm_coef, y=spear_coef)) +
+        geom_scattermore(color=PAL_DARK, pixels=c(1000,1000), pointsize=1, alpha=0.5) +
+        theme_pubr() +
+        stat_cor(method="spearman", size=FONT_SIZE, family=FONT_FAMILY) +
+        theme(aspect.ratio=1) +
+        labs(x="LM Coef.", y="Spearman Coef.")
     
     # how do p-values compare to each other?
     plts[["assocs-pvalues-mi_vs_lm"]] = X %>%
@@ -121,6 +134,258 @@ plot_assocs = function(assocs){
         stat_cor(method="spearman", size=FONT_SIZE, family=FONT_FAMILY) +
         theme(aspect.ratio=1) +
         labs(x="Mutual Information", y="-log10(Spearman p-value)")
+    
+    # is the association coefficient related to the target gene expression?
+    plts[["assocs-genexpr_vs_mi"]] = X %>%
+        group_by(target) %>%
+        slice_max(abs(mutual_information), n=1) %>%
+        ungroup() %>%
+        ggplot(aes(x=ENSEMBL_median, y=mutual_information)) +
+        geom_scattermore(pixels=c(1000,1000), pointsize=1, alpha=0.5, color=PAL_DARK) +
+        theme_pubr() +
+        stat_cor(method="spearman", size=FONT_SIZE, family=FONT_FAMILY) +
+        geom_density_2d(size=LINE_SIZE, linetype="dashed", color="black") +
+        theme(aspect.ratio=1) +
+        labs(x="Median log2(TPM+1)", y="Mutual Information")
+    
+    plts[["assocs-genexpr_vs_spear_coef"]] = X %>%
+        group_by(target) %>%
+        slice_max(abs(spear_coef), n=1) %>%
+        ungroup() %>%
+        ggplot(aes(x=ENSEMBL_median, y=abs(spear_coef))) +
+        geom_scattermore(pixels=c(1000,1000), pointsize=1, alpha=0.5, color=PAL_DARK) +
+        theme_pubr() +
+        stat_cor(method="spearman", size=FONT_SIZE, family=FONT_FAMILY) +
+        geom_density_2d(size=LINE_SIZE, linetype="dashed", color="black") +
+        theme(aspect.ratio=1) +
+        labs(x="Median log2(TPM+1)", y="|Spearman Coef.|")
+    
+    plts[["assocs-genexpr_vs_spear_pvalue"]] = X %>%
+        group_by(target) %>%
+        slice_max(abs(log_spear_pvalue), n=1) %>%
+        ungroup() %>%
+        ggplot(aes(x=ENSEMBL_median, y=log_spear_pvalue)) +
+        geom_scattermore(pixels=c(1000,1000), pointsize=1, alpha=0.1, color=PAL_DARK) +
+        theme_pubr() +
+        stat_cor(method="spearman", size=FONT_SIZE, family=FONT_FAMILY) +
+        geom_density_2d(size=LINE_SIZE, linetype="dashed", color="black") +
+        theme(aspect.ratio=1) +
+        labs(x="Median log2(TPM+1)", y="-log10(Spearman p-value)")
+    
+    plts[["assocs-genexpr_vs_lm_coef"]] = X %>%
+        group_by(target) %>%
+        slice_max(abs(lm_coef), n=1) %>%
+        ungroup() %>%
+        ggplot(aes(x=ENSEMBL_median, y=abs(lm_coef))) +
+        geom_scattermore(pixels=c(1000,1000), pointsize=1, alpha=0.5, color=PAL_DARK) +
+        theme_pubr() +
+        stat_cor(method="spearman", size=FONT_SIZE, family=FONT_FAMILY) +
+        geom_density_2d(size=LINE_SIZE, linetype="dashed", color="black") +
+        theme(aspect.ratio=1) +
+        labs(x="Median log2(TPM+1)", y="|LM Coef.|")
+    
+    plts[["assocs-genexpr_vs_lm_pvalue"]] = X %>%
+        group_by(target) %>%
+        slice_max(abs(log_lm_pvalue), n=1) %>%
+        ungroup() %>%
+        ggplot(aes(x=ENSEMBL_median, y=log_lm_pvalue)) +
+        geom_scattermore(pixels=c(1000,1000), pointsize=1, alpha=0.1, color=PAL_DARK) +
+        stat_cor(method="spearman", size=FONT_SIZE, family=FONT_FAMILY) +
+        geom_density_2d(size=LINE_SIZE, linetype="dashed", color="black") +
+        theme_pubr() +
+        theme(aspect.ratio=1) +
+        labs(x="Median log2(TPM+1)", y="-log10(LM p-value)")
+    
+    plts[["assocs-genexpr_vs_mi-box"]] = X %>%
+        drop_na(ENSEMBL_mean) %>%
+        group_by(target) %>%
+        slice_max(abs(mutual_information), n=1) %>%
+        ungroup() %>%
+        mutate(ENSEMBL_mean_bins = cut(
+            ENSEMBL_mean, include.lowest=TRUE, 
+            breaks=seq(0,max(ENSEMBL_mean, na.rm=TRUE),length.out=8)
+        )) %>%
+        ggplot(aes(x=ENSEMBL_mean_bins, y=mutual_information)) +
+        geom_boxplot(fill=PAL_ACCENT, outlier.size=0.1) +
+        geom_text(
+            aes(label=label, y=-0.01),
+            . %>% count(ENSEMBL_mean_bins) %>% mutate(label=sprintf("n=%s",n)),
+            size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        theme_pubr() +
+        theme(aspect.ratio=1) +
+        labs(x="Mean log2(TPM+1)", y="Mutual Information")
+    
+    plts[["assocs-genexpr_vs_spear_coef-box"]] = X %>%
+        drop_na(ENSEMBL_mean) %>%
+        group_by(target) %>%
+        slice_max(abs(spear_coef), n=1) %>%
+        ungroup() %>%
+        mutate(ENSEMBL_mean_bins = cut(
+            ENSEMBL_mean, include.lowest=TRUE, 
+            breaks=seq(0,max(ENSEMBL_mean, na.rm=TRUE)+0.1,length.out=8)
+        )) %>%
+        ggplot(aes(x=ENSEMBL_mean_bins, y=abs(spear_coef))) +
+        geom_boxplot(fill=PAL_ACCENT, outlier.size=0.1) +
+        geom_text(
+            aes(label=label, y=-0.01),
+            . %>% count(ENSEMBL_mean_bins) %>% mutate(label=sprintf("n=%s",n)),
+            size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        theme_pubr() +
+        theme(aspect.ratio=1) +
+        labs(x="Mean log2(TPM+1)", y="|Spearman Coef.|")
+    
+    
+    plts[["assocs-genexpr_vs_lm_coef-box"]] = X %>%
+        drop_na(ENSEMBL_mean) %>%
+        group_by(target) %>%
+        slice_max(abs(lm_coef), n=1) %>%
+        ungroup() %>%
+        mutate(ENSEMBL_mean_bins = cut(
+            ENSEMBL_mean, include.lowest=TRUE, 
+            breaks=seq(0,max(ENSEMBL_mean, na.rm=TRUE)+0.1,length.out=8)
+        )) %>%
+        ggplot(aes(x=ENSEMBL_mean_bins, y=abs(lm_coef))) +
+        geom_boxplot(fill=PAL_ACCENT, outlier.size=0.1) +
+        geom_text(
+            aes(label=label, y=-0.01),
+            . %>% count(ENSEMBL_mean_bins) %>% mutate(label=sprintf("n=%s",n)),
+            size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        theme_pubr() +
+        theme(aspect.ratio=1) +
+        labs(x="Mean log2(TPM+1)", y="|LM Coef.|")
+
+    
+    # splicing variation vs associations
+    plts[["assocs-splicing_vs_mi-box"]] = X %>%
+        drop_na(iqr) %>%
+        mutate(iqr_bins = cut(
+            iqr, include.lowest=TRUE, 
+            breaks=seq(0,max(iqr, na.rm=TRUE),length.out=8)
+        )) %>%
+        ggplot(aes(x=iqr_bins, y=mutual_information)) +
+        geom_boxplot(fill=PAL_ACCENT, outlier.size=0.1) +
+        geom_text(
+            aes(label=label, y=-0.01),
+            . %>% count(iqr_bins) %>% mutate(label=sprintf("n=%s",n)),
+            size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        theme_pubr() +
+        theme(aspect.ratio=1) +
+        labs(x="IQR PSI", y="Mutual Information")
+    
+    plts[["assocs-splicing_vs_spear_coef-box"]] = X %>%
+        drop_na(iqr) %>%
+        mutate(iqr_bins = cut(
+            iqr, include.lowest=TRUE, 
+            breaks=seq(0,max(iqr, na.rm=TRUE),length.out=8)
+        )) %>%
+        ggplot(aes(x=iqr_bins, y=abs(spear_coef))) +
+        geom_boxplot(fill=PAL_ACCENT, outlier.size=0.1) +
+        geom_text(
+            aes(label=label, y=-0.01),
+            . %>% count(iqr_bins) %>% mutate(label=sprintf("n=%s",n)),
+            size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        theme_pubr() +
+        theme(aspect.ratio=1) +
+        labs(x="IQR PSI", y="|Spearman Coef.|")
+    
+    plts[["assocs-splicing_vs_lm_coef-box"]] = X %>%
+        drop_na(iqr) %>%
+        mutate(iqr_bins = cut(
+            iqr, include.lowest=TRUE, 
+            breaks=seq(0,max(iqr, na.rm=TRUE),length.out=8)
+        )) %>%
+        ggplot(aes(x=iqr_bins, y=abs(lm_coef))) +
+        geom_boxplot(fill=PAL_ACCENT, outlier.size=0.1) +
+        geom_text(
+            aes(label=label, y=-0.01),
+            . %>% count(iqr_bins) %>% mutate(label=sprintf("n=%s",n)),
+            size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        theme_pubr() +
+        theme(aspect.ratio=1) +
+        labs(x="IQR PSI", y="|LM Coef.|")
+    
+    
+    # splicing variation vs gene expression
+    plts[["assocs-splicing_iqr_vs_genexpr_mean-box"]] = X %>%
+        drop_na(ENSEMBL_mean) %>%
+        group_by(target) %>%
+        slice_max(iqr, n=1) %>%
+        ungroup() %>%
+        drop_na(iqr) %>%
+        mutate(iqr_bins = cut(
+            iqr, include.lowest=TRUE, 
+            breaks=seq(0,max(iqr, na.rm=TRUE),length.out=6)
+        )) %>%
+        ggplot(aes(x=iqr_bins, y=ENSEMBL_mean)) +
+        geom_boxplot(fill=PAL_ACCENT, outlier.size=0.1) +
+        geom_text(
+            aes(label=label, y=-0.01),
+            . %>% count(iqr_bins) %>% mutate(label=sprintf("n=%s",n)),
+            size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        theme_pubr() +
+        theme(aspect.ratio=1) +
+        labs(x="IQR PSI", y="Mean log2(TPM+1)")
+    
+    plts[["assocs-genexpr_mean_vs_splicing_iqr-box"]] = X %>%
+        drop_na(ENSEMBL_mean) %>%
+        group_by(target) %>%
+        slice_max(iqr, n=1) %>%
+        ungroup() %>%
+        drop_na(iqr) %>%
+        mutate(ENSEMBL_mean_bins = cut(
+            ENSEMBL_mean, include.lowest=TRUE, 
+            breaks=seq(0,max(ENSEMBL_mean, na.rm=TRUE)+0.1,length.out=6)
+        )) %>%
+        ggplot(aes(x=ENSEMBL_mean_bins, y=iqr)) +
+        geom_boxplot(fill=PAL_ACCENT, outlier.size=0.1) +
+        geom_text(
+            aes(label=label, y=-0.01),
+            . %>% count(ENSEMBL_mean_bins) %>% mutate(label=sprintf("n=%s",n)),
+            size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        theme_pubr() +
+        theme(aspect.ratio=1) +
+        labs(x="Mean log2(TPM+1)", y="IQR PSI")
+    
+    plts[["assocs-genexpr_mean_vs_splicing_iqr-scatter"]] = X %>%
+        drop_na(ENSEMBL_mean) %>%
+        group_by(target) %>%
+        slice_max(iqr, n=1) %>%
+        ungroup() %>%
+        drop_na(iqr) %>%
+        ggplot(aes(x=ENSEMBL_mean, y=iqr)) +
+        geom_scattermore(pixels=c(1000,1000), pointsize=1, alpha=0.1, color=PAL_DARK) +
+        stat_cor(method="spearman", size=FONT_SIZE, family=FONT_FAMILY) +
+        geom_density_2d(size=LINE_SIZE, linetype="dashed", color="black") +
+        theme_pubr() +
+        theme(aspect.ratio=1) +
+        labs(x="Mean log2(TPM+1)", y="IQR PSI")
+    
+    
+    # splicing average vs gene average (sanity check)
+    plts[["assocs-splicing_mean_vs_genexpr_mean-box"]] = X %>%
+        drop_na(ENSEMBL_mean, EVENT_mean) %>%
+        mutate(psi_bins = cut(
+            EVENT_mean, include.lowest=TRUE, 
+            breaks=seq(0, 100, length.out=8)
+        )) %>%
+        ggplot(aes(x=psi_bins, y=ENSEMBL_mean)) +
+        geom_boxplot(fill=PAL_ACCENT, outlier.size=0.1) +
+        geom_text(
+            aes(label=label, y=-0.01),
+            . %>% count(psi_bins) %>% mutate(label=sprintf("n=%s",n)),
+            size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        theme_pubr() +
+        theme(aspect.ratio=1) +
+        labs(x="Mean PSI", y="Mean log2(TPM+1)")
     
     # pull out some examples SF genexpr vs exon PSI (TODO)
     ## low MI and high spearman
@@ -616,7 +881,7 @@ plot_eval_pert = function(){
                 arrange(auc) %>%
                 mutate(
                     auc_lab = sprintf("AUC(%s)=%s",ranking_var,round(auc,2)),
-                    x=0.58, 
+                    x=0.35, 
                     y=seq(0,0.25,length.out=7)
                 ) %>%
                 ungroup(),
@@ -1015,18 +1280,30 @@ main = function(){
     
     summary_stats_genexpr = read_tsv(summary_stats_genexpr_file)
     summary_stats_splicing = read_tsv(summary_stats_splicing_file)
+    event_annot = read_tsv(event_annot_file)
     
     gc()
     
     # prep
-    ## high-variant exons (TO REMOVE)
+    ## summary stats
     summary_stats_splicing = summary_stats_splicing %>% 
         mutate(cv = EVENT_std / EVENT_mean, 
                iqr = EVENT_q75 - EVENT_q25) %>%
-        drop_na(cv, iqr)
+        drop_na(iqr)
     
+    summary_stats = summary_stats_splicing %>%
+        left_join(
+            event_annot,
+            by="EVENT"
+        ) %>%
+        left_join(
+            summary_stats_genexpr,
+            by=c("ENSEMBL"="ID")
+        )
+    
+    ## high-variant exons (TO REMOVE)
     events_oi = summary_stats_splicing %>% 
-        filter(iqr >= 1) %>% 
+        #filter(iqr >= 1) %>% 
         pull(EVENT)
     
     ## merge sf-exon associations
