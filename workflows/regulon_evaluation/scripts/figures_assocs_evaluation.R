@@ -472,6 +472,41 @@ plot_assocs = function(assocs){
 }
 
 
+compute_precision = function(labels, values, len=11){
+    threshs = seq(10, length(values), length.out=len) # they must be ordered
+
+    precisions = sapply(threshs, function(thresh){
+        preds = values > values[thresh]
+        # how many of predicted TRUE, are TRUE
+        TP = sum( labels[preds] )
+        # how many of predicted TRUE, are FALSE
+        FP = sum( !labels[preds] )
+        precision = TP / (TP + FP)
+        return(precision)
+    })
+    
+    return(precisions)
+}
+
+
+compute_recall = function(labels, values, len=11){
+    threshs = seq(10, length(values), length.out=len) # they must be ordered
+    
+    recalls = sapply(threshs, function(thresh){
+        preds = values > values[thresh]
+        # how many of predicted TRUE, are TRUE
+        TP = sum( labels[preds] )
+        # how many of predicted FALSE, are TRUE
+        FN = sum( labels[!preds] )
+        recall = TP / (TP + FN)
+        return(recall)
+    })
+    
+    return(recalls)
+    
+}
+
+
 plot_eval_clip = function(assocs, regulons_clip){
     plts = list()
     
@@ -556,6 +591,53 @@ plot_eval_clip = function(assocs, regulons_clip){
             ) %>%
             filter(ranking %in% round(quantile(ranking, seq(0,1,0.1))))
         )
+
+    prec_rec = X
+    prec_rec = prec_rec %>%
+        arrange(-abs(mutual_information)) %>%
+        reframe(
+            precision = compute_precision(in_clip, -abs(mutual_information)),
+            recall = compute_recall(in_clip, -abs(mutual_information)),
+            ranking_var = "mutual_information"
+        ) %>% 
+        ungroup() %>%
+        bind_rows(
+            prec_rec %>%
+            arrange(-abs(lm_coef)) %>%
+            reframe(
+                precision = compute_precision(in_clip, -abs(lm_coef)),
+                recall = compute_recall(in_clip, -abs(lm_coef)),
+                ranking_var = "lm_coef"
+            )
+        ) %>%
+        bind_rows(
+            prec_rec %>%
+            arrange(lm_pvalue) %>%
+            reframe(
+                precision = compute_precision(in_clip, lm_pvalue),
+                recall = compute_recall(in_clip, lm_pvalue),
+                ranking_var = "lm_pvalue"
+            )
+        ) %>%
+        bind_rows(
+            prec_rec %>%
+            arrange(-abs(spear_coef)) %>%
+            reframe(
+                precision = compute_precision(in_clip, -abs(spear_coef)),
+                recall = compute_recall(in_clip, -abs(spear_coef)),
+                ranking_var = "spear_coef"
+            )
+        ) %>%
+        bind_rows(
+            prec_rec %>%
+            arrange(spear_pvalue) %>%
+            reframe(
+                precision = compute_precision(in_clip, spear_pvalue),
+                recall = compute_recall(in_clip, spear_pvalue),
+                ranking_var = "spear_pvalue"
+            )
+        ) %>%
+        drop_na()
     
     # calculate auc
     eval_clip = eval_clip %>%
@@ -580,6 +662,15 @@ plot_eval_clip = function(assocs, regulons_clip){
         ) +
         theme(aspect.ratio=1) +
         labs(x="Ranking Ratio Association", y="TPR CLIP Interactions", color="Association")
+    
+    plts[["eval_clip-recall_vs_precision-scatter"]] = prec_rec %>%
+        ggplot(aes(x=recall, y=precision)) +
+        geom_line(aes(color=ranking_var), size=LINE_SIZE) +
+        geom_point(aes(color=ranking_var), size=1) +
+        color_palette("simpsons") +
+        theme_pubr() +
+        theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Recall", y="Precision", color="Association")
     
     plts[["eval_clip-in_clip_vs_mi-box"]] = X %>%
         ggplot(aes(x=in_clip, y=mutual_information)) +
@@ -826,13 +917,13 @@ plot_eval_pert = function(){
             ranking_ratio = ranking / n(),
             cumsum_is_inter = cumsum(is_inter) / sum(is_inter),
             ranking_var = "mutual_information"
-        ) %>%
+        ) %>% 
         filter(ranking %in% round(quantile(ranking, seq(0,1,0.1)))) %>%
         ungroup() %>%
         bind_rows(
             eval_pert %>%
             group_by(cell_line) %>%
-            arrange(abs(lm_coef)) %>%
+            arrange(-abs(lm_coef)) %>%
             mutate(
                 ranking = row_number(),
                 ranking_ratio = ranking / n(),
@@ -907,11 +998,72 @@ plot_eval_pert = function(){
             filter(ranking %in% round(quantile(ranking, seq(0,1,0.1)))) %>%
             ungroup()
         )
-
+    
+    prec_rec = X
+    prec_rec = prec_rec %>%
+        group_by(cell_line) %>%
+        arrange(-abs(mutual_information)) %>%
+        reframe(
+            precision = compute_precision(is_inter, -abs(mutual_information)),
+            recall = compute_recall(is_inter, -abs(mutual_information)),
+            ranking_var = "mutual_information"
+        ) %>% 
+        ungroup %>%
+        bind_rows(
+            prec_rec %>%
+            group_by(cell_line) %>%
+            arrange(-abs(lm_coef)) %>%
+            reframe(
+                precision = compute_precision(is_inter, -abs(lm_coef)),
+                recall = compute_recall(is_inter, -abs(lm_coef)),
+                ranking_var = "lm_coef"
+            ) %>%
+            ungroup()
+        ) %>%
+        bind_rows(
+            prec_rec %>%
+            group_by(cell_line) %>%
+            arrange(lm_pvalue) %>%
+            reframe(
+                precision = compute_precision(is_inter, lm_pvalue),
+                recall = compute_recall(is_inter, lm_pvalue),
+                ranking_var = "lm_pvalue"
+            ) %>%
+            ungroup()
+        ) %>%
+        bind_rows(
+            prec_rec %>%
+            group_by(cell_line) %>%
+            arrange(-abs(spear_coef)) %>%
+            reframe(
+                precision = compute_precision(is_inter, -abs(spear_coef)),
+                recall = compute_recall(is_inter, -abs(spear_coef)),
+                ranking_var = "spear_coef"
+            ) %>%
+            ungroup()
+        ) %>%
+        bind_rows(
+            prec_rec %>%
+            group_by(cell_line) %>%
+            arrange(spear_pvalue) %>%
+            reframe(
+                precision = compute_precision(is_inter, spear_pvalue),
+                recall = compute_recall(is_inter, spear_pvalue),
+                ranking_var = "spear_pvalue"
+            ) %>%
+            ungroup()
+        ) %>%
+        drop_na()
+    
     # calculate auc
     eval_pert = eval_pert %>%
         group_by(cell_line, ranking_var) %>%
         mutate(auc = sum(diff(ranking_ratio) * (head(cumsum_is_inter,-1)+tail(cumsum_is_inter,-1)))/2) %>%
+        ungroup()
+    
+    prec_rec = prec_rec %>%
+        group_by(cell_line, ranking_var) %>%
+        mutate(auc = sum(diff(precision) * (head(recall,-1)+tail(recall,-1)))/2) %>%
         ungroup()
 
     # do clip interactions tend to have large association values?
@@ -939,6 +1091,18 @@ plot_eval_pert = function(){
         theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         labs(x="Ranking Ratio Association", 
              y=sprintf("Cumulative TPR (|dPSI|>%s)", dpsi_thresh), color="Association")
+    
+    
+    plts[["eval_pert-recall_vs_precision-scatter"]] = prec_rec %>%
+        ggplot(aes(x=recall, y=precision)) +
+        geom_line(aes(color=ranking_var), size=LINE_SIZE) +
+        geom_point(aes(color=ranking_var), size=1) +
+        color_palette("simpsons") +
+        theme_pubr() +
+        facet_wrap(~cell_line) +
+        theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Recall", y="Precision", color="Association")
+    
 
     plts[[sprintf("eval_pert-is_inter_vs_mi-box-thresh%s",dpsi_thresh)]] = X %>%
         ggplot(aes(x=is_inter, y=mutual_information)) +
