@@ -34,7 +34,10 @@ METHODS_ASSOC = ["aracne","correlation_spearman","linear_model"]
 rule all:
     input:
         ## combine associations of interest
-        expand(os.path.join(RESULTS_DIR,"files","associations","{dataset}","genexpr_vs_psi_imputed","{method}.tsv.gz"), dataset=DATASETS, method=METHODS_ASSOC)
+        expand(os.path.join(RESULTS_DIR,"files","associations","{dataset}","genexpr_vs_psi_imputed","{method}.tsv.gz"), dataset=DATASETS, method=METHODS_ASSOC),
+        
+        # figures
+        expand(os.path.join(RESULTS_DIR,'figures','assocs_evaluation','{dataset}'), dataset=DATASETS),
         
         #         # evaluation
         #         #expand(os.path.join(RESULTS_DIR,"files","inference_evaluation","{method}-{cell_line}.tsv.gz"), method=METHODS_INFER, cell_line=CELL_LINES),
@@ -75,3 +78,32 @@ rule combine_associations:
 #                     --n_jobs={threads} \
 #                     --output_file={output}
 #         """
+
+
+rule figures_assocs_evaluation:
+    input:
+        assocs_mi = os.path.join(RESULTS_DIR,"files","associations","{dataset}","genexpr_vs_psi_imputed","aracne.tsv.gz"),
+        assocs_spear = os.path.join(RESULTS_DIR,"files","associations","{dataset}","genexpr_vs_psi_imputed","correlation_spearman.tsv.gz"),
+        assocs_lm = os.path.join(RESULTS_DIR,"files","associations","{dataset}","genexpr_vs_psi_imputed","linear_model.tsv.gz"),
+        regulons_clip = os.path.join(REGINF_DIR,"files","regulons","CLIP","POSTAR3.tsv.gz"),
+        regulons_pert_dpsi = os.path.join(REGINF_DIR,"files","regulons","pert_rnaseq","delta_psi-EX-merged.tsv.gz"),
+        regulons_pert_dpsi_rel = os.path.join(REGINF_DIR,"files","regulons","pert_rnaseq","delta_psi_rel-EX-merged.tsv.gz"),
+        summary_stats_genexpr = os.path.join(PREP_DIR,"summary_stats","genexpr_tpm","{dataset}.tsv.gz"),
+        summary_stats_splicing = os.path.join(PREP_DIR,"summary_stats","event_psi_imputed","{dataset}-EX.tsv.gz"),
+        event_annot = os.path.join(RAW_DIR,"VastDB","event_annotation-Hs2.tsv.gz")
+    output:
+        directory(os.path.join(RESULTS_DIR,'figures','assocs_evaluation','{dataset}'))
+    shell:
+        """
+        Rscript scripts/figures_assocs_evaluation.R \
+                    --assocs_mi_file={input.assocs_mi} \
+                    --assocs_spear_file={input.assocs_spear} \
+                    --assocs_lm_file={input.assocs_lm} \
+                    --regulons_clip_file={input.regulons_clip} \
+                    --regulons_pert_dpsi_file={input.regulons_pert_dpsi} \
+                    --regulons_pert_dpsi_rel_file={input.regulons_pert_dpsi_rel} \
+                    --summary_stats_genexpr_file={input.summary_stats_genexpr} \
+                    --summary_stats_splicing_file={input.summary_stats_splicing} \
+                    --event_annot_file={input.event_annot} \
+                    --figs_dir={output}
+        """
