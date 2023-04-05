@@ -11,9 +11,6 @@ require(ggpubr)
 require(cowplot)
 require(scattermore)
 require(extrafont)
-require(ComplexHeatmap)
-require(ggplotify)
-require(circlize)
 
 # variables
 RANDOM_SEED = 1234
@@ -1055,6 +1052,8 @@ parseargs = function(){
 main = function(){
     args = parseargs()
     
+    print(args)
+    
     assocs_mi_file = args[["assocs_mi_file"]]
     assocs_spear_file = args[["assocs_spear_file"]]
     assocs_lm_file = args[["assocs_lm_file"]]
@@ -1190,6 +1189,7 @@ main = function(){
     
     # plot
     plts = make_plots(assocs, summary_stats, regulons_clip, regulons_pert)
+    gc()
     
     # make figdata
     figdata = make_figdata(assocs, summary_stats, regulons_clip, regulons_pert)

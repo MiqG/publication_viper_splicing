@@ -26,7 +26,7 @@ SPLICING_FACTORS = pd.read_table(os.path.join(SUPPORT_DIR,"20230324-splicing_fac
 SPLICING_FACTORS = SPLICING_FACTORS.loc[SPLICING_FACTORS["in_postar3"] & SPLICING_FACTORS["in_encore_kd"]]
 SPLICING_FACTORS = SPLICING_FACTORS["ENSEMBL"].to_list()
 
-DATASETS = ["CCLE", "LIHC"]
+DATASETS = ["CCLE","LIHC"]
 METHODS_ASSOC = ["aracne","correlation_spearman","linear_model"]
 
 
