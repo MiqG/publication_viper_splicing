@@ -39,9 +39,6 @@ rule all:
         # figures
         expand(os.path.join(RESULTS_DIR,'figures','assocs_evaluation','{dataset}'), dataset=DATASETS),
         
-        #         # evaluation
-        #         #expand(os.path.join(RESULTS_DIR,"files","inference_evaluation","{method}-{cell_line}.tsv.gz"), method=METHODS_INFER, cell_line=CELL_LINES),
-        #         #os.path.join(RESULTS_DIR,"files","inference_evaluation","merged.tsv.gz"),
 
 rule combine_associations:
     input:
@@ -61,25 +58,6 @@ rule combine_associations:
         print("Done!")
         
         
-# rule inference_evaluation:
-#     input:
-#         inference = os.path.join(RESULTS_DIR,"files","target_inference","{method}.tsv.gz"),
-#         ground_truth_kd_dpsi = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'delta_psi-EX.tsv.gz'),
-#         ground_truth_kd_rel = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'delta_psi_rel-EX.tsv.gz')
-#     output:
-#         os.path.join(RESULTS_DIR,"files","inference_evaluation","{method}-{cell_line}.tsv.gz")
-#     threads: 16
-#     shell:
-#         """
-#         nice python scripts/evaluate_inference.py \
-#                     --inference_file={input.inference} \
-#                     --ground_truth_kd_dpsi_file={input.ground_truth_kd_dpsi} \
-#                     --ground_truth_kd_rel_file={input.ground_truth_kd_rel} \
-#                     --n_jobs={threads} \
-#                     --output_file={output}
-#         """
-
-
 rule figures_assocs_evaluation:
     input:
         assocs_mi = os.path.join(RESULTS_DIR,"files","associations","{dataset}","genexpr_vs_psi_imputed","aracne.tsv.gz"),
