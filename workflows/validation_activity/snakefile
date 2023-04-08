@@ -13,23 +13,70 @@ RAW_DIR = os.path.join(ROOT,"data","raw")
 PREP_DIR = os.path.join(ROOT,"data","prep")
 SUPPORT_DIR = os.path.join(ROOT,"support")
 RESULTS_DIR = os.path.join(ROOT,"results","validation_activity")
+REGEVAL_DIR = os.path.join(ROOT,"results","regulon_evaluation")
 SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
 
 CELL_LINES = ["K562","HepG2"]
 
 SIGNATURE_FILES = {
     #"event_psi": os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'delta_psi-EX.tsv.gz'),
-    "event_psi": os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'delta_psi_rel-EX-masked.tsv.gz'),
-    "genexpr_tpm": os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'log2_fold_change_tpm.tsv.gz')
+    "genexpr_vs_psi_imputed": {
+        "delta_psi_rel": os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'delta_psi_rel-EX-masked.tsv.gz'),
+        "delta_psi": os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'delta_psi-EX-masked.tsv.gz')
+    },
+    "genexpr_vs_genexpr": os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'log2_fold_change_tpm.tsv.gz')
 }
 
+METHODS_ASSOC = ["aracne_w_spearman","correlation_spearman","linear_model"]
+METHODS_ACTINF = ["viper","correlation"]
+OMICS = ["genexpr_vs_psi_imputed"]
+DATASETS = ["CCLE","LIHC"]
+DELTA_PSI_TYPES = ["delta_psi","delta_psi_rel"]
 
 ##### RULES #####
 rule all:
     input:
-        #         # infer activities with VIPER
-        #         expand(os.path.join(RESULTS_DIR,'files','validations','{method}','{omic}','ENCORE','{cell_line}-{dataset}_regulons.tsv.gz'), method=["aracne"], omic=OMICS, cell_line=CELL_LINES, dataset=DATASETS),
+        # infer activities
+        expand(os.path.join(RESULTS_DIR,'files','validations','{assoc_method}','{actinf_method}','{omic}',"{delta_psi_type}",'ENCORE','{cell_line}-{dataset}_regulons.tsv.gz'), assoc_method=METHODS_ASSOC, actinf_method=METHODS_ACTINF, omic=OMICS, delta_psi_type=DELTA_PSI_TYPES, cell_line=CELL_LINES, dataset=DATASETS),
 
-        #         # make figures
-        #         expand(os.path.join(RESULTS_DIR,'figures','validations',"{cell_line}","{omic}","{dataset}"), cell_line=CELL_LINES, omic=OMICS, dataset=DATASETS)
+        # make figures
+        #expand(os.path.join(RESULTS_DIR,'figures','validations',"{cell_line}","{omic}","{dataset}"), cell_line=CELL_LINES, omic=OMICS, dataset=DATASETS)
         
+        
+rule infer_protein_activity:
+    input:
+        signature = lambda wildcards: SIGNATURE_FILES[wildcards.omic][wildcards.delta_psi_type],
+        regulons = os.path.join(REGEVAL_DIR,"files","associations","{dataset}","genexpr_vs_psi_imputed","{assoc_method}.tsv.gz")
+    output:
+        os.path.join(RESULTS_DIR,'files','validations','{assoc_method}','{actinf_method}','{omic}',"{delta_psi_type}",'ENCORE','{cell_line}-{dataset}_regulons.tsv.gz')
+    params:
+        assoc_method = "{assoc_method}",
+        actinf_method = "{actinf_method}"
+    shell:
+        """
+        Rscript scripts/infer_protein_activity.R \
+                    --signature_file={input.signature} \
+                    --regulons_file={input.regulons} \
+                    --output_file={output} \
+                    --assoc_method={params.assoc_method} \
+                    --actinf_method={params.actinf_method}
+        """
+        
+        
+rule figures_target_inference:
+    input:
+        viper_result = os.path.join(RESULTS_DIR,'files','validations','aracne','{omic}','ENCORE','{cell_line}-{dataset}_regulons.tsv.gz'),
+        regulons = os.path.join(RESULTS_DIR,"files","target_inference","aracne","{omic}","{dataset}","regulons.tsv.gz"),
+        encore_logfc = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'log2_fold_change_tpm.tsv.gz'),
+        event_info = os.path.join(RAW_DIR,"VastDB","EVENT_INFO-hg38_noseqs.tsv")
+    output:
+        directory(os.path.join(RESULTS_DIR,'figures','validations',"{cell_line}","{omic}","{dataset}"))
+    shell:
+        """
+        nice Rscript scripts/figures_target_inference.R \
+                    --viper_result_file={input.viper_result} \
+                    --encore_logfc_file={input.encore_logfc} \
+                    --regulons_file={input.regulons} \
+                    --event_info_file={input.event_info} \
+                    --figs_dir={output}
+        """
