@@ -29,18 +29,23 @@ SPLICING_FACTORS = SPLICING_FACTORS["ENSEMBL"].to_list()
 DATASETS = ["CCLE","LIHC"]
 METHODS_ASSOC = ["aracne","correlation_spearman","linear_model"]
 
-
 ##### RULES #####
 rule all:
     input:
-        ## combine associations of interest
+        # combine associations of interest
         expand(os.path.join(RESULTS_DIR,"files","associations","{dataset}","genexpr_vs_psi_imputed","{method}.tsv.gz"), dataset=DATASETS, method=METHODS_ASSOC),
+        
+        # add spearman to aracne
+        expand(os.path.join(RESULTS_DIR,"files","associations","{dataset}","genexpr_vs_psi_imputed","aracne_w_spearman.tsv.gz"), dataset=DATASETS),
+        
+        # prune associations of interest
+        #expand(os.path.join(RESULTS_DIR,"files","associations_pruned","{dataset}","genexpr_vs_psi_imputed","{method}.tsv.gz"), dataset=DATASETS, method=METHODS_ASSOC),
         
         # figures
         expand(os.path.join(RESULTS_DIR,'figures','assocs_evaluation','{dataset}'), dataset=DATASETS),
         
 
-rule combine_associations:
+rule combine_associations_across_splicing_factors:
     input:
         assocs = [
             os.path.join(REGINF_DIR,"files","associations","{dataset}","genexpr_vs_psi_imputed","{method}",sf+".tsv.gz")
@@ -54,6 +59,195 @@ rule combine_associations:
         assocs = pd.concat([pd.read_table(f) for f in input.assocs])
         
         assocs.to_csv(output[0], **SAVE_PARAMS)
+        
+        print("Done!")
+        
+        
+rule add_spearman_to_aracne:
+    input:
+        aracne = os.path.join(RESULTS_DIR,"files","associations","{dataset}","genexpr_vs_psi_imputed","aracne.tsv.gz"),
+        spearman = os.path.join(RESULTS_DIR,"files","associations","{dataset}","genexpr_vs_psi_imputed","correlation_spearman.tsv.gz")
+    output:
+        os.path.join(RESULTS_DIR,"files","associations","{dataset}","genexpr_vs_psi_imputed","aracne_w_spearman.tsv.gz")
+    run:
+        import pandas as pd
+        
+        # load
+        aracne = pd.read_table(input.aracne)
+        spearman = pd.read_table(input.spearman)
+        
+        # merge
+        df = pd.merge(aracne, spearman, on=["regulator","target"], how="left", suffixes=["_aracne","_spearman"])
+        
+        # save
+        df.to_csv(output[0], **SAVE_PARAMS)
+        
+        print("Done!")
+
+        
+rule prune_associations:
+    input:
+        assocs_targ = os.path.join(RESULTS_DIR,"files","associations","{dataset}","genexpr_vs_psi_imputed","{method}.tsv.gz"),
+        assocs_regu = os.path.join(REGINF_DIR,"files","associations","{dataset}","genexpr_vs_genexpr","{method}.tsv.gz")
+    output:
+        assocs_targ = os.path.join(RESULTS_DIR,"files","associations_pruned","{dataset}","genexpr_vs_psi_imputed","{method}.tsv.gz"),
+        assocs_regu = os.path.join(RESULTS_DIR,"files","associations_pruned","{dataset}","genexpr_vs_genexpr","{method}.tsv.gz")
+    params:
+        method = "{method}",
+        thresh = 0.1
+    run:
+        import pandas as pd
+        import numpy as np
+        from tqdm import tqdm
+        
+        # load
+        assocs_targ = pd.read_table(input.assocs_targ)
+        assocs_regu = pd.read_table(input.assocs_regu)
+        method = params.method
+        thresh = params.thresh
+        
+        # DPI function
+        def fast_dpi(assocs_targ, assocs_regu, pruning_assoc):
+            
+            # make sure we have all necessary info for regulators
+            regulators = assocs_regu["regulator"].unique()
+            assocs_targ = assocs_targ.loc[assocs_targ["regulator"].isin(regulators)]
+            
+            # sort associations regulator-target
+            assocs_targ = assocs_targ.sort_values(pruning_assoc, ascending=False)
+
+            # reduce problem, we save unique regulator-target associations
+            unique_targets = assocs_targ["target"].value_counts() == 1
+            unique_targets = unique_targets.index[unique_targets]
+            assocs_uniq = assocs_targ.loc[assocs_targ["target"].isin(unique_targets)].copy()
+            assocs_mult = assocs_targ.loc[~assocs_targ["target"].isin(unique_targets)].copy()
+
+            # we iterate across rows and save the visited pairs
+            rows_tokeep = []
+            seen_targets = []
+            seen_pairs = {}
+            for idx, row in tqdm(assocs_mult.iterrows(), total=assocs_mult.shape[0]):
+
+                regulator, target, association = row["regulator"], row["target"], row["association"]
+
+                if (target not in seen_targets) or (len(seen_targets)==0):
+                    # save association
+                    seen_targets.append(target)
+                    seen_pairs[target] = regulator
+                    rows_tokeep.append(row)
+
+                else: 
+                    # this regulator-target pair has a lower association score than any
+                    # previously seen regulator, we need to decide whether to keep this pair
+
+                    # get association value for regulator pairs of that seen target
+                    regulator_prev = seen_pairs[target]
+                    idx_regulator_pair = (assocs_regu["regulator"]==regulator_prev) & (assocs_regu["target"]==regulator)
+                    association_reg_pair = assocs_regu.loc[idx_regulator_pair,"association"].values[0]
+
+                    # we drop the current regulator-target association if the regulator-regulator association is higher
+                    if association < association_reg_pair:
+                        continue
+                    else:
+                        # save association
+                        seen_targets.append(target)
+                        seen_pairs[target] = regulator
+                        rows_tokeep.append(row)
+
+            assocs_kept = pd.DataFrame(rows_tokeep)
+
+            # concatenate back with unique associations
+            assocs_pruned = pd.concat([assocs_uniq, assocs_kept])
+
+            return assocs_pruned
+        
+        
+        #         def dpi(assocs, regulators, pruning_assoc):
+        #             """
+        #             To do: parallelize.
+        #             """
+        #             # pairs of transcription factors, if they have a mutual information value above a threshold 
+        #             # add an edge, creating a TF-TF network
+        #             is_regulator_pair = (assocs["regulator"].isin(regulators)) & (
+        #                 assocs["target"].isin(regulators)
+        #             )
+        #             regulator_pairs = assocs.loc[is_regulator_pair]
+
+        #             # for each TF, iterate over all its targets that are also targets of any other TF
+        #             assocs_to_remove = []
+        #             for idx, regulator_pair in tqdm(regulator_pairs.iterrows(), total=regulator_pairs.shape[0]):
+        #                 regulator_a = regulator_pair["regulator"]
+        #                 regulator_b = regulator_pair["target"]
+        #                 assoc_regulator_pair = regulator_pair[pruning_assoc]
+
+        #                 targets_regulator_a = assocs.loc[assocs["regulator"] == regulator_a, "target"]
+        #                 targets_regulator_b = assocs.loc[assocs["regulator"] == regulator_b, "target"]
+
+        #                 common_targets = set(targets_regulator_a).intersection(targets_regulator_b)
+
+        #                 # for the common targets keep only the edge with the regulator
+        #                 # with the highest mutual information
+        #                 for common_target in common_targets:
+        #                     idx_pair_a = (assocs["regulator"] == regulator_a) & (
+        #                         assocs["target"] == common_target
+        #                     )
+        #                     assoc_pair_a = assocs.loc[idx_pair_a, pruning_assoc].values[0]
+        #                     idx_pair_b = (assocs["regulator"] == regulator_b) & (
+        #                         assocs["target"] == common_target
+        #                     )
+        #                     assoc_pair_b = assocs.loc[idx_pair_b, pruning_assoc].values[0]
+
+        #                     if (assoc_pair_a > assoc_pair_b) & (assoc_regulator_pair > assoc_pair_b):
+        #                         assoc_to_remove = assocs.loc[idx_pair_b]
+        #                         assocs_to_remove.append(assoc_to_remove)
+
+        #                     elif (assoc_pair_a < assoc_pair_b) & (assoc_regulator_pair > assoc_pair_a):
+        #                         assoc_to_remove = assocs.loc[idx_pair_a]
+        #                         assocs_to_remove.append(assoc_to_remove)
+
+        #             if len(assocs_to_remove) > 0:
+        #                 assocs_to_remove = pd.concat(assocs_to_remove).drop_duplicates()
+        #                 assocs_to_remove["to_keep"] = False
+        #                 assocs_to_remove = assocs_to_remove[["regulator", "target", "to_keep"]].copy()
+        #                 to_keep = pd.merge(
+        #                     assocs[["regulator", "target"]],
+        #                     assocs_to_remove,
+        #                     on=["regulator", "target"],
+        #                     how="left",
+        #                 )["to_keep"].isnull()
+        #                 to_keep = list(to_keep)
+
+        #             else:
+        #                 to_keep = [True] * len(assocs)
+
+        #             return to_keep
+        
+        # prune network
+        ## significant associations
+        thresh_col = assocs_all.columns[assocs_all.columns.str.contains("padj")]
+        if len(thresh_col) == 0:
+            thresh_col = "association"
+            assocs_all = assocs_all.loc[np.abs(assocs_all[thresh_col]) > thresh].copy()
+            assocs_targ = assocs_targ.loc[np.abs(assocs_targ[thresh_col]) > thresh].copy()
+            assocs_regu = assocs_regu.loc[np.abs(assocs_regu[thresh_col]) > thresh].copy()
+            pruning_
+        else:
+            assocs_all = assocs_all.loc[np.abs(assocs_all[thresh_col]) < thresh].copy()
+            assocs_targ = assocs_targ.loc[np.abs(assocs_targ[thresh_col]) < thresh].copy()
+            assocs_regu = assocs_regu.loc[np.abs(assocs_regu[thresh_col]) < thresh].copy()
+        
+        ## DPI
+        assocs_targ = fast_dpi(assocs_targ, assocs_regu, thresh_col)
+        
+        # keep only those regulator-regulator associations for which remains a regulator-target interaction
+        assocs_regu = assocs_regu.loc[
+            (assocs_regu["regulator"].isin(assocs_targ["regulator"])) & \
+            (assocs_regu["target"].isin(assocs_targ["regulator"]))
+        ]
+        
+        # save
+        assocs_targ.to_csv(output.assocs_targ, **SAVE_PARAMS)
+        assocs_regu.to_csv(output.assocs_regu, **SAVE_PARAMS)
         
         print("Done!")
         
