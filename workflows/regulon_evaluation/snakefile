@@ -27,7 +27,7 @@ SPLICING_FACTORS = SPLICING_FACTORS.loc[SPLICING_FACTORS["in_postar3"] & SPLICIN
 SPLICING_FACTORS = SPLICING_FACTORS["ENSEMBL"].to_list()
 
 DATASETS = ["CCLE","LIHC"]
-METHODS_ASSOC = ["aracne","correlation_spearman","linear_model"]
+METHODS_ASSOC = ["correlation_spearman","aracne","linear_model"]
 
 ##### RULES #####
 rule all:
@@ -39,8 +39,9 @@ rule all:
         expand(os.path.join(RESULTS_DIR,"files","associations","{dataset}","genexpr_vs_psi_imputed","aracne_w_spearman.tsv.gz"), dataset=DATASETS),
         
         # prune associations of interest
-        #expand(os.path.join(RESULTS_DIR,"files","associations_pruned","{dataset}","genexpr_vs_psi_imputed","{method}.tsv.gz"), dataset=DATASETS, method=METHODS_ASSOC),
-        
+        expand(os.path.join(RESULTS_DIR,"files","associations_pruned","{dataset}","genexpr_vs_psi_imputed","{method}.tsv.gz"), dataset=DATASETS, method=METHODS_ASSOC),
+        expand(os.path.join(RESULTS_DIR,"files","associations_pruned","{dataset}","genexpr_vs_genexpr","{method}.tsv.gz"), dataset=DATASETS, method=METHODS_ASSOC),
+
         # figures
         expand(os.path.join(RESULTS_DIR,'figures','assocs_evaluation','{dataset}'), dataset=DATASETS),
         
@@ -101,6 +102,7 @@ rule prune_associations:
         from tqdm import tqdm
         
         # load
+        print("Loading...")
         assocs_targ = pd.read_table(input.assocs_targ)
         assocs_regu = pd.read_table(input.assocs_regu)
         method = params.method
@@ -111,7 +113,11 @@ rule prune_associations:
             
             # make sure we have all necessary info for regulators
             regulators = assocs_regu["regulator"].unique()
-            assocs_targ = assocs_targ.loc[assocs_targ["regulator"].isin(regulators)]
+            assocs_regu = assocs_regu.loc[
+                assocs_regu["regulator"].isin(regulators) & assocs_regu["target"].isin(regulators)
+            ]
+            remaining_regulators = assocs_regu["regulator"].unique()
+            assocs_targ = assocs_targ.loc[assocs_targ["regulator"].isin(remaining_regulators)]
             
             # sort associations regulator-target
             assocs_targ = assocs_targ.sort_values(pruning_assoc, ascending=False, key=abs)
@@ -121,7 +127,7 @@ rule prune_associations:
             unique_targets = unique_targets.index[unique_targets]
             assocs_uniq = assocs_targ.loc[assocs_targ["target"].isin(unique_targets)].copy()
             assocs_mult = assocs_targ.loc[~assocs_targ["target"].isin(unique_targets)].copy()
-
+            
             # we iterate across rows and save the visited pairs
             rows_tokeep = []
             seen_targets = []
@@ -143,8 +149,15 @@ rule prune_associations:
                     # get association value for regulator pairs of that seen target
                     regulator_prev = seen_pairs[target]
                     idx_regulator_pair = (assocs_regu["regulator"]==regulator_prev) & (assocs_regu["target"]==regulator)
-                    association_reg_pair = assocs_regu.loc[idx_regulator_pair,"association"].values[0]
-
+                    association_reg_pair = assocs_regu.loc[idx_regulator_pair,"association"].values
+                    
+                    if len(association_reg_pair)==0:
+                        # we removed the reg-reg association with the threshold, we save the association
+                        association_reg_pair = 0
+                    else:
+                        # the reg-reg interaction was significant, we extract the association for DPI comparison
+                        association_reg_pair = association_reg_pair[0]
+                    
                     # we drop the current regulator-target association if the regulator-regulator association is higher
                     if np.abs(association) < np.abs(association_reg_pair):
                         continue
@@ -163,19 +176,20 @@ rule prune_associations:
         
         # prune network
         ## significant associations
-        thresh_col = assocs_all.columns[assocs_all.columns.str.contains("padj")]
+        print("Pruning non-significant associations...")
+        thresh_col = assocs_targ.columns[assocs_targ.columns.str.contains("padj")]
         if len(thresh_col) == 0:
             thresh_col = "association"
-            assocs_all = assocs_all.loc[np.abs(assocs_all[thresh_col]) > thresh].copy()
             assocs_targ = assocs_targ.loc[np.abs(assocs_targ[thresh_col]) > thresh].copy()
             assocs_regu = assocs_regu.loc[np.abs(assocs_regu[thresh_col]) > thresh].copy()
         else:
             # we prune by FDR threshold
-            assocs_all = assocs_all.loc[np.abs(assocs_all[thresh_col]) < thresh].copy()
+            thresh_col = thresh_col.values[0]
             assocs_targ = assocs_targ.loc[np.abs(assocs_targ[thresh_col]) < thresh].copy()
             assocs_regu = assocs_regu.loc[np.abs(assocs_regu[thresh_col]) < thresh].copy()
         
         ## DPI
+        print("Pruning by DPI...")
         assocs_targ = fast_dpi(assocs_targ, assocs_regu, "association")
         
         # keep only those regulator-regulator associations for which remains a regulator-target interaction
