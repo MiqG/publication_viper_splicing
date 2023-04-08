@@ -152,7 +152,7 @@ rule prune_associations:
                     association_reg_pair = assocs_regu.loc[idx_regulator_pair,"association"].values
                     
                     if len(association_reg_pair)==0:
-                        # we removed the reg-reg association with the threshold, we save the association
+                        # we removed the reg-reg association with the threshold, we keep the association
                         association_reg_pair = 0
                     else:
                         # the reg-reg interaction was significant, we extract the association for DPI comparison
