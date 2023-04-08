@@ -73,7 +73,7 @@ TARGETS_FILES = {
 }
 
 OMICS = ["genexpr_vs_psi","genexpr_vs_psi_imputed","genexpr_vs_genexpr"]
-METHODS_ASSOC = ["aracne","correlation_spearman","aracne","linear_model"]
+METHODS_ASSOC = ["aracne","correlation_spearman","linear_model"]
 
 SPLICING_FACTORS = pd.read_table(os.path.join(SUPPORT_DIR,"20230324-splicing_factors.tsv"))
 SPLICING_FACTORS = SPLICING_FACTORS.loc[SPLICING_FACTORS["in_postar3"] & SPLICING_FACTORS["in_encore_kd"]]
@@ -122,7 +122,6 @@ rule all:
             ),
             dataset=DATASETS, method=METHODS_ASSOC
         )
-        
         
         ### mutual information - with ARACNe
         #         #### bootstraps
@@ -346,10 +345,6 @@ rule prep_inputs_regulon_inference:
         targets = targets.loc[common_targets].copy()
         targets_imputed = targets_imputed.loc[common_targets].copy()
         
-        # DEV #########
-        #regulators = regulators.iloc[:100]
-        #targets = targets.iloc[:100]
-        
         # save
         regulators.reset_index().to_csv(output.regulators, sep="\t", index=None)
         pd.DataFrame(regulators.index).to_csv(
@@ -425,7 +420,6 @@ rule associations_sf_sf:
                     --n_jobs={threads} \
                     --output_file={output}
         """
-
 
 ################
 rule mutual_information_genexpr_psi_bootstrap:
@@ -554,8 +548,6 @@ rule mutual_information_prep_outputs:
 #         """
         
 
-        
-        
 rule target_inference_aracne_java_prep_output:
     input:
         regulons = os.path.join(RESULTS_DIR,"files","target_inference","aracne","{omic}","{dataset}","network.txt"),
@@ -634,40 +626,6 @@ rule target_inference_aracne_java_prep_output:
 
 
 
-rule run_viper:
-    input:
-        signature = lambda wildcards: SIGNATURE_FILES[wildcards.omic],
-        regulons = os.path.join(RESULTS_DIR,"files","target_inference","{method}","{omic}","{dataset}","regulons.tsv.gz")
-    output:
-        os.path.join(RESULTS_DIR,'files','validations','{method}','{omic}','ENCORE','{cell_line}-{dataset}_regulons.tsv.gz')
-    shell:
-        """
-        Rscript scripts/run_viper.R \
-                    --signature_file={input.signature} \
-                    --regulons_file={input.regulons} \
-                    --output_file={output}
-        """
-        
-
-rule figures_target_inference:
-    input:
-        viper_result = os.path.join(RESULTS_DIR,'files','validations','aracne','{omic}','ENCORE','{cell_line}-{dataset}_regulons.tsv.gz'),
-        regulons = os.path.join(RESULTS_DIR,"files","target_inference","aracne","{omic}","{dataset}","regulons.tsv.gz"),
-        encore_logfc = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'log2_fold_change_tpm.tsv.gz'),
-        event_info = os.path.join(RAW_DIR,"VastDB","EVENT_INFO-hg38_noseqs.tsv")
-    output:
-        directory(os.path.join(RESULTS_DIR,'figures','validations',"{cell_line}","{omic}","{dataset}"))
-    shell:
-        """
-        nice Rscript scripts/figures_target_inference.R \
-                    --viper_result_file={input.viper_result} \
-                    --encore_logfc_file={input.encore_logfc} \
-                    --regulons_file={input.regulons} \
-                    --event_info_file={input.event_info} \
-                    --figs_dir={output}
-        """
-
-        
 # rule target_inference_aracne_py:
 #     input:
 #         targets = lambda wildcards: TARGETS_FILES[wildcards.omic] if wildcards.omic!="event_psi" else TARGETS_FILES[wildcards.omic+"_imputed"],
