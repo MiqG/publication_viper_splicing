@@ -43,7 +43,7 @@ rule all:
         expand(os.path.join(RESULTS_DIR,'files','validations','{actinf_method}',"merged-{omic}-{delta_psi_type}.tsv.gz"), actinf_method=METHODS_ACTINF, omic=OMICS, delta_psi_type=DELTA_PSI_TYPES),
 
         # make figures
-        #expand(os.path.join(RESULTS_DIR,'figures','validations',"{cell_line}","{omic}","{dataset}"), cell_line=CELL_LINES, omic=OMICS, dataset=DATASETS)
+        expand(os.path.join(RESULTS_DIR,'figures','validations_encore','{actinf_method}',"{omic}","{delta_psi_type}"), actinf_method=METHODS_ACTINF, omic=OMICS, delta_psi_type=DELTA_PSI_TYPES)
         
         
 rule infer_protein_activity:
@@ -108,20 +108,18 @@ rule combine_inferred_activities:
         print("Done!")
         
         
-rule figures_target_inference:
+rule figures_validation_activity_encore:
     input:
-        viper_result = os.path.join(RESULTS_DIR,'files','validations','aracne','{omic}','ENCORE','{cell_line}-{dataset}_regulons.tsv.gz'),
-        regulons = os.path.join(RESULTS_DIR,"files","target_inference","aracne","{omic}","{dataset}","regulons.tsv.gz"),
-        encore_logfc = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'log2_fold_change_tpm.tsv.gz'),
-        event_info = os.path.join(RAW_DIR,"VastDB","EVENT_INFO-hg38_noseqs.tsv")
+        protein_activities = os.path.join(RESULTS_DIR,'files','validations','{actinf_method}',"merged-{omic}-{delta_psi_type}.tsv.gz"),
+        encore_logfc_hepg2 = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"HepG2",'log2_fold_change_tpm.tsv.gz'),
+        encore_logfc_k562 = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"K562",'log2_fold_change_tpm.tsv.gz')
     output:
-        directory(os.path.join(RESULTS_DIR,'figures','validations',"{cell_line}","{omic}","{dataset}"))
+        directory(os.path.join(RESULTS_DIR,'figures','validations_encore','{actinf_method}',"{omic}","{delta_psi_type}"))
     shell:
         """
-        nice Rscript scripts/figures_target_inference.R \
-                    --viper_result_file={input.viper_result} \
-                    --encore_logfc_file={input.encore_logfc} \
-                    --regulons_file={input.regulons} \
-                    --event_info_file={input.event_info} \
+        nice Rscript scripts/figures_validation_activity_encore.R \
+                    --protein_activities_file={input.protein_activities} \
+                    --encore_logfc_hepg2={input.encore_logfc_hepg2} \
+                    --encore_logfc_k562={input.encore_logfc_k562} \
                     --figs_dir={output}
         """

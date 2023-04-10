@@ -29,8 +29,9 @@ prep_regulons = function(regulons, assoc_method){
     if (assoc_method=="correlation_spearman"){
         
         regulons = regulons %>% drop_na(padj, association)
-        regulons[["likelihood"]] = regulons[["association"]]
-        regulons[["tfmode"]] = sign(regulons[["association"]]) * (1 - regulons[["padj"]])
+        regulons[["likelihood"]] = abs(regulons[["association"]])
+        regulons[["tfmode"]] = sign(regulons[["association"]]) * (-log10(regulons[["padj"]]))
+        #regulons[["tfmode"]] = sign(regulons[["association"]])
         regulons = regulons %>%
             distinct(regulator, target, likelihood, tfmode)
         
@@ -45,8 +46,9 @@ prep_regulons = function(regulons, assoc_method){
     } else if (assoc_method=="linear_model"){
         
         regulons = regulons %>% drop_na(lr_padj, association)
-        regulons[["likelihood"]] = regulons[["association"]]
-        regulons[["tfmode"]] = sign(regulons[["association"]]) * (1 - regulons[["lr_padj"]])
+        regulons[["likelihood"]] = abs(regulons[["association"]])
+        regulons[["tfmode"]] = sign(regulons[["association"]]) * (-log10(regulons[["lr_padj"]]))
+        #regulons[["tfmode"]] = sign(regulons[["association"]])
         regulons = regulons %>%
             distinct(regulator, target, likelihood, tfmode)
         
