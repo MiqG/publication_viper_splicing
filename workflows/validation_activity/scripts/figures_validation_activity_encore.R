@@ -110,6 +110,38 @@ plot_viper_activities = function(protein_activities, encore_logfc){
         geom_smooth(method="lm", linetype="dashed", color="black", size=LINE_SIZE) +
         labs(x="Log2FC KD vs WT", y="Viper Activity", color="Is KD")
     
+    # what is the ranking of each splicing factor when validated across all experiments?
+    set.seed(1234)
+    x = X %>%
+        group_by(assoc_method, regulon, cell_line, regulator) %>%
+        arrange(abs(protein_activity)) %>% 
+        mutate(ranking = row_number()) %>%
+        ungroup() %>%
+        filter(is_validated) %>%
+        mutate(ordering_type = "real") %>%
+        bind_rows(
+            X %>%
+            group_by(assoc_method, regulon, cell_line) %>%
+            mutate(is_validated = sample(is_validated)) %>%
+            ungroup() %>%
+            group_by(assoc_method, regulon, cell_line, regulator) %>%
+            arrange(abs(protein_activity)) %>% 
+            mutate(ranking = row_number()) %>%
+            ungroup() %>%
+            filter(is_validated) %>%
+            mutate(ordering_type = "random")
+        )
+    
+    plts[["viper_activities-specificity-violin"]] = x %>%
+        ggviolin(x="ordering_type", y="ranking", fill="ordering_type", color=NA) +
+        geom_boxplot(width=0.1, fill=NA) + 
+        facet_wrap(~assoc_method+regulon+cell_line, scales="free", ncol=2) +
+        theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        stat_compare_means(method="wilcox.test", size=FONT_SIZE, family=FONT_FAMILY) +
+        guides(fill="none") + 
+        labs(x="Sample Ranking", y="Viper Activity Ranking Across Experiments")
+
+    
     return(plts)
 }
 
@@ -160,6 +192,7 @@ save_plt = function(plts, plt_name, extension='.pdf',
 save_plots = function(plts, figs_dir){
     save_plt(plts, "viper_activities-fc_kds_vs_protein_activity-scatter", '.pdf', figs_dir, width=12, height=35)
     save_plt(plts, "viper_activities-fc_kds_vs_max_protein_activity-scatter", '.pdf', figs_dir, width=12, height=35)
+    save_plt(plts, "viper_activities-specificity-violin", '.pdf', figs_dir, width=12, height=35)
 }
 
 
