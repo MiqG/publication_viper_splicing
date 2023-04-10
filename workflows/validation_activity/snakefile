@@ -37,7 +37,10 @@ DELTA_PSI_TYPES = ["delta_psi","delta_psi_rel"]
 rule all:
     input:
         # infer activities
-        expand(os.path.join(RESULTS_DIR,'files','validations','{assoc_method}','{actinf_method}','{omic}',"{delta_psi_type}",'ENCORE','{cell_line}-{dataset}_regulons.tsv.gz'), assoc_method=METHODS_ASSOC, actinf_method=METHODS_ACTINF, omic=OMICS, delta_psi_type=DELTA_PSI_TYPES, cell_line=CELL_LINES, dataset=DATASETS),
+        ## for each association method
+        expand(os.path.join(RESULTS_DIR,'files','validations','{actinf_method}','{assoc_method}','{omic}',"{delta_psi_type}",'ENCORE','{cell_line}-{dataset}_regulons.tsv.gz'), actinf_method=METHODS_ACTINF, assoc_method=METHODS_ASSOC, omic=OMICS, delta_psi_type=DELTA_PSI_TYPES, cell_line=CELL_LINES, dataset=DATASETS),
+        ## concatenate by 
+        expand(os.path.join(RESULTS_DIR,'files','validations','{actinf_method}',"merged-{omic}-{delta_psi_type}.tsv.gz"), actinf_method=METHODS_ACTINF, omic=OMICS, delta_psi_type=DELTA_PSI_TYPES),
 
         # make figures
         #expand(os.path.join(RESULTS_DIR,'figures','validations',"{cell_line}","{omic}","{dataset}"), cell_line=CELL_LINES, omic=OMICS, dataset=DATASETS)
@@ -48,7 +51,7 @@ rule infer_protein_activity:
         signature = lambda wildcards: SIGNATURE_FILES[wildcards.omic][wildcards.delta_psi_type],
         regulons = os.path.join(REGEVAL_DIR,"files","associations","{dataset}","genexpr_vs_psi_imputed","{assoc_method}.tsv.gz")
     output:
-        os.path.join(RESULTS_DIR,'files','validations','{assoc_method}','{actinf_method}','{omic}',"{delta_psi_type}",'ENCORE','{cell_line}-{dataset}_regulons.tsv.gz')
+        os.path.join(RESULTS_DIR,'files','validations','{actinf_method}','{assoc_method}','{omic}',"{delta_psi_type}",'ENCORE','{cell_line}-{dataset}_regulons.tsv.gz')
     params:
         assoc_method = "{assoc_method}",
         actinf_method = "{actinf_method}"
@@ -61,6 +64,48 @@ rule infer_protein_activity:
                     --assoc_method={params.assoc_method} \
                     --actinf_method={params.actinf_method}
         """
+        
+        
+rule combine_inferred_activities:
+    input:
+        protein_activities = [os.path.join(RESULTS_DIR,'files','validations','{actinf_method}','{assoc_method}','{omic}',"{delta_psi_type}",'ENCORE','{cell_line}-{dataset}_regulons.tsv.gz').format(actinf_method="{actinf_method}", assoc_method=assoc_method, omic="{omic}", delta_psi_type="{delta_psi_type}", cell_line=cell_line, dataset=dataset) for assoc_method in METHODS_ASSOC for cell_line in CELL_LINES for dataset in DATASETS]
+    output:
+        os.path.join(RESULTS_DIR,'files','validations','{actinf_method}',"merged-{omic}-{delta_psi_type}.tsv.gz")
+    params:
+        actinf_method = "{actinf_method}",
+        omic = "{omic}",
+        delta_psi_type = "{delta_psi_type}"
+    run:
+        import os
+        import pandas as pd
+        
+        actinf_method = params.actinf_method
+        omic = params.omic
+        delta_psi_type = params.delta_psi_type
+        
+        dfs = []
+        for file in input.protein_activities:
+            assoc_method = os.path.basename(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(file)))))
+            cell_line = os.path.basename(file).split("-")[0]
+            regulon = os.path.basename(file).replace(".tsv.gz","").split("-")[1]
+            
+            df = pd.read_table(file)
+            df = df.melt(id_vars="regulator", var_name="KD", value_name="protein_activity")
+            
+            df["actinf_method"] = actinf_method
+            df["assoc_method"] = assoc_method
+            df["omic"] = omic
+            df["delta_psi_type"] = delta_psi_type
+            df["cell_line"] = cell_line
+            df["regulon"] = regulon
+            
+            dfs.append(df)
+            
+        dfs = pd.concat(dfs)
+        
+        dfs.to_csv(output[0], **SAVE_PARAMS)
+        
+        print("Done!")
         
         
 rule figures_target_inference:
