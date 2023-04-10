@@ -95,7 +95,10 @@ rule prune_associations:
         assocs_regu = os.path.join(RESULTS_DIR,"files","associations_pruned","{dataset}","genexpr_vs_genexpr","{method}.tsv.gz")
     params:
         method = "{method}",
-        thresh = 0.1
+    threads: 1
+    resources:
+        runtime = int(3600*12), # h 
+        memory = 10
     run:
         import pandas as pd
         import numpy as np
@@ -106,7 +109,6 @@ rule prune_associations:
         assocs_targ = pd.read_table(input.assocs_targ)
         assocs_regu = pd.read_table(input.assocs_regu)
         method = params.method
-        thresh = params.thresh
         
         # DPI function
         def fast_dpi(assocs_targ, assocs_regu, pruning_assoc):
@@ -179,11 +181,14 @@ rule prune_associations:
         print("Pruning non-significant associations...")
         thresh_col = assocs_targ.columns[assocs_targ.columns.str.contains("padj")]
         if len(thresh_col) == 0:
+            # we prune by value of association
+            thresh = 0.1
             thresh_col = "association"
             assocs_targ = assocs_targ.loc[np.abs(assocs_targ[thresh_col]) > thresh].copy()
             assocs_regu = assocs_regu.loc[np.abs(assocs_regu[thresh_col]) > thresh].copy()
         else:
             # we prune by FDR threshold
+            thresh = 0.01
             thresh_col = thresh_col.values[0]
             assocs_targ = assocs_targ.loc[np.abs(assocs_targ[thresh_col]) < thresh].copy()
             assocs_regu = assocs_regu.loc[np.abs(assocs_regu[thresh_col]) < thresh].copy()
