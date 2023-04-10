@@ -3,6 +3,7 @@
 ## Overview
 1. [ ] Inference and validation of splicing factor activities
     - [X] download GO splicing factors (https://www.gsea-msigdb.org/gsea/msigdb/geneset_page.jsp?geneSetName=GOBP_RNA_SPLICING)
+    - [X] download GO RNA binding (https://www.gsea-msigdb.org/gsea/msigdb/human/geneset/GOMF_RNA_BINDING.html)
     - [X] download CCLE splicing factor omics
     - [X] download SpliceAid RBP exon interactions (http://srv00.recas.ba.infn.it/SpliceAidF/)
     - [X] download eCLIP seq from ENCODE

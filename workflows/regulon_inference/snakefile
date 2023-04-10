@@ -113,7 +113,7 @@ rule all:
             os.path.join(RESULTS_DIR,"files","associations","{dataset}","{omic}","{method}","{sf}.tsv.gz").format(
                 dataset="{dataset}", omic="genexpr_vs_psi_imputed", method="{method}", sf="{sf}"
             ),
-            dataset=DATASETS, method=METHODS_ASSOC, sf=SPLICING_FACTORS
+            dataset=DATASETS, method=METHODS_ASSOC+["linear_model2"], sf=SPLICING_FACTORS
         ),
         ### SF vs SF
         expand(
@@ -376,10 +376,12 @@ rule split_regulators:
         print("Done!")
 
         
-rule associations_sf_exon:
+rule associations_sf_exon_lm2:
     input:
         regulators = os.path.join(RESULTS_DIR,"files","inputs","{dataset}","genexpr_tpm-splicing_factors-{sf}.tsv"),
-        targets = os.path.join(RESULTS_DIR,"files","inputs","{dataset}","event_psi_imputed-exons.tsv")
+        targets_splicing = os.path.join(RESULTS_DIR,"files","inputs","{dataset}","event_psi_imputed-exons.tsv"),
+        targets_genexpr = os.path.join(PREP_DIR,"genexpr_tpm","{dataset}.tsv.gz"),
+        mapping = os.path.join(RAW_DIR,"VastDB","event_annotation-Hs2.tsv.gz")
     output:
         os.path.join(RESULTS_DIR,"files","associations","{dataset}","{omic}","{method}","{sf}.tsv.gz")
     params:
@@ -390,15 +392,27 @@ rule associations_sf_exon:
         memory = 6,
     shell:
         """
-        python scripts/compute_associations.py \
-                    --regulators_file={input.regulators} \
-                    --targets_file={input.targets} \
-                    --method={params.method} \
-                    --n_jobs={threads} \
-                    --output_file={output}
-        """
+        if [[ "{params.method}" == "linear_model2" ]]; then
 
-        
+            python scripts/compute_associations.py \
+                        --regulators_file={input.regulators} \
+                        --targets_file={input.targets_splicing} \
+                        --targets_genexpr_file={input.targets_genexpr} \
+                        --mapping_file={input.mapping} \
+                        --method={params.method} \
+                        --n_jobs={threads} \
+                        --output_file={output}
+        else
+            python scripts/compute_associations.py \
+                        --regulators_file={input.regulators} \
+                        --targets_file={input.targets_splicing} \
+                        --method={params.method} \
+                        --n_jobs={threads} \
+                        --output_file={output}
+        fi
+        """
+    
+    
 rule associations_sf_sf:
     input:
         regulators = os.path.join(RESULTS_DIR,"files","inputs","{dataset}","genexpr_tpm-splicing_factors.tsv"),

@@ -50,9 +50,9 @@ def pairwise(lst1, lst2, lim=np.inf):
                 if i <= lim:
                     i = i + 1
                     yield (x, y)
-                    
-                    
-def load_data(regulators_file, targets_file):
+
+
+def load_data(regulators_file, targets_file, targets_genexpr_file, mapping_file):
     print("Loading data...")
 
     # read
@@ -68,15 +68,35 @@ def load_data(regulators_file, targets_file):
     regulators = regulators[common_samples].copy()
     targets = targets[common_samples].copy()
 
+    if targets_genexpr_file is not None:
+        targets_genexpr = pd.read_table(targets_genexpr_file, index_col=0)
+        mapping = pd.read_table(mapping_file)[["EVENT","ENSEMBL"]].dropna()
+
+        # subset
+        mapping = mapping.loc[
+            mapping["EVENT"].isin(targets.index)
+            & mapping["ENSEMBL"].isin(targets_genexpr.index)
+        ].copy()
+        targets = targets.loc[targets.index.isin(mapping["EVENT"])]
+        targets_genexpr = targets_genexpr.loc[
+            targets_genexpr.index.isin(mapping["ENSEMBL"]), common_samples
+        ]
+        
+        mapping = mapping.set_index("EVENT")["ENSEMBL"]
+        
+    else:
+        targets_genexpr = None
+        mapping = None
+    
     gc.collect()
 
-    return regulators, targets
+    return regulators, targets, targets_genexpr, mapping
 
 
 def compute_correlation_single(regulator_single, target_single, method):
-    
+
     regulator, target = regulator_single.name, target_single.name
-    
+
     idx = np.isfinite(regulator_single) & np.isfinite(target_single)
     a = regulator_single[idx]
     b = target_single[idx]
@@ -114,30 +134,32 @@ def compute_correlation_single(regulator_single, target_single, method):
 
 def compute_correlations(regulators, targets, n_jobs, method):
     pairs = pairwise(regulators.index, targets.index)
-    
+
     correls = Parallel(n_jobs=n_jobs)(
-        delayed(compute_correlation_single)(regulators.loc[reg], targets.loc[tar], method)
+        delayed(compute_correlation_single)(
+            regulators.loc[reg], targets.loc[tar], method
+        )
         for reg, tar in tqdm(pairs)
     )
     result = pd.DataFrame(correls)
-    
+
     # adjust pvalues
     result["padj"] = np.nan
     _, fdr, _, _ = multitest.multipletests(
         result.loc[np.isfinite(result["pvalue"]), "pvalue"], method="fdr_bh"
     )
     result.loc[np.isfinite(result["pvalue"]), "padj"] = fdr
-    
+
     # add association
     result["association"] = result["statistic"]
-    
+
     return result
 
 
 def execute_aracne(regulators_file, targets_file, aracne_bin, n_jobs):
-    
+
     regulators = pd.read_table(regulators_file, index_col=0)
-    regulators_oi = "\n".join(list(regulators.index)) 
+    regulators_oi = "\n".join(list(regulators.index))
     n_samples = regulators.shape[1]
 
     with tempfile.TemporaryDirectory() as tmpdirname:
@@ -168,7 +190,7 @@ def execute_aracne(regulators_file, targets_file, aracne_bin, n_jobs):
             targets=targets_file,
             output_dir=tmpdirname,
             n_jobs=n_jobs,
-            n_samples=n_samples
+            n_samples=n_samples,
         )
         print(cmd)
         exit = os.system(cmd)
@@ -178,7 +200,9 @@ def execute_aracne(regulators_file, targets_file, aracne_bin, n_jobs):
         result = pd.read_table(os.path.join(tmpdirname, "nobootstrap_network.txt"))
 
     # prepare output
-    result = result.rename(columns={"Regulator": "regulator", "Target": "target", "MI":"association"})
+    result = result.rename(
+        columns={"Regulator": "regulator", "Target": "target", "MI": "association"}
+    )
 
     return result
 
@@ -197,11 +221,13 @@ def get_summary_stats(df, col_oi):
 def fit_olsmodel(y, X, n_iterations):
     regulator = y.name
     target = X.columns[0]
-    
+
     summaries = []
     for i in range(n_iterations):
         # split data
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=TEST_SIZE, random_state=i)
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=TEST_SIZE, random_state=i
+        )
 
         # fit linear model to training data
         model = sm.OLS(y_train, X_train).fit()
@@ -237,7 +263,7 @@ def fit_olsmodel(y, X, n_iterations):
             "lr_df": lr_df,
         }
         summaries.append(summary_it)
-        
+
     summaries = pd.DataFrame(summaries)
 
     # compute average likelihood-ratio test
@@ -267,12 +293,12 @@ def compute_lm_single(regulator_single, target_single, n_iterations):
     # model variables
     X = pd.DataFrame([target_single]).T
     y = regulator_single
-    
+
     # drop missing values
     is_nan = X.isnull().any(1) | y.isnull()
     X = X.loc[~is_nan].copy()
     y = y[~is_nan].copy()
-    
+
     # fit
     try:
         # add intercept
@@ -334,35 +360,244 @@ def compute_lm_single(regulator_single, target_single, n_iterations):
 
     return summary
 
-    
+
 def compute_lm(regulators, targets, n_jobs, n_iterations):
     # standardize regulators
-    regulators = regulators - regulators.mean(axis=1).values.reshape(-1,1)
-    regulators = regulators / regulators.std(axis=1).values.reshape(-1,1)
-    
+    regulators = regulators - regulators.mean(axis=1).values.reshape(-1, 1)
+    regulators = regulators / regulators.std(axis=1).values.reshape(-1, 1)
+
     # fit linear models
     pairs = pairwise(regulators.index, targets.index)
-    
+
     results = Parallel(n_jobs=n_jobs)(
         delayed(compute_lm_single)(regulators.loc[reg], targets.loc[tar], n_iterations)
         for reg, tar in tqdm(pairs)
     )
     result = pd.DataFrame(results)
-    
+
     # adjust pvalues
     result["lr_padj"] = np.nan
     _, fdr, _, _ = multitest.multipletests(
         result.loc[np.isfinite(result["lr_pvalue"]), "lr_pvalue"], method="fdr_bh"
     )
     result.loc[np.isfinite(result["lr_pvalue"]), "lr_padj"] = fdr
-    
+
     # add association
     result["association"] = result["target_coefficient_mean"]
-    
+
     return result
-    
-    
-def compute_associations(regulators, targets, method, n_jobs, aracne_bin, n_iterations):
+
+
+def fit_olsmodel2(y, X, n_iterations):
+    regulator = y.name
+    target_event = X.columns[0]
+    target_gene = X.columns[1]
+
+    summaries = []
+    for i in range(n_iterations):
+        # split data
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=TEST_SIZE, random_state=i
+        )
+
+        # fit linear model to training data
+        model = sm.OLS(y_train, X_train).fit()
+
+        # log-likelihood test
+        model_null = sm.OLS(y_train, X_train[["intercept",target_gene]]).fit()
+        lr_stat, lr_pvalue, lr_df = model.compare_lr_test(model_null)
+
+        # score using test data
+        prediction = model.predict(X_test)
+        pearson_coef, pearson_pvalue = stats.pearsonr(prediction, y_test)
+        spearman_coef, spearman_pvalue = stats.spearmanr(prediction, y_test)
+
+        # prepare output
+        summary_it = {
+            "iteration": i,
+            "target_splicing_coefficient": model.params[target_event],
+            "target_splicing_stderr": model.bse[target_event],
+            "target_splicing_zscore": model.params[target_event] / model.bse[target_event],
+            "target_splicing_pvalue": model.pvalues[target_event],
+            "target_genexpr_coefficient": model.params[target_gene],
+            "target_genexpr_stderr": model.bse[target_gene],
+            "target_genexpr_zscore": model.params[target_gene] / model.bse[target_gene],
+            "target_genexpr_pvalue": model.pvalues[target_gene],
+            "intercept_coefficient": model.params["intercept"],
+            "intercept_stderr": model.bse["intercept"],
+            "intercept_zscore": model.params["intercept"] / model.bse["intercept"],
+            "intercept_pvalue": model.pvalues["intercept"],
+            "n_obs": model.nobs,
+            "rsquared": model.rsquared,
+            "pearson_correlation": pearson_coef,
+            "pearson_pvalue": pearson_pvalue,
+            "spearman_correlation": spearman_coef,
+            "spearman_pvalue": spearman_pvalue,
+            "lr_stat": lr_stat,
+            "lr_pvalue": lr_pvalue,
+            "lr_df": lr_df,
+        }
+        summaries.append(summary_it)
+
+    summaries = pd.DataFrame(summaries)
+
+    # compute average likelihood-ratio test
+    avg_lr_stat = np.mean(summaries["lr_stat"])
+    avg_lr_df = np.round(summaries["lr_df"].mean())
+    lr_pvalue = stats.chi2.sf(avg_lr_stat, avg_lr_df)
+
+    # prepare output
+    ## summary
+    summary = {"regulator": regulator, "target_event": target_event, "target_gene": target_gene, "n_obs": model.nobs}
+    summary.update(get_summary_stats(summaries, "target_splicing_coefficient"))
+    summary.update(get_summary_stats(summaries, "target_genexpr_coefficient"))
+    summary.update(get_summary_stats(summaries, "intercept_coefficient"))
+    summary.update(get_summary_stats(summaries, "rsquared"))
+    summary.update(get_summary_stats(summaries, "pearson_correlation"))
+    summary.update(get_summary_stats(summaries, "spearman_correlation"))
+    summary.update(get_summary_stats(summaries, "lr_stat"))
+    summary.update(
+        {"lr_df": lr_df, "lr_pvalue": lr_pvalue,}
+    )
+    summary = pd.Series(summary)
+
+    return summary
+
+
+def compute_lm2_single(regulator_single, target_splicing_single, target_genexpr_single, n_iterations):
+
+    # model variables
+    X = pd.DataFrame([target_splicing_single, target_genexpr_single]).T
+    y = regulator_single
+
+    # drop missing values
+    is_nan = X.isnull().any(1) | y.isnull()
+    X = X.loc[~is_nan].copy()
+    y = y[~is_nan].copy()
+
+    # fit
+    try:
+        # add intercept
+        X["intercept"] = 1.0
+
+        # fit full model
+        summary = fit_olsmodel2(y, X, n_iterations)
+
+    except:
+        X["intercept"] = np.nan
+
+        # create empy summary
+        summary = pd.Series(
+            np.nan,
+            index=[
+                "regulator",
+                "target_event",
+                "target_gene",
+                "n_obs",
+                "target_splicing_coefficient_mean",
+                "target_splicing_coefficient_median",
+                "target_splicing_coefficient_std",
+                "target_splicing_coefficient_q25",
+                "target_splicing_coefficient_q75",
+                "target_genexpr_coefficient_mean",
+                "target_genexpr_coefficient_median",
+                "target_genexpr_coefficient_std",
+                "target_genexpr_coefficient_q25",
+                "target_genexpr_coefficient_q75",
+                "intercept_coefficient_mean",
+                "intercept_coefficient_median",
+                "intercept_coefficient_std",
+                "intercept_coefficient_q25",
+                "intercept_coefficient_q75",
+                "rsquared_mean",
+                "rsquared_median",
+                "rsquared_std",
+                "rsquared_q25",
+                "rsquared_q75",
+                "pearson_correlation_mean",
+                "pearson_correlation_median",
+                "pearson_correlation_std",
+                "pearson_correlation_q25",
+                "pearson_correlation_q75",
+                "spearman_correlation_mean",
+                "spearman_correlation_median",
+                "spearman_correlation_std",
+                "spearman_correlation_q25",
+                "spearman_correlation_q75",
+                "lr_stat_mean",
+                "lr_stat_median",
+                "lr_stat_std",
+                "lr_stat_q25",
+                "lr_stat_q75",
+                "lr_df",
+                "lr_pvalue",
+            ],
+        )
+        summary["regulator"] = regulator_single.name
+        summary["target_event"] = target_splicing_single.name
+        summary["target_gene"] = target_genexpr_single.name
+
+    # add some more info to the summary
+    summary["target_splicing_mean"] = target_splicing_single.mean()
+    summary["target_splicing_std"] = target_splicing_single.std()
+    summary["target_genexpr_mean"] = target_genexpr_single.mean()
+    summary["target_genexpr_std"] = target_genexpr_single.std()
+
+    return summary
+
+def compute_lm2(regulators, targets_splicing, targets_genexpr, mapping, n_jobs, n_iterations):
+    # standardize regulators
+    regulators = regulators - regulators.mean(axis=1).values.reshape(-1, 1)
+    regulators = regulators / regulators.std(axis=1).values.reshape(-1, 1)
+
+    # standardize targets
+    targets_splicing = targets_splicing - targets_splicing.mean(axis=1).values.reshape(-1, 1)
+    targets_splicing = targets_splicing / targets_splicing.std(axis=1).values.reshape(-1, 1)
+
+    targets_genexpr = targets_genexpr - targets_genexpr.mean(axis=1).values.reshape(
+        -1, 1
+    )
+    targets_genexpr = targets_genexpr / targets_genexpr.std(axis=1).values.reshape(
+        -1, 1
+    )
+
+    # fit linear models
+    pairs = pairwise(regulators.index, targets_splicing.index)
+
+    results = Parallel(n_jobs=n_jobs)(
+        delayed(compute_lm2_single)(
+            regulators.loc[reg],
+            targets_splicing.loc[tar],
+            targets_genexpr.loc[mapping[tar]],
+            n_iterations,
+        )
+        for reg, tar in tqdm(pairs)
+    )
+    result = pd.DataFrame(results)
+
+    # adjust pvalues
+    result["lr_padj"] = np.nan
+    _, fdr, _, _ = multitest.multipletests(
+        result.loc[np.isfinite(result["lr_pvalue"]), "lr_pvalue"], method="fdr_bh"
+    )
+    result.loc[np.isfinite(result["lr_pvalue"]), "lr_padj"] = fdr
+
+    # add association
+    result["association"] = result["target_splicing_coefficient_mean"]
+
+    return result
+
+
+def compute_associations(
+    regulators,
+    targets,
+    targets_genexpr,
+    mapping,
+    method,
+    n_jobs,
+    aracne_bin,
+    n_iterations,
+):
     print("Computing associations...")
 
     if method == "correlation_spearman":
@@ -377,10 +612,17 @@ def compute_associations(regulators, targets, method, n_jobs, aracne_bin, n_iter
 
     elif method == "aracne":
         result = execute_aracne(regulators, targets, aracne_bin, n_jobs)
-        
+
     elif method == "linear_model":
         result = compute_lm(regulators, targets, n_jobs, n_iterations)
-        
+
+    elif method == "linear_model2":
+        assert (targets_genexpr is not None) & (mapping is not None)
+
+        result = compute_lm2(
+            regulators, targets, targets_genexpr, mapping, n_jobs, n_iterations
+        )
+
     result["method"] = method
 
     return result
@@ -389,6 +631,8 @@ def compute_associations(regulators, targets, method, n_jobs, aracne_bin, n_iter
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--targets_file", type=str)
+    parser.add_argument("--targets_genexpr_file", type=str, default=None)
+    parser.add_argument("--mapping_file", type=str, default=None)
     parser.add_argument("--regulators_file", type=str)
     parser.add_argument("--method", type=str)
     parser.add_argument("--n_jobs", type=int)
@@ -404,6 +648,8 @@ def parse_args():
 def main():
     args = parse_args()
     targets_file = args.targets_file
+    targets_genexpr_file = args.targets_genexpr_file
+    mapping_file = args.mapping_file
     regulators_file = args.regulators_file
     method = args.method
     n_jobs = args.n_jobs
@@ -415,25 +661,24 @@ def main():
 
     if method == "aracne":
         result = compute_associations(
-            regulators_file,
-            targets_file,
-            method,
-            n_jobs,
-            aracne_bin,
-            n_iterations
+            regulators_file, targets_file, method, n_jobs, aracne_bin, n_iterations
         )
     else:
-        regulators, targets = load_data(regulators_file, targets_file)
+        regulators, targets, targets_genexpr, mapping = load_data(
+            regulators_file, targets_file, targets_genexpr_file, mapping_file
+        )
 
         result = compute_associations(
             regulators,
             targets,
+            targets_genexpr,
+            mapping,
             method,
             n_jobs,
             aracne_bin,
-            n_iterations
+            n_iterations,
         )
-    
+
     # save
     print("Saving data...")
     result.to_csv(output_file, **SAVE_PARAMS)
