@@ -365,6 +365,10 @@ def compute_lm(regulators, targets, n_jobs, n_iterations):
     # standardize regulators
     regulators = regulators - regulators.mean(axis=1).values.reshape(-1, 1)
     regulators = regulators / regulators.std(axis=1).values.reshape(-1, 1)
+    
+    # standardize targets
+    targets = targets - targets.mean(axis=1).values.reshape(-1, 1)
+    targets = targets / targets.std(axis=1).values.reshape(-1, 1)
 
     # fit linear models
     pairs = pairwise(regulators.index, targets.index)
