@@ -38,6 +38,7 @@ PAL_CONTRAST = c("darkgrey","darkred")
 # assocs_mi_file = file.path(RESULTS_DIR,"files","associations","LIHC","genexpr_vs_psi_imputed","aracne.tsv.gz")
 # assocs_spear_file = file.path(RESULTS_DIR,"files","associations","LIHC","genexpr_vs_psi_imputed","correlation_spearman.tsv.gz")
 # assocs_lm_file = file.path(RESULTS_DIR,"files","associations","LIHC","genexpr_vs_psi_imputed","linear_model.tsv.gz")
+# assocs_lm2_file = file.path(RESULTS_DIR,"files","associations","LIHC","genexpr_vs_psi_imputed","linear_model2.tsv.gz")
 
 # genexpr_file = file.path(PREP_DIR,"genexpr_tpm","LIHC.tsv.gz")
 # regulators_file = file.path(REGINF_DIR,"files","inputs","LIHC","genexpr_tpm-splicing_factors.tsv")

@@ -37,6 +37,7 @@ PAL_CONTRAST = c("darkgrey","darkred")
 # assocs_mi_file = file.path(RESULTS_DIR,"files","associations","LIHC","genexpr_vs_psi_imputed","aracne.tsv.gz")
 # assocs_spear_file = file.path(RESULTS_DIR,"files","associations","LIHC","genexpr_vs_psi_imputed","correlation_spearman.tsv.gz")
 # assocs_lm_file = file.path(RESULTS_DIR,"files","associations","LIHC","genexpr_vs_psi_imputed","linear_model.tsv.gz")
+# assocs_lm2_file = file.path(RESULTS_DIR,"files","associations","LIHC","genexpr_vs_psi_imputed","linear_model2.tsv.gz")
 
 # REGINF_DIR = file.path(ROOT,"results","regulon_inference")
 # regulons_clip_file = file.path(REGINF_DIR,"files","regulons","CLIP","POSTAR3.tsv.gz")
@@ -47,7 +48,7 @@ PAL_CONTRAST = c("darkgrey","darkred")
 
 ##### FUNCTIONS #####
 compute_precision = function(labels, values, len=11){
-    threshs = seq(10, length(values), length.out=len) # they must be ordered
+    threshs = round(seq(10, length(values), length.out=len)) # they must be ordered
 
     precisions = sapply(threshs, function(thresh){
         preds = values > values[thresh]
@@ -63,7 +64,7 @@ compute_precision = function(labels, values, len=11){
 }
 
 compute_recall = function(labels, values, len=11){
-    threshs = seq(10, length(values), length.out=len) # they must be ordered
+    threshs = round(seq(10, length(values), length.out=len)) # they must be ordered
     
     recalls = sapply(threshs, function(thresh){
         preds = values > values[thresh]
@@ -80,6 +81,35 @@ compute_recall = function(labels, values, len=11){
 }
 
 
+compute_prec_rec = function(.data, true_var, pred_var, label, len=11){
+    df = .data %>%
+        arrange({{pred_var}}) %>%
+        drop_na({{pred_var}}) %>%
+        reframe(
+            precision = compute_precision({{true_var}}, {{pred_var}}, len),
+            recall = compute_recall({{true_var}}, {{pred_var}}, len),
+            ranking_var = label,
+            n_obs = n()
+        )
+    return(df)
+}
+
+
+compute_prec_rec_mult = function(.data, true_var, vars_oi, len=11){
+    
+    result = lapply(
+        vars_oi, function(var_oi){
+            result = .data %>% compute_prec_rec(.data[[true_var]], .data[[var_oi]], var_oi)
+            
+            return(result)
+        }) %>%
+        do.call(rbind, .) %>%
+        drop_na()
+    
+    return(result)
+}
+
+
 plot_eval_clip = function(assocs, regulons_clip){
     plts = list()
     
@@ -87,63 +117,109 @@ plot_eval_clip = function(assocs, regulons_clip){
     
     print(sprintf("CLIP total interactions: %s", sum(X[["in_clip"]])))
     
-    eval_clip = X
-    eval_clip = eval_clip %>%
-        arrange(-abs(mutual_information)) %>%
-        reframe(
-            precision = compute_precision(in_clip, -abs(mutual_information)),
-            recall = compute_recall(in_clip, -abs(mutual_information)),
-            ranking_var = "mutual_information"
-        ) %>% 
-        ungroup() %>%
-        bind_rows(
-            eval_clip %>%
-            arrange(-abs(lm_coef)) %>%
-            reframe(
-                precision = compute_precision(in_clip, -abs(lm_coef)),
-                recall = compute_recall(in_clip, -abs(lm_coef)),
-                ranking_var = "lm_coef"
-            )
-        ) %>%
-        bind_rows(
-            eval_clip %>%
-            arrange(lm_pvalue) %>%
-            reframe(
-                precision = compute_precision(in_clip, lm_pvalue),
-                recall = compute_recall(in_clip, lm_pvalue),
-                ranking_var = "lm_pvalue"
-            )
-        ) %>%
-        bind_rows(
-            eval_clip %>%
-            arrange(-abs(spear_coef)) %>%
-            reframe(
-                precision = compute_precision(in_clip, -abs(spear_coef)),
-                recall = compute_recall(in_clip, -abs(spear_coef)),
-                ranking_var = "spear_coef"
-            )
-        ) %>%
-        bind_rows(
-            eval_clip %>%
-            arrange(spear_pvalue) %>%
-            reframe(
-                precision = compute_precision(in_clip, spear_pvalue),
-                recall = compute_recall(in_clip, spear_pvalue),
-                ranking_var = "spear_pvalue"
-            )
-        ) %>%
-        drop_na()
+    vars_oi = c("mutual_information",
+                "abs_lm_coef","abs_lm_pearson","lm_pearson","lm_pvalue",
+                "abs_lm2_coef","abs_lm2_pearson","lm2_pearson","lm2_pvalue",
+                "abs_spear_coef","spear_pvalue")
+
+    eval_clip = X %>% compute_prec_rec_mult("in_clip", vars_oi)
     gc()
     
     # do clip interactions tend to have large association values?   
-    plts[["eval_clip-recall_vs_precision-scatter"]] = eval_clip %>%
+    # FDR thresholds
+    thresholds = c(1e-30, 1e-25, 1e-20, 1e-15, 1e-10, 1)
+    eval_clip_threshs_fdr = lapply(
+        thresholds, function(thresh){
+            # spearman
+            eval_spear = X %>% 
+                filter(spear_padj <= thresh) %>%
+                compute_prec_rec_mult("in_clip", "abs_spear_coef") %>%
+                mutate(thresh_fdr = thresh)
+            
+            # linear model
+            eval_lm = X %>% 
+                filter(lm_padj <= thresh) %>%
+                compute_prec_rec_mult("in_clip", c("abs_lm_coef","lm_pearson")) %>%
+                mutate(thresh_fdr = thresh)
+            
+            # linear model 2
+            eval_lm2 = X %>% 
+                filter(lm2_padj <= thresh) %>%
+                compute_prec_rec_mult("in_clip", c("abs_lm2_coef","lm2_pearson")) %>%
+                mutate(thresh_fdr = thresh)
+
+            
+            evals = rbind(eval_spear, eval_lm, eval_lm2) %>%
+                mutate(n_obs_lab = sprintf("n(%s)=%s",ranking_var,n_obs))
+            return(evals)
+    }) %>%
+    do.call(rbind, .)
+    
+    plts[["eval_clip-recall_vs_precision-fdr_threshs-scatter"]] = eval_clip_threshs_fdr %>%
+        #filter(ranking_var %in% c("lm_pearson","lm2_pearson")) %>%
         ggplot(aes(x=recall, y=precision)) +
         geom_line(aes(color=ranking_var), size=LINE_SIZE) +
         geom_point(aes(color=ranking_var), size=1) +
-        color_palette("simpsons") +
+        color_palette("Paired") +
         theme_pubr() +
+        facet_wrap(~thresh_fdr) +
         theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        ylim(0,NA) +
         labs(x="Recall", y="Precision", color="Association")
+    
+    
+    plts[["eval_clip-recall_vs_precision-fdr_threshs-bar"]] = eval_clip_threshs_fdr %>%
+        distinct(thresh_fdr, ranking_var, n_obs) %>%
+        ggbarplot(x="thresh_fdr", y="n_obs", fill="ranking_var", 
+                  color=NA, palette="Paired", position=position_dodge(0.9)) +
+        yscale("log10", .format=TRUE) +
+        labs(x="FDR Threshold", y="Total SF-exon interactions", fill="Association")
+        
+    ## correlation thresholds
+    thresholds = c(0, 0.1, 0.2, 0.3, 0.4, 0.5)
+    eval_clip_threshs_corr = lapply(
+        thresholds, function(thresh){
+            # spearman
+            eval_spear = X %>%
+                filter(abs(abs_spear_coef) >= thresh) %>%
+                compute_prec_rec_mult("in_clip", "spear_padj") %>%
+                mutate(thresh_corr = thresh)
+            
+            # linear model
+            eval_lm = X %>% 
+                filter(lm_pearson >= thresh) %>%
+                compute_prec_rec_mult("in_clip", c("abs_lm_coef","lm_padj")) %>%
+                mutate(thresh_corr = thresh)
+            
+            # linear model 2
+            eval_lm2 = X %>% 
+                filter(lm2_pearson >= thresh) %>%
+                compute_prec_rec_mult("in_clip", c("abs_lm2_coef","lm2_padj")) %>%
+                mutate(thresh_corr = thresh)
+            
+            evals = rbind(eval_spear, eval_lm, eval_lm2)
+            return(evals)
+    }) %>%
+    do.call(rbind, .)
+    
+    plts[["eval_clip-recall_vs_precision-corr_threshs-scatter"]] = eval_clip_threshs_corr %>%
+        #filter(ranking_var %in% c("lm_pearson","lm2_pearson")) %>%
+        ggplot(aes(x=recall, y=precision)) +
+        geom_line(aes(color=ranking_var), size=LINE_SIZE) +
+        geom_point(aes(color=ranking_var), size=1) +
+        color_palette("Paired") +
+        theme_pubr() +
+        facet_wrap(~thresh_corr, ncol=3) +
+        theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        ylim(0, NA) +
+        labs(x="Recall", y="Precision", color="Association")
+   
+   plts[["eval_clip-recall_vs_precision-corr_threshs-bar"]] = eval_clip_threshs_corr %>%
+        distinct(thresh_corr, ranking_var, n_obs) %>%
+        ggbarplot(x="thresh_corr", y="n_obs", fill="ranking_var", 
+                  color=NA, palette="Paired", position=position_dodge(0.9)) +
+        yscale("log10", .format=TRUE) +
+        labs(x="Correlation Threshold", y="Total SF-exon interactions", fill="Association")
     
     return(plts)
 }
@@ -157,139 +233,192 @@ plot_eval_pert = function(assocs, regulons_pert){
             regulons_pert,
             by = c("regulator", "target")
         ) %>%
-        drop_na(delta_psi)
+        drop_na(delta_psi) 
     
     print(sprintf("Total interactions: %s (Thresh = %s)", 
           X %>% filter(is_inter) %>% count(cell_line, is_inter) %>% pull(n), 10))
 
-    eval_pert = X
-    eval_pert = eval_pert %>%
+    vars_oi = c("mutual_information",
+                "abs_lm_coef","abs_lm_pearson","lm_pearson","lm_pvalue",
+                "abs_lm2_coef","abs_lm2_pearson","lm2_pearson","lm2_pvalue",
+                "abs_spear_coef","spear_pvalue")
+    
+    eval_pert = X %>%
         group_by(cell_line) %>%
-        arrange(-abs(mutual_information)) %>%
-        reframe(
-            precision = compute_precision(is_inter, -abs(mutual_information)),
-            recall = compute_recall(is_inter, -abs(mutual_information)),
-            ranking_var = "mutual_information"
-        ) %>% 
-        ungroup %>%
-        bind_rows(
-            eval_pert %>%
-            group_by(cell_line) %>%
-            arrange(-abs(lm_coef)) %>%
-            reframe(
-                precision = compute_precision(is_inter, -abs(lm_coef)),
-                recall = compute_recall(is_inter, -abs(lm_coef)),
-                ranking_var = "lm_coef"
-            ) %>%
-            ungroup()
-        ) %>%
-        bind_rows(
-            eval_pert %>%
-            group_by(cell_line) %>%
-            arrange(lm_pvalue) %>%
-            reframe(
-                precision = compute_precision(is_inter, lm_pvalue),
-                recall = compute_recall(is_inter, lm_pvalue),
-                ranking_var = "lm_pvalue"
-            ) %>%
-            ungroup()
-        ) %>%
-        bind_rows(
-            eval_pert %>%
-            group_by(cell_line) %>%
-            arrange(-abs(spear_coef)) %>%
-            reframe(
-                precision = compute_precision(is_inter, -abs(spear_coef)),
-                recall = compute_recall(is_inter, -abs(spear_coef)),
-                ranking_var = "spear_coef"
-            ) %>%
-            ungroup()
-        ) %>%
-        bind_rows(
-            eval_pert %>%
-            group_by(cell_line) %>%
-            arrange(spear_pvalue) %>%
-            reframe(
-                precision = compute_precision(is_inter, spear_pvalue),
-                recall = compute_recall(is_inter, spear_pvalue),
-                ranking_var = "spear_pvalue"
-            ) %>%
-            ungroup()
-        ) %>%
-        drop_na()
+        compute_prec_rec_mult("is_inter", vars_oi) %>%
+        ungroup()
     gc()
     
     # do clip interactions tend to have large association values?
-    plts[["eval_pert-recall_vs_precision-scatter"]] = eval_pert %>%
+    # evaluate precision and recall using additional thresholds
+    ## FDR thresholds
+    thresholds = c(1e-30, 1e-25, 1e-20, 1e-15, 1e-10, 1)
+    eval_pert_threshs_fdr = lapply(
+        thresholds, function(thresh){
+            # spearman
+            eval_spear = X %>% 
+                filter(spear_padj <= thresh) %>%
+                group_by(cell_line) %>%
+                compute_prec_rec_mult("is_inter", "abs_spear_coef") %>%
+                ungroup() %>%
+                mutate(thresh_fdr = thresh)
+            
+            # linear model
+            eval_lm = X %>% 
+                filter(lm_padj <= thresh) %>%
+                group_by(cell_line) %>%
+                compute_prec_rec_mult("is_inter", c("abs_lm_coef","lm_pearson")) %>%
+                ungroup() %>%
+                mutate(thresh_fdr = thresh)
+            
+            # linear model 2
+            eval_lm2 = X %>% 
+                filter(lm2_padj <= thresh) %>%
+                group_by(cell_line) %>%
+                compute_prec_rec_mult("is_inter", c("abs_lm2_coef","lm2_pearson")) %>%
+                ungroup() %>%
+                mutate(thresh_fdr = thresh)
+            
+            evals = rbind(eval_spear, eval_lm, eval_lm2)
+            return(evals)
+    }) %>%
+    do.call(rbind, .)
+    
+    plts[["eval_pert-recall_vs_precision-fdr_threshs-scatter"]] = eval_pert_threshs_fdr %>%
+        #filter(ranking_var %in% c("lm_pearson","lm2_pearson")) %>%
         ggplot(aes(x=recall, y=precision)) +
         geom_line(aes(color=ranking_var), size=LINE_SIZE) +
         geom_point(aes(color=ranking_var), size=1) +
-        color_palette("simpsons") +
+        color_palette("Paired") +
         theme_pubr() +
-        facet_wrap(~cell_line) +
+        facet_wrap(~thresh_fdr+cell_line, ncol=3) +
         theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        ylim(0, NA) +
         labs(x="Recall", y="Precision", color="Association")
+   
+   plts[["eval_pert-recall_vs_precision-fdr_threshs-bar"]] = eval_pert_threshs_fdr %>%
+        distinct(cell_line, thresh_fdr, ranking_var, n_obs) %>%
+        ggbarplot(x="thresh_fdr", y="n_obs", fill="ranking_var", 
+                  color=NA, palette="Paired", position=position_dodge(0.9)) +
+        yscale("log10", .format=TRUE) +
+        facet_wrap(~cell_line) +
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="FDR Threshold", y="Total SF-exon interactions", fill="Association")
+    
+    ## correlation thresholds
+    thresholds = c(0, 0.1, 0.2, 0.3, 0.4, 0.5)
+    eval_pert_threshs_corr = lapply(
+        thresholds, function(thresh){
+            # spearman
+            eval_spear = X %>%
+                filter(abs(abs_spear_coef) >= thresh) %>%
+                group_by(cell_line) %>%
+                compute_prec_rec_mult("is_inter", "spear_padj") %>%
+                ungroup() %>%
+                mutate(thresh_corr = thresh)
+            
+            # linear model
+            eval_lm = X %>% 
+                filter(lm_pearson >= thresh) %>%
+                group_by(cell_line) %>%
+                compute_prec_rec_mult("is_inter", c("abs_lm_coef","lm_padj")) %>%
+                ungroup() %>%
+                mutate(thresh_corr = thresh)
+            
+            # linear model 2
+            eval_lm2 = X %>% 
+                filter(lm2_pearson >= thresh) %>%
+                group_by(cell_line) %>%
+                compute_prec_rec_mult("is_inter", c("abs_lm2_coef","lm2_padj")) %>%
+                ungroup() %>%
+                mutate(thresh_corr = thresh)
+            
+            evals = rbind(eval_spear, eval_lm, eval_lm2)
+            return(evals)
+    }) %>%
+    do.call(rbind, .)
+    
+    plts[["eval_pert-recall_vs_precision-corr_threshs-scatter"]] = eval_pert_threshs_corr %>%
+        #filter(ranking_var %in% c("lm_pearson","lm2_pearson")) %>%
+        ggplot(aes(x=recall, y=precision)) +
+        geom_line(aes(color=ranking_var), size=LINE_SIZE) +
+        geom_point(aes(color=ranking_var), size=1) +
+        color_palette("Paired") +
+        theme_pubr() +
+        facet_wrap(~thresh_corr+cell_line, ncol=3) +
+        theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        ylim(0, NA) +
+        labs(x="Recall", y="Precision", color="Association")
+   
+   plts[["eval_pert-recall_vs_precision-corr_threshs-bar"]] = eval_pert_threshs_corr %>%
+        distinct(cell_line, thresh_corr, ranking_var, n_obs) %>%
+        ggbarplot(x="thresh_corr", y="n_obs", fill="ranking_var", 
+                  color=NA, palette="Paired", position=position_dodge(0.9)) +
+        yscale("log10", .format=TRUE) +
+        facet_wrap(~cell_line) +
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Correlation Threshold", y="Total SF-exon interactions", fill="Association")
     
     return(plts)
 }
 
 
-plot_clip_vs_pert = function(regulons_pert, regulons_clip){
-    plts = list()
+# plot_clip_vs_pert = function(regulons_pert, regulons_clip){
+#     plts = list()
     
-    X = regulons_pert %>% 
-        filter(cell_line != "merged") %>%
-        left_join(
-            regulons_clip %>%
-            mutate(in_clip = TRUE),
-            by=c("regulator"="ENSEMBL","target")
-        ) %>%
-        mutate(in_clip=replace_na(in_clip, FALSE)) %>%
-        drop_na(cell_line) %>%
-        distinct(cell_line, regulator, target, delta_psi, delta_psi_rel, in_clip)
+#     X = regulons_pert %>% 
+#         filter(cell_line != "merged") %>%
+#         left_join(
+#             regulons_clip %>%
+#             mutate(in_clip = TRUE),
+#             by=c("regulator"="ENSEMBL","target")
+#         ) %>%
+#         mutate(in_clip=replace_na(in_clip, FALSE)) %>%
+#         drop_na(cell_line) %>%
+#         distinct(cell_line, regulator, target, delta_psi, delta_psi_rel, in_clip)
     
-    # predictive power of delta PSI and delta PSI rel.
-    evaluation = X %>%
-        group_by(cell_line) %>%
-        arrange(-abs(delta_psi)) %>%
-        reframe(
-            precision = compute_precision(in_clip, -abs(delta_psi), 25),
-            recall = compute_recall(in_clip, -abs(delta_psi), 25),
-            ranking_var = "delta_psi"
-        ) %>% 
-        ungroup() %>%
-        bind_rows(
-            X %>%
-            group_by(cell_line) %>%
-            arrange(-abs(delta_psi_rel)) %>%
-            reframe(
-                precision = compute_precision(in_clip, -abs(delta_psi_rel), 25),
-                recall = compute_recall(in_clip, -abs(delta_psi_rel), 25),
-                ranking_var = "delta_psi_rel"
-            ) %>%
-            ungroup()
-        ) %>% drop_na()
+#     # predictive power of delta PSI and delta PSI rel.
+#     evaluation = X %>%
+#         group_by(cell_line) %>%
+#         arrange(-abs(delta_psi)) %>%
+#         reframe(
+#             precision = compute_precision(in_clip, -abs(delta_psi), 25),
+#             recall = compute_recall(in_clip, -abs(delta_psi), 25),
+#             ranking_var = "delta_psi"
+#         ) %>% 
+#         ungroup() %>%
+#         bind_rows(
+#             X %>%
+#             group_by(cell_line) %>%
+#             arrange(-abs(delta_psi_rel)) %>%
+#             reframe(
+#                 precision = compute_precision(in_clip, -abs(delta_psi_rel), 25),
+#                 recall = compute_recall(in_clip, -abs(delta_psi_rel), 25),
+#                 ranking_var = "delta_psi_rel"
+#             ) %>%
+#             ungroup()
+#         ) %>% drop_na()
     
-    # do clip interactions tend to have large association values?
-    plts[["eval_clip_vs_pert-recall_vs_precision-scatter"]] = evaluation %>%
-        ggplot(aes(x=recall, y=precision)) +
-        geom_line(aes(color=ranking_var), size=LINE_SIZE) +
-        geom_point(aes(color=ranking_var), size=1) +
-        color_palette("simpsons") +
-        theme_pubr() +
-        facet_wrap(~cell_line) +
-        theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
-        labs(x="Recall", y="Precision", color="Association")
+#     # do clip interactions tend to have large association values?
+#     plts[["eval_clip_vs_pert-recall_vs_precision-scatter"]] = evaluation %>%
+#         ggplot(aes(x=recall, y=precision)) +
+#         geom_line(aes(color=ranking_var), size=LINE_SIZE) +
+#         geom_point(aes(color=ranking_var), size=1) +
+#         color_palette("simpsons") +
+#         theme_pubr() +
+#         facet_wrap(~cell_line) +
+#         theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+#         labs(x="Recall", y="Precision", color="Association")
 
-    return(plts)
-}
+#     return(plts)
+# }
 
 
 make_plots = function(assocs, regulons_clip, regulons_pert){
     plts = list(
         plot_eval_clip(assocs, regulons_clip),
-        plot_eval_pert(assocs, regulons_pert),
-        plot_clip_vs_pert(regulons_pert, regulons_clip)
+        plot_eval_pert(assocs, regulons_pert)#,
+        #plot_clip_vs_pert(regulons_pert, regulons_clip)
     )
     plts = do.call(c,plts)
     return(plts)
@@ -324,10 +453,17 @@ save_plt = function(plts, plt_name, extension='.pdf',
 
 
 save_plots = function(plts, figs_dir){
-    save_plt(plts, "eval_clip-recall_vs_precision-scatter", '.pdf', figs_dir, width=5, height=5)
-    save_plt(plts, "eval_pert-recall_vs_precision-scatter", '.pdf', figs_dir, width=10, height=6)
-    save_plt(plts, "eval_clip_vs_pert-recall_vs_precision-scatter", '.pdf', figs_dir, width=10, height=6)
+    save_plt(plts, "eval_clip-recall_vs_precision-fdr_threshs-scatter", '.pdf', figs_dir, width=15, height=12)
+    save_plt(plts, "eval_clip-recall_vs_precision-fdr_threshs-bar", '.pdf', figs_dir, width=5, height=7)
+    save_plt(plts, "eval_clip-recall_vs_precision-corr_threshs-scatter", '.pdf', figs_dir, width=15, height=12)
+    save_plt(plts, "eval_clip-recall_vs_precision-corr_threshs-bar", '.pdf', figs_dir, width=5, height=7)
     
+    save_plt(plts, "eval_pert-recall_vs_precision-fdr_threshs-scatter", '.pdf', figs_dir, width=15, height=35)
+    save_plt(plts, "eval_pert-recall_vs_precision-fdr_threshs-bar", '.pdf', figs_dir, width=15, height=8)
+    save_plt(plts, "eval_pert-recall_vs_precision-corr_threshs-scatter", '.pdf', figs_dir, width=15, height=35)
+    save_plt(plts, "eval_pert-recall_vs_precision-corr_threshs-bar", '.pdf', figs_dir, width=15, height=8)
+    
+    #save_plt(plts, "eval_clip_vs_pert-recall_vs_precision-scatter", '.pdf', figs_dir, width=10, height=6)
 }
 
 save_figdata = function(figdata, dir){
@@ -350,6 +486,7 @@ parseargs = function(){
         make_option("--assocs_mi_file", type="character"),
         make_option("--assocs_spear_file", type="character"),
         make_option("--assocs_lm_file", type="character"),
+        make_option("--assocs_lm2_file", type="character"),
         make_option("--regulons_clip_file", type="character"),
         make_option("--regulons_pert_dpsi_file", type="character"),
         make_option("--regulons_pert_dpsi_rel_file", type="character"),
@@ -371,6 +508,7 @@ main = function(){
     assocs_mi_file = args[["assocs_mi_file"]]
     assocs_spear_file = args[["assocs_spear_file"]]
     assocs_lm_file = args[["assocs_lm_file"]]
+    assocs_lm2_file = args[["assocs_lm2_file"]]
     regulons_clip_file = args[["regulons_clip_file"]]
     regulons_pert_dpsi_file = args[["regulons_pert_dpsi_file"]]
     regulons_pert_dpsi_rel_file = args[["regulons_pert_dpsi_rel_file"]]
@@ -383,6 +521,7 @@ main = function(){
     assocs_mi = read_tsv(assocs_mi_file)
     assocs_spear = read_tsv(assocs_spear_file)
     assocs_lm = read_tsv(assocs_lm_file)
+    assocs_lm2 = read_tsv(assocs_lm2_file)
     regulons_clip = read_tsv(regulons_clip_file)
     regulons_pert_dpsi = read_tsv(regulons_pert_dpsi_file)
     regulons_pert_dpsi_rel = read_tsv(regulons_pert_dpsi_rel_file)
@@ -398,21 +537,36 @@ main = function(){
             assocs_lm %>%
             rename(
                 lm_coef = target_coefficient_mean,
-                lm_pvalue = lr_pvalue
+                lm_pvalue = lr_pvalue,
+                lm_padj = lr_padj,
+                lm_pearson = pearson_correlation_mean
             ) %>%
-            dplyr::select(regulator, target, lm_coef, lm_pvalue),
+            dplyr::select(regulator, target, lm_coef, lm_pvalue, lm_pearson, lm_padj),
             by = c("regulator","target")
         ) %>%
         # spearman coefficient
         left_join(
-            assocs_spear %>%
+            assocs_spear %>% 
             rename(
                 spear_coef = statistic,
-                spear_pvalue = pvalue
+                spear_pvalue = pvalue,
+                spear_padj = padj
             ) %>%
-            dplyr::select(regulator, target, spear_coef, spear_pvalue),
+            dplyr::select(regulator, target, spear_coef, spear_pvalue, spear_padj),
             by = c("regulator","target")
-        )
+        ) %>%
+        # linear model2
+        left_join(
+            assocs_lm2 %>%
+            rename(
+                lm2_coef = target_splicing_coefficient_mean,
+                lm2_pvalue = lr_pvalue,
+                lm2_padj = lr_padj,
+                lm2_pearson = pearson_correlation_mean
+            ) %>%
+            dplyr::select(regulator, target, lm2_coef, lm2_pvalue, lm2_pearson, lm2_padj),
+            by = c("regulator","target")
+        ) 
     gc()
     
     ## merge perturbation regulons
@@ -460,9 +614,17 @@ main = function(){
         ) %>%
         mutate(in_clip = replace_na(in_clip, FALSE)) %>%
         mutate(
-            log_lm_coef = sign(lm_coef)*log10(abs(lm_coef)+1),
             log_lm_pvalue = -log10(lm_pvalue),
+            log_lm2_pvalue = -log10(lm2_pvalue),
             log_spear_pvalue = -log10(spear_pvalue)
+        ) %>%
+        mutate(
+            abs_mutual_information = -abs(mutual_information),
+            abs_lm_coef = -abs(lm_coef),
+            abs_lm2_coef = -abs(lm2_coef),
+            abs_lm_pearson = -abs(lm_pearson),
+            abs_lm2_pearson = -abs(lm2_pearson),
+            abs_spear_coef = -abs(spear_coef)
         )
     gc()
     

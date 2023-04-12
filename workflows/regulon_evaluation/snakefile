@@ -8,7 +8,6 @@ Outline
 
 """
 
-
 import os
 import pandas as pd
 
@@ -27,7 +26,7 @@ SPLICING_FACTORS = SPLICING_FACTORS.loc[SPLICING_FACTORS["in_postar3"] & SPLICIN
 SPLICING_FACTORS = SPLICING_FACTORS["ENSEMBL"].to_list()
 
 DATASETS = ["CCLE","LIHC"]
-METHODS_ASSOC = ["correlation_spearman","aracne","linear_model"]
+METHODS_ASSOC = ["correlation_spearman","aracne","linear_model","linear_model2"]
 
 ##### RULES #####
 rule all:
@@ -35,15 +34,15 @@ rule all:
         # combine associations of interest
         expand(os.path.join(RESULTS_DIR,"files","associations","{dataset}","genexpr_vs_psi_imputed","{method}.tsv.gz"), dataset=DATASETS, method=METHODS_ASSOC),
         
-        # add spearman to aracne
-        expand(os.path.join(RESULTS_DIR,"files","associations","{dataset}","genexpr_vs_psi_imputed","aracne_w_spearman.tsv.gz"), dataset=DATASETS),
-        
         # prune associations of interest
         expand(os.path.join(RESULTS_DIR,"files","associations_pruned","{dataset}","genexpr_vs_psi_imputed","{method}.tsv.gz"), dataset=DATASETS, method=METHODS_ASSOC),
         expand(os.path.join(RESULTS_DIR,"files","associations_pruned","{dataset}","genexpr_vs_genexpr","{method}.tsv.gz"), dataset=DATASETS, method=METHODS_ASSOC),
 
+        # add spearman to aracne
+        expand(os.path.join(RESULTS_DIR,"files","{assoc_type}","{dataset}","genexpr_vs_psi_imputed","aracne_w_spearman.tsv.gz"), dataset=DATASETS, assoc_type=["associations","associations_pruned"]),
+        
         # figures
-        expand(os.path.join(RESULTS_DIR,'figures','assocs_evaluation','{dataset}'), dataset=DATASETS),
+        #expand(os.path.join(RESULTS_DIR,'figures','assocs_evaluation','{dataset}'), dataset=DATASETS),
         
 
 rule combine_associations_across_splicing_factors:
@@ -59,40 +58,72 @@ rule combine_associations_across_splicing_factors:
         
         assocs = pd.concat([pd.read_table(f) for f in input.assocs])
         
+        assocs = assocs.rename(columns={"target_event":"target"}) # only linear_model2 will change
+        
         assocs.to_csv(output[0], **SAVE_PARAMS)
         
         print("Done!")
         
         
-rule add_spearman_to_aracne:
-    input:
-        aracne = os.path.join(RESULTS_DIR,"files","associations","{dataset}","genexpr_vs_psi_imputed","aracne.tsv.gz"),
-        spearman = os.path.join(RESULTS_DIR,"files","associations","{dataset}","genexpr_vs_psi_imputed","correlation_spearman.tsv.gz")
-    output:
-        os.path.join(RESULTS_DIR,"files","associations","{dataset}","genexpr_vs_psi_imputed","aracne_w_spearman.tsv.gz")
-    run:
-        import pandas as pd
-        
-        # load
-        aracne = pd.read_table(input.aracne)
-        spearman = pd.read_table(input.spearman)
-        
-        # merge
-        df = pd.merge(aracne, spearman, on=["regulator","target"], how="left", suffixes=["_aracne","_spearman"])
-        
-        # save
-        df.to_csv(output[0], **SAVE_PARAMS)
-        
-        print("Done!")
-
-        
-rule prune_associations:
+rule prune_associations_threshold:
     input:
         assocs_targ = os.path.join(RESULTS_DIR,"files","associations","{dataset}","genexpr_vs_psi_imputed","{method}.tsv.gz"),
-        assocs_regu = os.path.join(REGINF_DIR,"files","associations","{dataset}","genexpr_vs_genexpr","{method}.tsv.gz")
+        assocs_regu = lambda wildcards: os.path.join(REGINF_DIR,"files","associations","{dataset}","genexpr_vs_genexpr","{method}.tsv.gz") if wildcards.method!="linear_model2" else os.path.join(REGINF_DIR,"files","associations","{dataset}","genexpr_vs_genexpr","linear_model.tsv.gz")
     output:
-        assocs_targ = os.path.join(RESULTS_DIR,"files","associations_pruned","{dataset}","genexpr_vs_psi_imputed","{method}.tsv.gz"),
-        assocs_regu = os.path.join(RESULTS_DIR,"files","associations_pruned","{dataset}","genexpr_vs_genexpr","{method}.tsv.gz")
+        assocs_targ = os.path.join(RESULTS_DIR,"files","associations_pruned_thresh","{dataset}","genexpr_vs_psi_imputed","{method}.tsv.gz"),
+        assocs_regu = os.path.join(RESULTS_DIR,"files","associations_pruned_thresh","{dataset}","genexpr_vs_genexpr","{method}.tsv.gz")
+    params:
+        method = "{method}",
+    threads: 1
+    resources:
+        runtime = int(3600*12), # h 
+        memory = 10
+    run:
+        import pandas as pd
+        import numpy as np
+        
+        # load
+        print("Loading...")
+        assocs_targ = pd.read_table(input.assocs_targ)
+        assocs_regu = pd.read_table(input.assocs_regu)
+        method = params.method
+    
+        # significant associations
+        print("Pruning non-significant associations...")
+        thresh_col = assocs_targ.columns[assocs_targ.columns.str.contains("padj")]
+        if len(thresh_col) == 0:
+            # we prune by value of association
+            thresh = 0.1
+            thresh_col = "association"
+            assocs_targ = assocs_targ.loc[np.abs(assocs_targ[thresh_col]) > thresh].copy()
+            assocs_regu = assocs_regu.loc[np.abs(assocs_regu[thresh_col]) > thresh].copy()
+        else:
+            # we prune by FDR threshold
+            thresh = 0.01
+            thresh_col = thresh_col.values[0]
+            assocs_targ = assocs_targ.loc[np.abs(assocs_targ[thresh_col]) < thresh].copy()
+            assocs_regu = assocs_regu.loc[np.abs(assocs_regu[thresh_col]) < thresh].copy()
+
+        # keep only those regulator-regulator associations for which remains a regulator-target interaction
+        assocs_regu = assocs_regu.loc[
+            (assocs_regu["regulator"].isin(assocs_targ["regulator"])) & \
+            (assocs_regu["target"].isin(assocs_targ["regulator"]))
+        ]
+        
+        # save
+        assocs_targ.to_csv(output.assocs_targ, **SAVE_PARAMS)
+        assocs_regu.to_csv(output.assocs_regu, **SAVE_PARAMS)
+        
+        print("Done!")
+            
+            
+rule prune_associations_dpi:
+    input:
+        assocs_targ = os.path.join(RESULTS_DIR,"files","associations_pruned_thresh","{dataset}","genexpr_vs_psi_imputed","{method}.tsv.gz"),
+        assocs_regu = os.path.join(RESULTS_DIR,"files","associations_pruned_thresh","{dataset}","genexpr_vs_genexpr","{method}.tsv.gz")
+    output:
+        assocs_targ = os.path.join(RESULTS_DIR,"files","associations_pruned_dpi","{dataset}","genexpr_vs_psi_imputed","{method}.tsv.gz"),
+        assocs_regu = os.path.join(RESULTS_DIR,"files","associations_pruned_dpi","{dataset}","genexpr_vs_genexpr","{method}.tsv.gz")
     params:
         method = "{method}",
     threads: 1
@@ -176,24 +207,7 @@ rule prune_associations:
 
             return assocs_pruned
         
-        # prune network
-        ## significant associations
-        print("Pruning non-significant associations...")
-        thresh_col = assocs_targ.columns[assocs_targ.columns.str.contains("padj")]
-        if len(thresh_col) == 0:
-            # we prune by value of association
-            thresh = 0.1
-            thresh_col = "association"
-            assocs_targ = assocs_targ.loc[np.abs(assocs_targ[thresh_col]) > thresh].copy()
-            assocs_regu = assocs_regu.loc[np.abs(assocs_regu[thresh_col]) > thresh].copy()
-        else:
-            # we prune by FDR threshold
-            thresh = 0.01
-            thresh_col = thresh_col.values[0]
-            assocs_targ = assocs_targ.loc[np.abs(assocs_targ[thresh_col]) < thresh].copy()
-            assocs_regu = assocs_regu.loc[np.abs(assocs_regu[thresh_col]) < thresh].copy()
-        
-        ## DPI
+        # prune network through DPI
         print("Pruning by DPI...")
         assocs_targ = fast_dpi(assocs_targ, assocs_regu, "association")
         
@@ -210,11 +224,34 @@ rule prune_associations:
         print("Done!")
         
         
+rule add_spearman_to_aracne:
+    input:
+        aracne = os.path.join(RESULTS_DIR,"files","{assoc_type}","{dataset}","genexpr_vs_psi_imputed","aracne.tsv.gz"),
+        spearman = os.path.join(RESULTS_DIR,"files","associations","{dataset}","genexpr_vs_psi_imputed","correlation_spearman.tsv.gz")
+    output:
+        os.path.join(RESULTS_DIR,"files","{assoc_type}","{dataset}","genexpr_vs_psi_imputed","aracne_w_spearman.tsv.gz")
+    run:
+        import pandas as pd
+        
+        # load
+        aracne = pd.read_table(input.aracne)
+        spearman = pd.read_table(input.spearman)
+        
+        # merge
+        df = pd.merge(aracne, spearman, on=["regulator","target"], how="left", suffixes=["_aracne","_spearman"])
+        
+        # save
+        df.to_csv(output[0], **SAVE_PARAMS)
+        
+        print("Done!")
+
+        
 rule figures_assocs_evaluation:
     input:
         assocs_mi = os.path.join(RESULTS_DIR,"files","associations","{dataset}","genexpr_vs_psi_imputed","aracne.tsv.gz"),
         assocs_spear = os.path.join(RESULTS_DIR,"files","associations","{dataset}","genexpr_vs_psi_imputed","correlation_spearman.tsv.gz"),
         assocs_lm = os.path.join(RESULTS_DIR,"files","associations","{dataset}","genexpr_vs_psi_imputed","linear_model.tsv.gz"),
+        assocs_lm2 = os.path.join(RESULTS_DIR,"files","associations","{dataset}","genexpr_vs_psi_imputed","linear_model2.tsv.gz"),
         regulons_clip = os.path.join(REGINF_DIR,"files","regulons","CLIP","POSTAR3.tsv.gz"),
         regulons_pert_dpsi = os.path.join(REGINF_DIR,"files","regulons","pert_rnaseq","delta_psi-EX-merged.tsv.gz"),
         regulons_pert_dpsi_rel = os.path.join(REGINF_DIR,"files","regulons","pert_rnaseq","delta_psi_rel-EX-merged.tsv.gz"),
@@ -229,6 +266,7 @@ rule figures_assocs_evaluation:
                     --assocs_mi_file={input.assocs_mi} \
                     --assocs_spear_file={input.assocs_spear} \
                     --assocs_lm_file={input.assocs_lm} \
+                    --assocs_lm2_file={input.assocs_lm2} \
                     --regulons_clip_file={input.regulons_clip} \
                     --regulons_pert_dpsi_file={input.regulons_pert_dpsi} \
                     --regulons_pert_dpsi_rel_file={input.regulons_pert_dpsi_rel} \
