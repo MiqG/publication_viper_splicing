@@ -33,7 +33,7 @@ PAL_DUAL = c("darkgreen","#7570B3") # '#1B9E77''#7570B3'
 # RESULTS_DIR = file.path(ROOT,"results","validation_activity")
 # SUPPORT_DIR = file.path(ROOT,"support")
 
-# protein_activities_file = file.path(RESULTS_DIR,'files','validations','viper',"merged-genexpr_vs_psi_imputed-delta_psi.tsv.gz")
+# protein_activities_file = file.path(RESULTS_DIR,'files','ground_truth','viper',"merged-genexpr_vs_psi_imputed-delta_psi.tsv.gz")
 # encore_logfc_hepg2_file = file.path(PREP_DIR,'ground_truth_kd','ENCORE',"HepG2",'log2_fold_change_tpm.tsv.gz')
 # encore_logfc_k562_file = file.path(PREP_DIR,'ground_truth_kd','ENCORE',"K562",'log2_fold_change_tpm.tsv.gz')
 
@@ -133,8 +133,8 @@ plot_viper_activities = function(protein_activities, encore_logfc){
         )
     
     plts[["viper_activities-specificity-violin"]] = x %>%
-        ggviolin(x="ordering_type", y="ranking", fill="ordering_type", color=NA) +
-        geom_boxplot(width=0.1, fill=NA) + 
+        ggviolin(x="ordering_type", y="ranking", fill="ordering_type", color=NA, trim=TRUE) +
+        geom_boxplot(width=0.1, fill=NA, outlier.size=0.1) + 
         facet_wrap(~assoc_method+regulon+cell_line, scales="free", ncol=2) +
         theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         stat_compare_means(method="wilcox.test", size=FONT_SIZE, family=FONT_FAMILY) +

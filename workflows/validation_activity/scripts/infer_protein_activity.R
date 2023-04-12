@@ -52,6 +52,10 @@ prep_regulons = function(regulons, assoc_method){
         regulons = regulons %>%
             distinct(regulator, target, likelihood, tfmode)
         
+    } else if (assoc_method=="ground_truth"){
+        
+        regulons = regulons
+        
     }
     
     return(regulons)
