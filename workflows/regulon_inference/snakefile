@@ -203,7 +203,7 @@ rule regulons_clip:
         )
         
         # format
-        mapped_peaks["regulator"] = mapped_peaks["RBP"]
+        mapped_peaks["regulator"] = mapped_peaks["ENSEMBL"]
         mapped_peaks["target"] = mapped_peaks["EVENT"]
         mapped_peaks["likelihood"] = 1
         mapped_peaks["tfmode"] = 1
