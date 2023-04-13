@@ -5,6 +5,8 @@ ROOT = os.path.dirname(os.path.dirname(os.getcwd()))
 RAW_DIR = os.path.join(ROOT,"data","raw")
 SUPPORT_DIR = os.path.join(ROOT,"support")
 
+SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
+
 ##### RULES #####
 rule all:
     input:
@@ -12,7 +14,9 @@ rule all:
         ## create ENA query to find samples with splicing factors
         ".done_query_sfs",
         ## download ENA metadata table to find samples
-        os.path.join(RAW_DIR,"ENA","splicing_factors","metadata","sf_experiments.tsv")
+        expand(os.path.join(RAW_DIR,"ENA","splicing_factors","metadata","sf_experiments-{field}.tsv"), field=["alias","title"]),
+        ## merge tables
+        os.path.join(RAW_DIR,"ENA","splicing_factors","metadata","sf_experiments_merged.tsv.gz"),
         ## clean SF ENA metadata
         ## create ENA query to get corresponding controls
         
@@ -27,19 +31,27 @@ rule create_ena_query_sfs:
         
         sfs = pd.read_table(input.sfs)
         
+        # alias
         sfs_query = (
             " OR ".join((
-                #'sample_alias="*'+sfs["GENE"]+'*" OR ' +\
-                #'run_alias="*'+sfs["GENE"]+'*" OR ' +\
+                'sample_alias="*'+sfs["GENE"]+'*" OR ' +\
+                'run_alias="*'+sfs["GENE"]+'*"'
+            ).values)
+        )
+        query = 'tax_eq(9606) AND library_strategy="RNA-Seq" AND library_source="TRANSCRIPTOMIC" AND ('+sfs_query + ")"
+        print(query)        
+        
+        # title
+        sfs_query = (
+            " OR ".join((
                 #'study_title="*'+sfs["GENE"]+'*" OR ' +\
                 'sample_title="*'+sfs["GENE"]+'*" OR ' +\
                 'experiment_title="*'+sfs["GENE"]+'*"'
             ).values)
         )
         query = 'tax_eq(9606) AND library_strategy="RNA-Seq" AND library_source="TRANSCRIPTOMIC" AND ('+sfs_query + ")"
-        
         print(query)
-        
+                
         print("Done!")
         
         
@@ -47,47 +59,44 @@ rule download_metadata_sfs:
     input:
         ".done_query_sfs"
     output:
-        os.path.join(RAW_DIR,"ENA","splicing_factors","metadata","sf_experiments.tsv")
+        os.path.join(RAW_DIR,"ENA","splicing_factors","metadata","sf_experiments-{field}.tsv")
+    params:
+        field = "{field}"
     shell:
         """
-        bash scripts/ENA-download_sf_exps_metadata.sh > {output}
+        bash scripts/ENA-download_sf_exps_metadata-{params.field}.sh > {output}
+        
+        echo "Done!"
         """
     
-rule clean_ena_sfs_metadata:
+rule merge_ena_sfs_metadata:
     input:
-        metadata = os.path.join(RAW_DIR,"ENA","splicing_factors","metadata","sf_experiments.tsv"),
+        metadata_alias = os.path.join(RAW_DIR,"ENA","splicing_factors","metadata","sf_experiments-alias.tsv"),
+        metadata_title = os.path.join(RAW_DIR,"ENA","splicing_factors","metadata","sf_experiments-title.tsv"),
         sfs = os.path.join(SUPPORT_DIR,"splicing_factors.tsv")
     output:
-        metadata = os.path.join(RAW_DIR,"ENA","splicing_factors","metadata","sf_experiments_clean.tsv")
+        metadata = os.path.join(RAW_DIR,"ENA","splicing_factors","metadata","sf_experiments_merged.tsv.gz")
+    threads: 24
     run:
         import pandas as pd
+        from joblib import Parallel, delayed
+        from tqdm import tqdm
         
-        metadata = pd.read_table(input.metadata, low_memory=False)
+        metadata_alias = pd.read_table(input.metadata_alias, low_memory=False)
+        metadata_title = pd.read_table(input.metadata_title, low_memory=False)
         sfs = pd.read_table(input.sfs)
+        threads = threads
+        
+        # combine metadata
+        metadata = pd.concat([metadata_title, metadata_alias]).drop_duplicates()
         
         # filter by instrument platform
         metadata = metadata.loc[metadata["instrument_platform"]=="ILLUMINA"]
         
         # filter by whether we can download the data
         metadata = metadata.loc[~metadata["fastq_ftp"].isnull()].copy()
-        
-        # filter by whether run_alias, sample_alias, sample_title, experiment_title, or study_title
-        # contain any of the splicing factors
-        cols_oi = ["run_alias","sample_alias","sample_title","experiment_title","study_title"]
-        metadata[cols_oi] = metadata[cols_oi].apply(lambda col: col.str.upper())
-        
-        query = "|".join(sfs["GENE"])
-        idx_samples_oi = metadata[cols_oi].apply(lambda col: col.str.contains(query)).any(axis=1)
-        metadata = metadata.loc[idx_samples_oi].copy()
-        
-        # inform on the match
-        metadata["found_sfs"] = [
-            ",".join([gene for gene in sfs["GENE"] if row[cols_oi].str.contains(gene).any()])
-            for idx, row in metadata.iterrows()
-        ]
-        
-        
-        # filter studies
+
+        # filter out studies we know we don't want
         studies_todrop = [
             "PRJNA379992", # rheumatoid patients
             "PRJNA486023", # triple negative breast cancer patients
@@ -203,10 +212,154 @@ rule clean_ena_sfs_metadata:
             "PRJNA612416", # cell line HEK293
             "PRJNA662434", # blood
             "PRJNA681741", # patient tumor sample
+            "PRJEB25108", # enteroids
+            "PRJNA722770", # microglia
+            "PRJNA731139", # drug combinations, low read count
+            "PRJNA63443", # ENCODE
+            "PRJNA799044", # HSF1,2 in different cell lines
+            "PRJNA532934", # metabolism
+            "PRJNA555321", # ES cells
+            "PRJEB49074", # enteroids drug toxicity
+            "PRJNA605264", # clonal human renal
+            "PRJNA612305", # tumor patient samples
+            "PRJNA614494", # EMT timecourse
+            "PRJNA729731", # nuclear export combination therapies
+            "PRJNA310000", # breast cancer
+            "PRJDB5361", # TF OE in hPSCs
+            "PRJNA589697", # lung epithelial
+            "PRJNA263687", # unperturbed human sample
+            "PRJNA765665", # sammson gene
+            "PRJEB54896", # patients
         ]
-        metadata = metadata.loc[~metadata["study_accession"].isin(studies_todrop)]
+        metadata = metadata.loc[~metadata["study_accession"].isin(studies_todrop)].copy()
+        
+        # filter by whether run_alias, sample_alias, sample_title, experiment_title, or study_title
+        # contain any of the splicing factors
+        cols_oi = ["run_alias","sample_alias","sample_title","experiment_title","study_title"]
+        metadata[cols_oi] = metadata[cols_oi].apply(lambda col: col.str.upper())
+        
+        query = "|".join(sfs["GENE"]).upper()
+        new_cols = ["match_in_"+col for col in cols_oi]
+        metadata[new_cols] = metadata[cols_oi].apply(lambda col: col.str.contains(query))
+        metadata = metadata.loc[metadata[new_cols].any(axis=1)].copy()
+        
+        # inform on the match
+        def get_gene_matches(row, cols_oi, genes_oi):
+            result = {}
+            for col_oi in cols_oi:
+                result["found_sfs_in_"+col_oi] = ",".join(
+                    [gene for gene in genes_oi if row[[col_oi]].str.contains(gene).any()]
+                )
+            result = pd.Series(result)
+            row = pd.concat([row,result])
+            return row
+            
+        found_sfs = Parallel(threads)(
+                delayed(get_gene_matches)(
+                    row,
+                    cols_oi,
+                    sfs["GENE"]
+                )
+                for idx, row in tqdm(metadata.iterrows(), total=metadata.shape[0])
+            )
+        metadata = pd.DataFrame(found_sfs).copy()
+        
+        # save
+        metadata.to_csv(output.metadata, **SAVE_PARAMS)
+        
+        print("Done!")
+        
+        
+rule clean_ena_metadata:
+    input:
+        metadata = os.path.join(RAW_DIR,"ENA","splicing_factors","metadata","sf_experiments_merged.tsv.gz"),
+        sfs = os.path.join(SUPPORT_DIR,"splicing_factors.tsv")
+    output:
+        metadata = os.path.join(RAW_DIR,"ENA","splicing_factors","metadata","sf_experiments_clean.tsv.gz")
+    run:
+        import pandas as pd
+        
+        # load
+        metadata = pd.read_table(input.metadata, low_memory=False)
+        sfs = pd.read_table(input.sfs)
+        
+        # combine iformation of matches
+        cols_oi = [col for col in metadata.columns if "found_sfs" in col]
+        metadata["found_sfs"] = metadata[cols_oi].apply(
+            lambda row: list(set(",".join(row.dropna().unique()).split(","))), axis=1
+        )
+        metadata = metadata.explode("found_sfs").drop_duplicates().copy()
+
+        # consider only those SFs hand curated, in Rogalska, in Hegele
+        idx = sfs["source"].isin(["Rogalska2022","hand-curated","Hegele2012"]) & sfs["in_hegele2012"]
+        sfs = sfs.loc[idx].copy()
+        metadata = metadata.loc[metadata["found_sfs"].isin(sfs["GENE"])].copy()
+
+        # filter out bad matches
+        cols_oi = ["run_alias","sample_alias","sample_title","experiment_title","study_title"]
+        is_bad_match = metadata[cols_oi].apply(
+            lambda col: col.str.contains(
+                "PREGNA|IMMUN|CD4|CD8|VIRUS|ZIKA|SCHIZO|ALZHEI|COVID|INFECTION|CREST|SINGLE-CELL|SINGLE CELL|T CELL|SKIN|NEUTROPH|FETAL|PLACEN|MONONU|EOSINOPHILS|PARKINSO|DIFFERENTIAT|PAEDIATRIC|INTERFERON|IPS|BUDESONIDE|TRANSPOSON|CORTISON|CITOKIN|ASTHMA|EPIDERMIS|INTERLEUKINS|FUSION GENES|MONOCYTE|TUBERCULOSIS|STEM CELL|ANGIOGE|EOSINOPHIL|ZIKV"
+            )
+        ).any(axis=1)
+        metadata = metadata.loc[~is_bad_match].copy()
+        
+        # studies to drop
+        studies_todrop = [
+            "PRJNA809587", # Riboseq
+            "PRJNA597343", # 
+        ]
+        metadata = metadata.loc[~metadata["study_accession"].isin(studies_todrop)].copy()        
+        
+        # how many SFs we found data for?
+        found_sfs = metadata.loc[metadata["found_sfs"].isin(sfs["GENE"]),"found_sfs"].unique()
+        new_sfs = set(found_sfs) - set(sfs.loc[~sfs["in_encore_kd"],"GENE"])
+        missing_sfs = set(sfs["GENE"]) - set(found_sfs)
+        print("Found %s SFs in total, %s of them not in ENCORE KDs. We are missing %s SFs" %\
+              (len(found_sfs), len(new_sfs), len(missing_sfs)))
+        
+        # consider only studies with high diversity in SF matches, how many/which ones are we missing? Are they covered by ENCORE KDs?
+        # consider larger studies, how much are we covering?
+        n_sfs = metadata[["study_accession","found_sfs"]].drop_duplicates()["study_accession"].value_counts()
+        studies_oi = set()
+        prev_found_missing = set()
+        prev_found_total = set()
+        for top_n in range(len(n_sfs)):
+            studies = set([n_sfs.index[top_n]])
+            found_total = metadata.loc[
+                metadata["study_accession"].isin(studies), "found_sfs"
+            ].unique()
+            found_missing = set(new_sfs).intersection(set(found_total))
+            
+            if len(found_missing - prev_found_missing) > 0:  
+                print(top_n)
+                # save the study if we found something new
+                studies_oi = studies_oi.union(studies)
+                prev_found_missing = prev_found_missing.union(found_missing)
+                prev_found_total = prev_found_total.union(found_total)
+
+        print("""
+            Taking %s studies we are would be covering a total of %s different SFs, 
+            %s out of %s for which we don't have data now.
+        """ % (len(studies_oi), len(prev_found_total), len(prev_found_missing), len(new_sfs)))
+        
+        print("Selected studies:\n", n_sfs[studies_oi].sort_values())
+        
+        metadata.loc[metadata["study_accession"].isin(studies_oi), ["study_title","study_accession"]].drop_duplicates().values
+        
+        print(metadata.loc[metadata["study_accession"].isin(studies_oi),"found_sfs"].value_counts().to_string())
+        
+        
+        # problematics: IK, KIN, SON      
         
         studies_tokeep = [
+            "PRJDB6952", # drug perturbation
+            "PRJNA642291", # KD RBPs
+            "PRJNA494172", # KD SMNDC1
+            "PRJNA674890", # OE SNRPA1
+            "PRJNA420970", # KD SFs
+            "PRJNA290340", # KD SFs
+        ] + [
             "PRJEB22885", # PRPF31 mut https://doi.org/10.1038%2Fs41467-018-06448-y
             "PRJNA321560", # CLK inhibitor, KDs https://doi.org/10.1038/s41467-016-0008-7
             "PRJEB46899", # siRNA screen https://doi.org/10.1161/CIRCRESAHA.120.318141
