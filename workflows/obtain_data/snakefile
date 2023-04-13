@@ -1,0 +1,16 @@
+import os
+
+# variables
+ROOT = os.path.dirname(os.path.dirname(os.getcwd()))
+RAW_DIR = os.path.join(ROOT,"data","raw")
+SUPPORT_DIR = os.path.join(ROOT,"support")
+
+##### RULES #####
+# Rules to download and align Transcriptomics on Splicing Factors from ENA
+module download_and_align_ena_sfs: 
+    snakefile: "download_and_align_ena_sfs.smk"
+use rule * from download_and_align_ena_sfs as ena_sfs_*
+
+rule all:
+    input:
+        rules.ena_sfs_all.input
