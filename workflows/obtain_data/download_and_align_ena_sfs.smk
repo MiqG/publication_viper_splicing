@@ -18,8 +18,10 @@ rule all:
         ## merge tables
         os.path.join(RAW_DIR,"ENA","splicing_factors","metadata","sf_experiments_merged.tsv.gz"),
         ## clean SF ENA metadata
-        ## create ENA query to get corresponding controls
-        
+        os.path.join(RAW_DIR,"ENA","splicing_factors","metadata","sf_experiments_clean.tsv.gz"),
+        ## download full SF ENA metadata for selected studies
+        os.path.join(RAW_DIR,"ENA","splicing_factors","metadata","sf_experiments_clean-selected.tsv")
+        ## clean selected ENA metadata
         
 rule create_ena_query_sfs:
     input:
@@ -296,6 +298,7 @@ rule clean_ena_metadata:
         metadata = metadata.loc[metadata["found_sfs"].isin(sfs["GENE"])].copy()
 
         # filter out bad matches
+        # problematics: IK, KIN, SON
         cols_oi = ["run_alias","sample_alias","sample_title","experiment_title","study_title"]
         is_bad_match = metadata[cols_oi].apply(
             lambda col: col.str.contains(
@@ -308,6 +311,14 @@ rule clean_ena_metadata:
         studies_todrop = [
             "PRJNA809587", # Riboseq
             "PRJNA597343", # 
+            "PRJNA615007", # KD SF3A3 with MYC OE (only 1)
+            "PRJNA240137", # CELF1 no control
+            "PRJNA252360", # gene fusions
+            "PRJNA375866", # TREND seq (3' preference)
+            "PRJNA639929", # don't trust it
+            "PRJNA484982", # only CLIP
+            "PRJNA738336", # 3' end sequencing
+            "PRJNA656188", # not perturbed
         ]
         metadata = metadata.loc[~metadata["study_accession"].isin(studies_todrop)].copy()        
         
@@ -318,183 +329,209 @@ rule clean_ena_metadata:
         print("Found %s SFs in total, %s of them not in ENCORE KDs. We are missing %s SFs" %\
               (len(found_sfs), len(new_sfs), len(missing_sfs)))
         
-        # consider only studies with high diversity in SF matches, how many/which ones are we missing? Are they covered by ENCORE KDs?
-        # consider larger studies, how much are we covering?
+        # consider only studies with high diversity in SF matches, how many/which ones are we missing? 
+        # Are they covered by ENCORE KDs? consider larger studies, how much are we covering?
         n_sfs = metadata[["study_accession","found_sfs"]].drop_duplicates()["study_accession"].value_counts()
-        studies_oi = set()
-        prev_found_missing = set()
-        prev_found_total = set()
-        for top_n in range(len(n_sfs)):
-            studies = set([n_sfs.index[top_n]])
-            found_total = metadata.loc[
-                metadata["study_accession"].isin(studies), "found_sfs"
-            ].unique()
-            found_missing = set(new_sfs).intersection(set(found_total))
-            
-            if len(found_missing - prev_found_missing) > 0:  
-                print(top_n)
-                # save the study if we found something new
-                studies_oi = studies_oi.union(studies)
-                prev_found_missing = prev_found_missing.union(found_missing)
-                prev_found_total = prev_found_total.union(found_total)
+        study_sfs = metadata[["study_accession","found_sfs"]].drop_duplicates().copy()
+        avail_studies = set(study_sfs["study_accession"])
+        studies_ois = set()
+        for it in range(2): # search 2 times
+            studies_oi = set()
+            prev_found_missing = set()
+            prev_found_total = set()
+            for top_n in range(len(n_sfs)):
+                studies = set([n_sfs.index[top_n]])
+                found_total = study_sfs.loc[
+                    study_sfs["study_accession"].isin(studies), "found_sfs"
+                ].unique()
+                found_missing = set(new_sfs).intersection(set(found_total))
 
-        print("""
-            Taking %s studies we are would be covering a total of %s different SFs, 
-            %s out of %s for which we don't have data now.
-        """ % (len(studies_oi), len(prev_found_total), len(prev_found_missing), len(new_sfs)))
+                if len(found_missing - prev_found_missing) > 0:  
+                    print(top_n)
+                    # save the study if we found something new
+                    studies_oi = studies_oi.union(studies)
+                    prev_found_missing = prev_found_missing.union(found_missing)
+                    prev_found_total = prev_found_total.union(found_total)
+
+            print("""
+                Taking %s studies we are would be covering a total of %s different SFs, 
+                %s out of %s for which we don't have data now.
+            """ % (len(studies_oi), len(prev_found_total), len(prev_found_missing), len(new_sfs)))
+            
+            study_sfs = study_sfs.loc[~study_sfs["study_accession"].isin(studies_oi)].copy()
+            studies_ois = studies_ois.union(studies_oi)
         
-        print("Selected studies:\n", n_sfs[studies_oi].sort_values())
+        studies_ois = studies_ois.union(["PRJNA140779","PRJNA192838"])
+        # "PRJNA140779", # KD ELAVL1, https://doi.org/10.1016/j.molcel.2011.06.008 (listed in Desai2020)
+        # "PRJNA192838", # KD and OE RBM10, https://doi.org/10.1093/nar/gkx508 (listed in Desai2020)
         
-        metadata.loc[metadata["study_accession"].isin(studies_oi), ["study_title","study_accession"]].drop_duplicates().values
+        ## subset metadata
+        metadata = metadata.loc[metadata["study_accession"].isin(studies_ois)].copy()
+
+        # print the new query for ENA
+        sfs_query = (
+            " OR ".join((
+                'study_accession="'+metadata["study_accession"]+'"'
+            ).values)
+        )
+        query = 'tax_eq(9606) AND library_strategy="RNA-Seq" AND library_source="TRANSCRIPTOMIC" AND ('+sfs_query + ")"
+        print(query)
         
-        print(metadata.loc[metadata["study_accession"].isin(studies_oi),"found_sfs"].value_counts().to_string())
-        
-        
-        # problematics: IK, KIN, SON      
-        
-        studies_tokeep = [
-            "PRJDB6952", # drug perturbation
-            "PRJNA642291", # KD RBPs
-            "PRJNA494172", # KD SMNDC1
-            "PRJNA674890", # OE SNRPA1
-            "PRJNA420970", # KD SFs
-            "PRJNA290340", # KD SFs
-        ] + [
-            "PRJEB22885", # PRPF31 mut https://doi.org/10.1038%2Fs41467-018-06448-y
-            "PRJNA321560", # CLK inhibitor, KDs https://doi.org/10.1038/s41467-016-0008-7
-            "PRJEB46899", # siRNA screen https://doi.org/10.1161/CIRCRESAHA.120.318141
-            "PRJEB33667", # iCLIP + KDs
-            "PRJNA384899", # TRRAP knockdowns https://doi.org/10.1083%2Fjcb.201706106
-            "PRJEB36354", # WT1 knockdown
-            "PRJNA300429", # CPSF6 KO
-            "PRJNA388736", # CLIP + KD EIF4A3
-            "PRJNA551123", # SRRM4 OE
-            "PRJEB23439", # KO PTBP1/2 MATR3(fractionated)
-            "PRJNA733583", # KD DDX42
-            "PRJEB6651", # U2AF1 depletion
-            "PRJNA394049", # HNRNPK depletion (fractionated)
-            "PRJNA394053", # SRSF6 KD
-            "PRJEB39343", # PTBP1, ESRP2, and MBNL1 KDs
-            "PRJEB41023", # LUC7L KD
-            "PRJNA530774", # drug CDKs
-            "PRJEB57225", # KO RBM15
-            "PRJNA400256", # KO TIA1
-            "PRJEB41023", # KD LUC7L
-            "PRJNA738336", # KD SFs
-            "PRJNA223244", # KD SFs
-            "PRJNA561411", # KD SFs
-            "PRJNA738336", # KD SFs
-            "PRJNA521683", # KD RBFOX2
-            "PRJNA678286", # KD HNRNPF
-            "PRJNA624911", # KO SMN2
-            "PRJEB41929", # KD ERN1
-            "PRJEB44104", # KD PPARGC1A
-            "PRJNA283786", # OE RBM8A
-            "PRJEB41850", # KD KEAP1 ZRANB2
-            "PRJNA789180", # DDX27
-            "PRJNA645345", # EIF4A3
-            "PRJEB41777", # ZRANB2
-            "PRJEB41872", # KD NCBP1
-            "PRJNA523954", # KD SRSF3
-            "PRJNA782063", # KD RNF213
-            "PRJNA779469", # KD RNF213 (weird)
-            "PRJEB53909", # KD RBM42
-            "PRJNA622794", # PRPF31 KO
-            "PRJNA886829", # KD SART3
-            "PRJNA474911", # OE SRRM4
-            "PRJNA789153", # KO CDK12
-            "PRJNA797682", # KO SNIP1
-            "PRJNA809499", # KD USP22
-            "PRJEB4007", # KD SON
-            "PRJNA669300", # KO PPIL1
-            "PRJEB23554", # KD DDX54
-            "PRJEB28561", # KD RNF40
-            "PRJEB25085", # KD MSI1 MSI2
-            "PRJNA540831", # KO PRPF40B
-            "PRJNA689247", # KO SRSF7
-            "PRJNA633677", # KD UPF1
-            "PRJNA520804", # KD CPSF6
-            "PRJEB36921", # KD HNRNPH1
-            "PRJNA655345", # KD HNRNPA2B1
-            "PRJNA353381", # KD RPUSD4
-            "PRJNA610182", # KD HNRNPL
-            "PRJNA361121", # mutations RBM39
-            "PRJNA258436", # KD PRMT1 and PRMT5
-            "PRJNA722728", # KD YTHDC1
-            "PRJNA915416", # KD METTL3
-            "PRJNA781783", # KD METTL3
-            "PRJNA428150", # KD SFs
-            "PRJNA241095", # KD RBPMS
-            "PRJNA293234", # SRSF1
-            "PRJNA505781", # KD SFPQ
-            "PRJNA471771", # KD AHNAK2 EVPL
-            "PRJEB7544", # KD PRPF8
-            "PRJNA850080", # KD PTBP1
-            "PRJNA314922", # KD PTBP1 HNRNPK
-            "PRJEB33860", # KD USP22
-            "PRJEB33859", # KD USP22
-            "PRJNA943438", # KD WTAP
-            "PRJNA551046", # KD MOV1 TRA1
-            "PRJNA797585", # OE RBFOX2
-            "PRJEB3048", # KD HNRNPC
-            "PRJEB29040", # KD EIF4A3
-            "PRJNA523477", # KD NOVA2
-            "PRJNA674660", # KD SF3B1
-            "PRJNA682912", # KD CPSF1
-            "PRJNA639929", # KD PABPC1
-            "PRJNA278702", # KD CWC22
-            "PRJNA722701", # KD USP22
-            "PRJNA720522", # RBM10
-            "PRJNA764507", # KD NCL
-            "PRJNA309732", # PTBP1 and 2 KD
-            "PRJNA525954", # KD WTAP
-            "PRJEB34009", # KD USP22
-            "PRJNA510082", # KD CELF2
-            "PRJNA579088", # KD EIF4A3
-            "PRJNA780251", # KD KDM1A
-            "PRJNA401938", # KD EIF4A3
-            "PRJEB48601", # KD DHX38
-            "PRJNA218550", # RBFOX1,2,3
-            "PRJEB40550", # KD MSI1
-            "PRJNA610157", # KO KAT2B
-            "PRJEB34918", # KD KLF5
-            "PRJEB34048", # KD USP22
-            "PRJEB32567", # KD MBNL1
-            "PRJNA164615", # KD MSI1
-            "PRJEB38971", # KD RNF40
-            "PRJEB10298", # KD SNRPB
-            "PRJEB9546", # KD HNRNP + iCLIP
-            "PRJEB14614", # KD SF1
-            "PRJNA301134", # KD HNRNP
-            "PRJEB29794", # KD USP22
-            "PRJNA666753", # KD METTL3
-            "PRJNA294972", # KD UPF1
-            "PRJNA914900", # KD RBBP6
-            "PRJNA774953", # KD SRPK1
-            "PRJNA484809", # KD RBMS3 + CLIP
-            "PRJNA752633", # KD XRN2
-            "PRJNA494617", # KD METTL3
-            "PRJNA706906", # KD SRSF6 + Bleomycin
-            "PRJNA482875", # KD METTL3
-            "PRJNA660570", # KD U2AF1
-            "PRJEB30370", # KD SMU1 RED IK MFAP1
-            "PRJEB32489", # KD YBX3
-            "PRJEB49865", # KD HNRNPL
-            "PRJNA234443", # KD RBFOX2
-            "PRJNA386251", # KD RBM10
-            "PRJNA413916", # KD SRSF5
-            "PRJNA414346", # KD SRSF3
-            "PRJNA422160", # (KD) CLIP RBM10
-            "PRJNA185008", # KD FUS
-            "PRJEB8225", # KD QKI
-            "PRJNA591294", # KD UPF1 and G3BP1
-        ] + [
-            "PRJNA683080", # Lu2021, indisulam treatment
-            "PRJNA140779", # KD ELAVL1, https://doi.org/10.1016/j.molcel.2011.06.008 (listed in Desai2020)
-            "PRJNA192838", # KD and OE RBM10, https://doi.org/10.1093/nar/gkx508 (listed in Desai2020)
-        ]
-        
-        # filter by library selection?
+        # save this metadata table
+        metadata.to_csv(output.metadata, **SAVE_PARAMS)
         
         print("Done!")
+        
+        #         studies_tokeep = [
+        #             "PRJDB6952", # drug perturbation
+        #             "PRJNA642291", # KD RBPs
+        #             "PRJNA494172", # KD SMNDC1
+        #             "PRJNA674890", # OE SNRPA1
+        #             "PRJNA420970", # KD SFs
+        #             "PRJNA290340", # KD SFs
+        #         ] + [
+        #             "PRJEB22885", # PRPF31 mut https://doi.org/10.1038%2Fs41467-018-06448-y
+        #             "PRJNA321560", # CLK inhibitor, KDs https://doi.org/10.1038/s41467-016-0008-7
+        #             "PRJEB46899", # siRNA screen https://doi.org/10.1161/CIRCRESAHA.120.318141
+        #             "PRJEB33667", # iCLIP + KDs
+        #             "PRJNA384899", # TRRAP knockdowns https://doi.org/10.1083%2Fjcb.201706106
+        #             "PRJEB36354", # WT1 knockdown
+        #             "PRJNA300429", # CPSF6 KO
+        #             "PRJNA388736", # CLIP + KD EIF4A3
+        #             "PRJNA551123", # SRRM4 OE
+        #             "PRJEB23439", # KO PTBP1/2 MATR3(fractionated)
+        #             "PRJNA733583", # KD DDX42
+        #             "PRJEB6651", # U2AF1 depletion
+        #             "PRJNA394049", # HNRNPK depletion (fractionated)
+        #             "PRJNA394053", # SRSF6 KD
+        #             "PRJEB39343", # PTBP1, ESRP2, and MBNL1 KDs
+        #             "PRJEB41023", # LUC7L KD
+        #             "PRJNA530774", # drug CDKs
+        #             "PRJEB57225", # KO RBM15
+        #             "PRJNA400256", # KO TIA1
+        #             "PRJEB41023", # KD LUC7L
+        #             "PRJNA738336", # KD SFs
+        #             "PRJNA223244", # KD SFs
+        #             "PRJNA561411", # KD SFs
+        #             "PRJNA738336", # KD SFs
+        #             "PRJNA521683", # KD RBFOX2
+        #             "PRJNA678286", # KD HNRNPF
+        #             "PRJNA624911", # KO SMN2
+        #             "PRJEB41929", # KD ERN1
+        #             "PRJEB44104", # KD PPARGC1A
+        #             "PRJNA283786", # OE RBM8A
+        #             "PRJEB41850", # KD KEAP1 ZRANB2
+        #             "PRJNA789180", # DDX27
+        #             "PRJNA645345", # EIF4A3
+        #             "PRJEB41777", # ZRANB2
+        #             "PRJEB41872", # KD NCBP1
+        #             "PRJNA523954", # KD SRSF3
+        #             "PRJNA782063", # KD RNF213
+        #             "PRJNA779469", # KD RNF213 (weird)
+        #             "PRJEB53909", # KD RBM42
+        #             "PRJNA622794", # PRPF31 KO
+        #             "PRJNA886829", # KD SART3
+        #             "PRJNA474911", # OE SRRM4
+        #             "PRJNA789153", # KO CDK12
+        #             "PRJNA797682", # KO SNIP1
+        #             "PRJNA809499", # KD USP22
+        #             "PRJEB4007", # KD SON
+        #             "PRJNA669300", # KO PPIL1
+        #             "PRJEB23554", # KD DDX54
+        #             "PRJEB28561", # KD RNF40
+        #             "PRJEB25085", # KD MSI1 MSI2
+        #             "PRJNA540831", # KO PRPF40B
+        #             "PRJNA689247", # KO SRSF7
+        #             "PRJNA633677", # KD UPF1
+        #             "PRJNA520804", # KD CPSF6
+        #             "PRJEB36921", # KD HNRNPH1
+        #             "PRJNA655345", # KD HNRNPA2B1
+        #             "PRJNA353381", # KD RPUSD4
+        #             "PRJNA610182", # KD HNRNPL
+        #             "PRJNA361121", # mutations RBM39
+        #             "PRJNA258436", # KD PRMT1 and PRMT5
+        #             "PRJNA722728", # KD YTHDC1
+        #             "PRJNA915416", # KD METTL3
+        #             "PRJNA781783", # KD METTL3
+        #             "PRJNA428150", # KD SFs
+        #             "PRJNA241095", # KD RBPMS
+        #             "PRJNA293234", # SRSF1
+        #             "PRJNA505781", # KD SFPQ
+        #             "PRJNA471771", # KD AHNAK2 EVPL
+        #             "PRJEB7544", # KD PRPF8
+        #             "PRJNA850080", # KD PTBP1
+        #             "PRJNA314922", # KD PTBP1 HNRNPK
+        #             "PRJEB33860", # KD USP22
+        #             "PRJEB33859", # KD USP22
+        #             "PRJNA943438", # KD WTAP
+        #             "PRJNA551046", # KD MOV1 TRA1
+        #             "PRJNA797585", # OE RBFOX2
+        #             "PRJEB3048", # KD HNRNPC
+        #             "PRJEB29040", # KD EIF4A3
+        #             "PRJNA523477", # KD NOVA2
+        #             "PRJNA674660", # KD SF3B1
+        #             "PRJNA682912", # KD CPSF1
+        #             "PRJNA639929", # KD PABPC1
+        #             "PRJNA278702", # KD CWC22
+        #             "PRJNA722701", # KD USP22
+        #             "PRJNA720522", # RBM10
+        #             "PRJNA764507", # KD NCL
+        #             "PRJNA309732", # PTBP1 and 2 KD
+        #             "PRJNA525954", # KD WTAP
+        #             "PRJEB34009", # KD USP22
+        #             "PRJNA510082", # KD CELF2
+        #             "PRJNA579088", # KD EIF4A3
+        #             "PRJNA780251", # KD KDM1A
+        #             "PRJNA401938", # KD EIF4A3
+        #             "PRJEB48601", # KD DHX38
+        #             "PRJNA218550", # RBFOX1,2,3
+        #             "PRJEB40550", # KD MSI1
+        #             "PRJNA610157", # KO KAT2B
+        #             "PRJEB34918", # KD KLF5
+        #             "PRJEB34048", # KD USP22
+        #             "PRJEB32567", # KD MBNL1
+        #             "PRJNA164615", # KD MSI1
+        #             "PRJEB38971", # KD RNF40
+        #             "PRJEB10298", # KD SNRPB
+        #             "PRJEB9546", # KD HNRNP + iCLIP
+        #             "PRJEB14614", # KD SF1
+        #             "PRJNA301134", # KD HNRNP
+        #             "PRJEB29794", # KD USP22
+        #             "PRJNA666753", # KD METTL3
+        #             "PRJNA294972", # KD UPF1
+        #             "PRJNA914900", # KD RBBP6
+        #             "PRJNA774953", # KD SRPK1
+        #             "PRJNA484809", # KD RBMS3 + CLIP
+        #             "PRJNA752633", # KD XRN2
+        #             "PRJNA494617", # KD METTL3
+        #             "PRJNA706906", # KD SRSF6 + Bleomycin
+        #             "PRJNA482875", # KD METTL3
+        #             "PRJNA660570", # KD U2AF1
+        #             "PRJEB30370", # KD SMU1 RED IK MFAP1
+        #             "PRJEB32489", # KD YBX3
+        #             "PRJEB49865", # KD HNRNPL
+        #             "PRJNA234443", # KD RBFOX2
+        #             "PRJNA386251", # KD RBM10
+        #             "PRJNA413916", # KD SRSF5
+        #             "PRJNA414346", # KD SRSF3
+        #             "PRJNA422160", # (KD) CLIP RBM10
+        #             "PRJNA185008", # KD FUS
+        #             "PRJEB8225", # KD QKI
+        #             "PRJNA591294", # KD UPF1 and G3BP1
+        #         ]
+
+        #         # filter by library selection?
+
+
+rule download_metadata_sfs_selection:
+    input:
+        os.path.join(RAW_DIR,"ENA","splicing_factors","metadata","sf_experiments_clean.tsv.gz")
+    output:
+        os.path.join(RAW_DIR,"ENA","splicing_factors","metadata","sf_experiments_clean-selected.tsv")
+    shell:
+        """
+        bash scripts/ENA-download_sf_exps_metadata-selected.sh > {output}
+        
+        echo "Done!"
+        """
 
