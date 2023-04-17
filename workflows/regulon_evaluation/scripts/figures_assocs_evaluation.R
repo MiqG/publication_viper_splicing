@@ -51,7 +51,7 @@ compute_precision = function(labels, values, len=11){
     threshs = round(seq(10, length(values), length.out=len)) # they must be ordered
 
     precisions = sapply(threshs, function(thresh){
-        preds = values > values[thresh]
+        preds = abs(values) > abs(values)[thresh]
         # how many of predicted TRUE, are TRUE
         TP = sum( labels[preds] )
         # how many of predicted TRUE, are FALSE
@@ -67,9 +67,9 @@ compute_recall = function(labels, values, len=11){
     threshs = round(seq(10, length(values), length.out=len)) # they must be ordered
     
     recalls = sapply(threshs, function(thresh){
-        preds = values > values[thresh]
+        preds = abs(values) > abs(values)[thresh]
         # how many of predicted TRUE, are TRUE
-        TP = sum( labels[preds] )
+        TP = sum( labels_bool[preds] )
         # how many of predicted FALSE, are TRUE
         FN = sum( labels[!preds] )
         recall = TP / (TP + FN)
@@ -110,6 +110,85 @@ compute_prec_rec_mult = function(.data, true_var, vars_oi, len=11){
 }
 
 
+compute_precision_signed = function(labels_bool, labels_sign, values_abs, values_sign, len=11){
+    values_abs = abs(values_abs)
+    values_sign = sign(values_sign)
+
+    threshs = round(seq(10, length(values_abs), length.out=len)) # they must be ordered
+
+    precisions = sapply(threshs, function(thresh){
+        # values to consider
+        preds = values_abs > values_abs[thresh]
+        # how many values to consider, they are in the labels and have the same sign
+        TP = sum( labels_bool[preds] & (labels_sign[preds]==values_sign[preds]))
+        # how many values to consider, they are predicted TRUE but are actually FALSE
+        FP = sum( !labels_bool[preds] | (labels_sign[preds]!=values_sign[preds]))
+        precision = TP / (TP + FP)
+        return(precision)
+    })
+    
+    return(precisions)
+}
+
+
+compute_recall_signed = function(labels_bool, labels_sign, values_abs, values_sign, len=11){
+    values_abs = abs(values_abs)
+    values_sign = sign(values_sign)
+    
+    threshs = round(seq(10, length(values_abs), length.out=len)) # they must be ordered
+    
+    recalls = sapply(threshs, function(thresh){
+        preds = values_abs > values_abs[thresh]
+        # how many of predicted TRUE, are TRUE
+        TP = sum( labels_bool[preds] & (labels_sign[preds]==values_sign[preds]))
+        # how many of predicted FALSE, are TRUE
+        FN = sum( labels_bool[!preds] | (labels_sign[!preds]==values_sign[!preds]))
+        recall = TP / (TP + FN)
+        return(recall)
+    })
+    
+    return(recalls)
+    
+}
+
+
+compute_prec_rec_signed = function(.data, true_var_bool, true_var_sign, pred_var_abs, pred_var_sign, label, len=11){
+    df = .data %>%
+        arrange({{pred_var_abs}}) %>%
+        drop_na({{pred_var_abs}}) %>%
+        reframe(
+            precision = compute_precision_signed(
+                {{true_var_bool}}, {{true_var_sign}}, {{pred_var_abs}}, {{pred_var_sign}}, len
+            ),
+            recall = compute_recall_signed(
+                {{true_var_bool}}, {{true_var_sign}}, {{pred_var_abs}}, {{pred_var_sign}}, len
+            ),
+            ranking_var = label,
+            n_obs = n()
+        )
+    return(df)
+}
+
+
+compute_prec_rec_mult_signed = function(.data, true_var_bool, true_var_sign, vars_oi_abs, vars_oi_sign, len=11){
+    
+    result = lapply(
+        1:length(vars_oi_abs), function(var_idx){
+            result = .data %>% 
+                compute_prec_rec_signed(
+                    .data[[true_var_bool]], .data[[true_var_sign]], 
+                    .data[[vars_oi_abs[var_idx]]], .data[[vars_oi_sign[var_idx]]], vars_oi_sign[var_idx]
+                )
+            
+            return(result)
+        }) %>%
+        do.call(rbind, .) %>%
+        drop_na()
+    
+    return(result)
+}
+
+
 plot_eval_clip = function(assocs, regulons_clip){
     plts = list()
     
@@ -133,24 +212,25 @@ plot_eval_clip = function(assocs, regulons_clip){
             # spearman
             eval_spear = X %>% 
                 filter(spear_padj <= thresh) %>%
-                compute_prec_rec_mult("in_clip", "abs_spear_coef") %>%
+                compute_prec_rec_mult("in_clip", "abs_spear_coef", 20) %>%
                 mutate(thresh_fdr = thresh)
             
             # linear model
             eval_lm = X %>% 
                 filter(lm_padj <= thresh) %>%
-                compute_prec_rec_mult("in_clip", c("abs_lm_coef","lm_pearson")) %>%
+                compute_prec_rec_mult("in_clip", c("abs_lm_coef","lm_pearson"), 20) %>%
                 mutate(thresh_fdr = thresh)
             
             # linear model 2
             eval_lm2 = X %>% 
                 filter(lm2_padj <= thresh) %>%
-                compute_prec_rec_mult("in_clip", c("abs_lm2_coef","lm2_pearson")) %>%
+                compute_prec_rec_mult("in_clip", c("abs_lm2_coef","lm2_pearson"), 20) %>%
                 mutate(thresh_fdr = thresh)
 
             
             evals = rbind(eval_spear, eval_lm, eval_lm2) %>%
                 mutate(n_obs_lab = sprintf("n(%s)=%s",ranking_var,n_obs))
+            
             return(evals)
     }) %>%
     do.call(rbind, .)
@@ -162,7 +242,7 @@ plot_eval_clip = function(assocs, regulons_clip){
         geom_point(aes(color=ranking_var), size=1) +
         color_palette("Paired") +
         theme_pubr() +
-        facet_wrap(~thresh_fdr) +
+        facet_wrap(~thresh_fdr, scales="free") +
         theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         ylim(0,NA) +
         labs(x="Recall", y="Precision", color="Association")
@@ -233,7 +313,11 @@ plot_eval_pert = function(assocs, regulons_pert){
             regulons_pert,
             by = c("regulator", "target")
         ) %>%
-        drop_na(delta_psi) 
+        drop_na(delta_psi) %>%
+        mutate(
+            is_inter_sign = -sign(delta_psi),  # it is a KD experiment
+            mutual_information_sign = sign(spear_coef)
+        )
     
     print(sprintf("Total interactions: %s (Thresh = %s)", 
           X %>% filter(is_inter) %>% count(cell_line, is_inter) %>% pull(n), 10))
@@ -249,7 +333,18 @@ plot_eval_pert = function(assocs, regulons_pert){
         ungroup()
     gc()
     
-    # do clip interactions tend to have large association values?
+    plts[["eval_pert-recall_vs_precision-scatter"]] = eval_pert %>%
+        ggplot(aes(x=recall, y=precision)) +
+        geom_line(aes(color=ranking_var), size=LINE_SIZE) +
+        geom_point(aes(color=ranking_var), size=1) +
+        color_palette("Paired") +
+        theme_pubr() +
+        facet_wrap(~cell_line, ncol=3) +
+        theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        ylim(0, NA) +
+        labs(x="Recall", y="Precision", color="Association")        
+    
+    # do perturbation interactions tend to have large association values?
     # evaluate precision and recall using additional thresholds
     ## FDR thresholds
     thresholds = c(1e-30, 1e-25, 1e-20, 1e-15, 1e-10, 1)
@@ -358,6 +453,84 @@ plot_eval_pert = function(assocs, regulons_pert){
         facet_wrap(~cell_line) +
         theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         labs(x="Correlation Threshold", y="Total SF-exon interactions", fill="Association")
+    
+    
+    # signed evaluation
+    vars_oi_abs = c("abs_lm_coef","abs_lm_pearson","abs_lm2_coef","abs_lm2_pearson","abs_spear_coef","mutual_information")
+    vars_oi_sign = c("lm_coef","lm_pearson","lm2_coef","lm2_pearson","spear_coef","mutual_information_sign")
+    
+    eval_pert_signed = X %>%
+        group_by(cell_line) %>%
+        compute_prec_rec_mult_signed("is_inter", "is_inter_sign", vars_oi_abs, vars_oi_sign) %>%
+        ungroup()
+    gc()
+
+    plts[["eval_pert_signed-recall_vs_precision-scatter"]] = eval_pert_signed %>%
+        ggplot(aes(x=recall, y=precision)) +
+        geom_line(aes(color=ranking_var), size=LINE_SIZE) +
+        geom_point(aes(color=ranking_var), size=1) +
+        color_palette("Paired") +
+        theme_pubr() +
+        facet_wrap(~cell_line, ncol=3) +
+        theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        ylim(0, NA) +
+        labs(x="Recall", y="Precision", color="Association")
+    
+    # with different fdr thresholds
+    thresholds = c(1e-30, 1e-25, 1e-20, 1e-15, 1e-10, 1)
+    eval_pert_signed_threshs_fdr = lapply(
+        thresholds, function(thresh){
+            # spearman
+            eval_spear = X %>% 
+                filter(spear_padj <= thresh) %>%
+                group_by(cell_line) %>%
+                compute_prec_rec_mult_signed(
+                    "is_inter", "is_inter_sign", c("abs_spear_coef","mutual_information"), c("spear_coef","mutual_information_sign")
+                ) %>%
+                ungroup() %>%
+                mutate(thresh_fdr = thresh)
+            
+            # linear model
+            eval_lm = X %>% 
+                filter(lm_padj <= thresh) %>%
+                group_by(cell_line) %>%
+                compute_prec_rec_mult_signed("is_inter", "is_inter_sign", c("abs_lm_coef","lm_pearson"), c("lm_coef","lm_pearson")) %>%
+                ungroup() %>%
+                mutate(thresh_fdr = thresh)
+            
+            # linear model 2
+            eval_lm2 = X %>% 
+                filter(lm2_padj <= thresh) %>%
+                group_by(cell_line) %>%
+                compute_prec_rec_mult_signed("is_inter", "is_inter_sign", c("abs_lm2_coef","lm2_pearson"), c("lm2_coef","lm2_pearson")) %>%
+                ungroup() %>%
+                mutate(thresh_fdr = thresh)
+            
+            evals = rbind(eval_spear, eval_lm, eval_lm2)
+            return(evals)
+    }) %>%
+    do.call(rbind, .)
+    
+    plts[["eval_pert_signed-recall_vs_precision-fdr_threshs-scatter"]] = eval_pert_signed_threshs_fdr %>%
+        #filter(ranking_var %in% c("mutual_information_sign")) %>%
+        ggplot(aes(x=recall, y=precision)) +
+        geom_line(aes(color=ranking_var), size=LINE_SIZE) +
+        geom_point(aes(color=ranking_var), size=1) +
+        color_palette("Paired") +
+        theme_pubr() +
+        facet_wrap(~thresh_fdr+cell_line, ncol=3) +
+        theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        ylim(0, NA) +
+        labs(x="Recall", y="Precision", color="Association")
+   
+   plts[["eval_pert_signed-recall_vs_precision-fdr_threshs-bar"]] = eval_pert_signed_threshs_fdr %>%
+        distinct(cell_line, thresh_fdr, ranking_var, n_obs) %>%
+        ggbarplot(x="thresh_fdr", y="n_obs", fill="ranking_var", 
+                  color=NA, palette="Paired", position=position_dodge(0.9)) +
+        yscale("log10", .format=TRUE) +
+        facet_wrap(~cell_line) +
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="FDR Threshold", y="Total SF-exon interactions", fill="Association")
     
     return(plts)
 }
