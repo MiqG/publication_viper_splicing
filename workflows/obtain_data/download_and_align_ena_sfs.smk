@@ -361,9 +361,10 @@ rule clean_ena_metadata:
             study_sfs = study_sfs.loc[~study_sfs["study_accession"].isin(studies_oi)].copy()
             studies_ois = studies_ois.union(studies_oi)
         
-        studies_ois = studies_ois.union(["PRJNA140779","PRJNA192838"])
+        studies_ois = studies_ois.union(["PRJNA140779","PRJNA192838","PRJNA746339"])
         # "PRJNA140779", # KD ELAVL1, https://doi.org/10.1016/j.molcel.2011.06.008 (listed in Desai2020)
         # "PRJNA192838", # KD and OE RBM10, https://doi.org/10.1093/nar/gkx508 (listed in Desai2020)
+        # "PRJNA746339", KD PHF5A (not found before)
         
         ## subset metadata
         metadata = metadata.loc[metadata["study_accession"].isin(studies_ois)].copy()
@@ -371,7 +372,7 @@ rule clean_ena_metadata:
         # print the new query for ENA
         sfs_query = (
             " OR ".join((
-                'study_accession="'+metadata["study_accession"]+'"'
+                'study_accession="'+list(studies_ois)+'"'
             ).values)
         )
         query = 'tax_eq(9606) AND library_strategy="RNA-Seq" AND library_source="TRANSCRIPTOMIC" AND ('+sfs_query + ")"
