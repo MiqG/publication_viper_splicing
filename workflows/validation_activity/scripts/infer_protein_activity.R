@@ -80,6 +80,7 @@ as_regulon_network = function(regulons){
 run_viper = function(signature, regulons){
     
     regulon_network = as_regulon_network(regulons)
+    regulon_network = pruneRegulon(regulon_network, cutoff=Inf)
     
     # run viper
     result = viper(

@@ -47,15 +47,15 @@ PAL_CONTRAST = c("darkgrey","darkred")
 # figs_dir = file.path(RESULTS_DIR,'figures','assocs_evaluation','LIHC')
 
 ##### FUNCTIONS #####
-compute_precision = function(labels, values, len=11){
+compute_precision = function(labels_bool, values, len=11){
     threshs = round(seq(10, length(values), length.out=len)) # they must be ordered
 
     precisions = sapply(threshs, function(thresh){
         preds = abs(values) > abs(values)[thresh]
         # how many of predicted TRUE, are TRUE
-        TP = sum( labels[preds] )
+        TP = sum( labels_bool[preds] )
         # how many of predicted TRUE, are FALSE
-        FP = sum( !labels[preds] )
+        FP = sum( !labels_bool[preds] )
         precision = TP / (TP + FP)
         return(precision)
     })
@@ -63,7 +63,7 @@ compute_precision = function(labels, values, len=11){
     return(precisions)
 }
 
-compute_recall = function(labels, values, len=11){
+compute_recall = function(labels_bool, values, len=11){
     threshs = round(seq(10, length(values), length.out=len)) # they must be ordered
     
     recalls = sapply(threshs, function(thresh){
@@ -71,7 +71,7 @@ compute_recall = function(labels, values, len=11){
         # how many of predicted TRUE, are TRUE
         TP = sum( labels_bool[preds] )
         # how many of predicted FALSE, are TRUE
-        FN = sum( labels[!preds] )
+        FN = sum( labels_bool[!preds] )
         recall = TP / (TP + FN)
         return(recall)
     })

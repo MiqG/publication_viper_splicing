@@ -1,0 +1,200 @@
+"""
+Author: Miquel Anglada Girotto
+Contact: miquelangladagirotto [at] gmail [dot] com
+"""
+
+
+import os
+import pandas as pd
+
+# variables
+ROOT = os.path.dirname(os.path.dirname(os.getcwd()))
+RAW_DIR = os.path.join(ROOT,"data","raw")
+PREP_DIR = os.path.join(ROOT,"data","prep")
+SUPPORT_DIR = os.path.join(ROOT,"support")
+RESULTS_DIR = os.path.join(ROOT,"results","validation_activity")
+REGINF_DIR = os.path.join(ROOT,"results","regulon_inference")
+REGEVAL_DIR = os.path.join(ROOT,"results","regulon_evaluation")
+SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
+
+CELL_LINES = ["K562","HepG2"]
+
+SIGNATURE_FILES = {
+    #"event_psi": os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'delta_psi-EX.tsv.gz'),
+    "genexpr_vs_psi_imputed": {
+        "delta_psi_rel": os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'delta_psi_rel-EX-masked.tsv.gz'),
+        "delta_psi": os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'delta_psi-EX-masked.tsv.gz')
+    },
+    "genexpr_vs_genexpr": os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'log2_fold_change_tpm.tsv.gz')
+}
+
+METHODS_ASSOC = ["aracne_w_spearman","correlation_spearman","linear_model"]
+METHODS_ACTINF = ["viper"]#,"correlation"]
+OMICS = ["genexpr_vs_psi_imputed"]
+DATASETS = ["CCLE","LIHC"]
+DELTA_PSI_TYPES = ["delta_psi","delta_psi_rel"]
+ASSOC_TYPES = ["association","associations_pruned"]
+
+REGULONS_GROUND_TRUTH = {
+    "POSTAR3": os.path.join(REGINF_DIR,"files","regulons","CLIP","POSTAR3.tsv.gz"),
+    "ENCORE_HepG2": os.path.join(REGINF_DIR,"files","regulons","pert_rnaseq","ENCORE","HepG2","{delta_psi_type}.tsv.gz"),
+    "ENCORE_K562": os.path.join(REGINF_DIR,"files","regulons","pert_rnaseq","ENCORE","K562","{delta_psi_type}.tsv.gz")
+}
+
+##### RULES #####
+rule all:
+    input:
+        # infer activities
+        ## for each association method
+        expand(os.path.join(RESULTS_DIR,'files','{assoc_type}','{actinf_method}','{assoc_method}','{omic}',"{delta_psi_type}",'ENCORE','{cell_line}-{dataset}_regulons.tsv.gz'), actinf_method=METHODS_ACTINF, assoc_method=METHODS_ASSOC, omic=OMICS, delta_psi_type=DELTA_PSI_TYPES, cell_line=CELL_LINES, dataset=DATASETS, assoc_type=ASSOC_TYPES),
+        ## concatenate inferred activities
+        expand(os.path.join(RESULTS_DIR,'files','{assoc_type}','{actinf_method}',"merged-{omic}-{delta_psi_type}.tsv.gz"), actinf_method=METHODS_ACTINF, omic=OMICS, delta_psi_type=DELTA_PSI_TYPES, assoc_type=ASSOC_TYPES),
+        
+        ## for ground truth
+        expand(os.path.join(RESULTS_DIR,'files','ground_truth','{actinf_method}',"{delta_psi_type}",'ENCORE','{cell_line}-{dataset}_regulons.tsv.gz'), actinf_method=METHODS_ACTINF, delta_psi_type=DELTA_PSI_TYPES, cell_line=CELL_LINES, dataset=REGULONS_GROUND_TRUTH.keys()),
+        ## concatenate inferred activities ground truth
+        expand(os.path.join(RESULTS_DIR,'files','ground_truth','{actinf_method}',"merged-{omic}-{delta_psi_type}.tsv.gz"), actinf_method=METHODS_ACTINF, omic="genexpr_vs_psi_imputed", delta_psi_type=DELTA_PSI_TYPES),
+        
+        # make figures
+        expand(os.path.join(RESULTS_DIR,'figures','validations_encore','{assoc_type}','{actinf_method}',"{omic}","{delta_psi_type}"), actinf_method=METHODS_ACTINF, omic=OMICS, delta_psi_type=DELTA_PSI_TYPES, assoc_type=ASSOC_TYPES+["ground_truth"])
+        
+        
+rule infer_protein_activity:
+    input:
+        signature = lambda wildcards: SIGNATURE_FILES[wildcards.omic][wildcards.delta_psi_type],
+        regulons = os.path.join(REGEVAL_DIR,"files","{assoc_type}","{dataset}","genexpr_vs_psi_imputed","{assoc_method}.tsv.gz")
+    output:
+        os.path.join(RESULTS_DIR,'files','{assoc_type}','{actinf_method}','{assoc_method}','{omic}',"{delta_psi_type}",'ENCORE','{cell_line}-{dataset}_regulons.tsv.gz')
+    params:
+        assoc_method = "{assoc_method}",
+        actinf_method = "{actinf_method}"
+    shell:
+        """
+        Rscript scripts/infer_protein_activity.R \
+                    --signature_file={input.signature} \
+                    --regulons_file={input.regulons} \
+                    --output_file={output} \
+                    --assoc_method={params.assoc_method} \
+                    --actinf_method={params.actinf_method}
+        """
+
+        
+rule combine_inferred_activities:
+    input:
+        protein_activities = [os.path.join(RESULTS_DIR,'files','{assoc_type}','{actinf_method}','{assoc_method}','{omic}',"{delta_psi_type}",'ENCORE','{cell_line}-{dataset}_regulons.tsv.gz').format(assoc_type="{assoc_type}", actinf_method="{actinf_method}", assoc_method=assoc_method, omic="{omic}", delta_psi_type="{delta_psi_type}", cell_line=cell_line, dataset=dataset) for assoc_method in METHODS_ASSOC for cell_line in CELL_LINES for dataset in DATASETS]
+    output:
+        os.path.join(RESULTS_DIR,'files','{assoc_type}','{actinf_method}',"merged-{omic}-{delta_psi_type}.tsv.gz")
+    params:
+        actinf_method = "{actinf_method}",
+        omic = "{omic}",
+        delta_psi_type = "{delta_psi_type}"
+    run:
+        import os
+        import pandas as pd
+        
+        actinf_method = params.actinf_method
+        omic = params.omic
+        delta_psi_type = params.delta_psi_type
+        
+        dfs = []
+        for file in input.protein_activities:
+            assoc_method = os.path.basename(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(file)))))
+            cell_line = os.path.basename(file).split("-")[0]
+            regulon = os.path.basename(file).replace(".tsv.gz","").split("-")[1]
+            
+            df = pd.read_table(file)
+            df = df.melt(id_vars="regulator", var_name="KD", value_name="protein_activity")
+            
+            df["actinf_method"] = actinf_method
+            df["assoc_method"] = assoc_method
+            df["omic"] = omic
+            df["delta_psi_type"] = delta_psi_type
+            df["cell_line"] = cell_line
+            df["regulon"] = regulon
+            
+            dfs.append(df)
+            
+        dfs = pd.concat(dfs)
+        
+        dfs.to_csv(output[0], **SAVE_PARAMS)
+        
+        print("Done!")
+        
+
+rule infer_protein_activity_ground_truth:
+    input:
+        signature = lambda wildcards: SIGNATURE_FILES["genexpr_vs_psi_imputed"][wildcards.delta_psi_type],
+        regulons = lambda wildcards: REGULONS_GROUND_TRUTH[wildcards.dataset]
+    output:
+        os.path.join(RESULTS_DIR,'files','ground_truth','{actinf_method}',"{delta_psi_type}",'ENCORE','{cell_line}-{dataset}_regulons.tsv.gz')
+    params:
+        assoc_method = "ground_truth",
+        actinf_method = "{actinf_method}"
+    shell:
+        """
+        Rscript scripts/infer_protein_activity.R \
+                    --signature_file={input.signature} \
+                    --regulons_file={input.regulons} \
+                    --output_file={output} \
+                    --assoc_method={params.assoc_method} \
+                    --actinf_method={params.actinf_method}
+        """
+
+        
+rule combine_inferred_ground_truth_activities:
+    input:
+        protein_activities = [os.path.join(RESULTS_DIR,'files','ground_truth','{actinf_method}',"{delta_psi_type}",'ENCORE','{cell_line}-{dataset}_regulons.tsv.gz').format(actinf_method="{actinf_method}", delta_psi_type="{delta_psi_type}", cell_line=cell_line, dataset=dataset) for cell_line in CELL_LINES for dataset in REGULONS_GROUND_TRUTH.keys()]
+    output:
+        os.path.join(RESULTS_DIR,'files','ground_truth','{actinf_method}',"merged-{omic}-{delta_psi_type}.tsv.gz")
+    params:
+        actinf_method = "{actinf_method}",
+        omic = "genexpr_vs_psi_imputed",
+        delta_psi_type = "{delta_psi_type}" # signature
+    run:
+        import os
+        import pandas as pd
+        
+        actinf_method = params.actinf_method
+        omic = params.omic
+        delta_psi_type = params.delta_psi_type
+        
+        dfs = []
+        for file in input.protein_activities:
+            assoc_method = os.path.basename(os.path.dirname(os.path.dirname(os.path.dirname(file))))
+            cell_line = os.path.basename(file).split("-")[0]
+            regulon = os.path.basename(file).replace(".tsv.gz","").split("-")[1]
+            
+            df = pd.read_table(file)
+            df = df.melt(id_vars="regulator", var_name="KD", value_name="protein_activity")
+            
+            df["actinf_method"] = actinf_method
+            df["assoc_method"] = assoc_method
+            df["omic"] = omic
+            df["delta_psi_type"] = delta_psi_type
+            df["cell_line"] = cell_line
+            df["regulon"] = regulon
+            
+            dfs.append(df)
+            
+        dfs = pd.concat(dfs)
+        
+        dfs.to_csv(output[0], **SAVE_PARAMS)
+        
+        print("Done!")
+        
+        
+rule figures_validation_activity_encore:
+    input:
+        protein_activities = os.path.join(RESULTS_DIR,'files','{assoc_type}','{actinf_method}',"merged-{omic}-{delta_psi_type}.tsv.gz"),
+        encore_logfc_hepg2 = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"HepG2",'log2_fold_change_tpm.tsv.gz'),
+        encore_logfc_k562 = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"K562",'log2_fold_change_tpm.tsv.gz')
+    output:
+        directory(os.path.join(RESULTS_DIR,'figures','validations_encore','{assoc_type}','{actinf_method}',"{omic}","{delta_psi_type}"))
+    shell:
+        """
+        nice Rscript scripts/figures_validation_activity_encore.R \
+                    --protein_activities_file={input.protein_activities} \
+                    --encore_logfc_hepg2={input.encore_logfc_hepg2} \
+                    --encore_logfc_k562={input.encore_logfc_k562} \
+                    --figs_dir={output}
+        """

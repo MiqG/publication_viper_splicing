@@ -1,0 +1,85 @@
+"""
+Author: Miquel Anglada Girotto
+Contact: miquelangladagirotto [at] gmail [dot] com
+
+Outline
+-------
+1. Protein activity vs drug treatment:
+    - indisulam targets RBM39
+    - MS023 targets PRMTs (methyltransferases)
+"""
+
+import os
+
+# variables
+ROOT = os.path.dirname(os.path.dirname(os.getcwd()))
+RAW_DIR = os.path.join(ROOT,"data","raw")
+PREP_DIR = os.path.join(ROOT,"data","prep")
+SUPPORT_DIR = os.path.join(ROOT,"support")
+BIN_DIR = os.path.join(ROOT,"bin")
+RESULTS_DIR = os.path.join(ROOT,"results","sf_activity_Lu2021")
+ACTVAL_DIR = os.path.join(ROOT,"results","validation_activity")
+SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
+
+##### RULES #####
+rule all:
+    input:
+        # calculate signature
+        os.path.join(RESULTS_DIR,"files","signatures","Lu2021-EX.tsv.gz"),
+        
+        # compute viper SF activities
+        os.path.join(RESULTS_DIR,"files","protein_activity","Lu2021.tsv.gz")
+        
+        
+rule compute_signature:
+    input:
+        splicing = os.path.join(PREP_DIR,"event_psi","Lu2021-EX.tsv.gz"),
+        metadata = os.path.join(PREP_DIR,"metadata","Lu2021.tsv.gz")
+    output:
+        signature = os.path.join(RESULTS_DIR,"files","signatures","Lu2021-EX.tsv.gz")
+    run:
+        import pandas as pd
+        
+        splicing = pd.read_table(input.splicing, index_col=0)
+        metadata = pd.read_table(input.metadata)
+        
+        # subtract median DMSO to corresponding cell type
+        signature = []
+        for cell_line_oi in metadata["cell_line_name"].unique():
+            samples_cell_line = metadata.loc[
+                metadata["cell_line_name"] == cell_line_oi,
+                "sampleID"
+            ]
+            samples_ctl = metadata.loc[
+                (metadata["cell_line_name"] == cell_line_oi) &\
+                (metadata["condition"] == "DMSO"),
+                "sampleID"
+            ]
+            
+            signature.append(
+                splicing[samples_cell_line] - \
+                splicing[samples_ctl].median(axis=1).values.reshape(-1,1)
+            )
+        signature = pd.concat(signature, axis=1)
+        
+        # save
+        signature.reset_index().to_csv(output.signature, **SAVE_PARAMS)
+        
+        print("Done!")
+        
+        
+rule compute_protein_activity:
+    input:
+        signature = os.path.join(RESULTS_DIR,"files","signatures","Lu2021-EX.tsv.gz"),
+        regulons_dir = os.path.join(ACTVAL_DIR,"files","subsetted_regulons","regulons_selected")
+    output:
+        os.path.join(RESULTS_DIR,"files","protein_activity","Lu2021.tsv.gz")
+    params:
+        script_dir = BIN_DIR
+    shell:
+        """
+        Rscript {params.script_dir}/compute_protein_activity.R \
+                    --signature_file={input.signature} \
+                    --regulons_dir={input.regulons_dir} \
+                    --output_file={output}
+        """

@@ -114,7 +114,7 @@ plot_viper_activities = function(protein_activities, encore_logfc){
     set.seed(1234)
     x = X %>%
         group_by(assoc_method, regulon, cell_line, regulator) %>%
-        arrange(abs(protein_activity)) %>% 
+        arrange(protein_activity) %>% 
         mutate(ranking = row_number()) %>%
         ungroup() %>%
         filter(is_validated) %>%
@@ -125,14 +125,14 @@ plot_viper_activities = function(protein_activities, encore_logfc){
             mutate(is_validated = sample(is_validated)) %>%
             ungroup() %>%
             group_by(assoc_method, regulon, cell_line, regulator) %>%
-            arrange(abs(protein_activity)) %>% 
+            arrange(protein_activity) %>% 
             mutate(ranking = row_number()) %>%
             ungroup() %>%
             filter(is_validated) %>%
             mutate(ordering_type = "random")
         )
     
-    plts[["viper_activities-specificity-violin"]] = x %>%
+    plts[["viper_activities-specificity_between-violin"]] = x %>%
         ggviolin(x="ordering_type", y="ranking", fill="ordering_type", color=NA, trim=TRUE) +
         geom_boxplot(width=0.1, fill=NA, outlier.size=0.1) + 
         facet_wrap(~assoc_method+regulon+cell_line, scales="free", ncol=2) +
@@ -140,7 +140,73 @@ plot_viper_activities = function(protein_activities, encore_logfc){
         stat_compare_means(method="wilcox.test", size=FONT_SIZE, family=FONT_FAMILY) +
         guides(fill="none") + 
         labs(x="Sample Ranking", y="Viper Activity Ranking Across Experiments")
-
+    
+    # what is the ranking of each splicing factor within each experiment?
+    set.seed(1234)
+    x = X %>%
+        group_by(assoc_method, regulon, cell_line, KD) %>%
+        arrange(protein_activity) %>% 
+        mutate(ranking = row_number()) %>%
+        ungroup() %>%
+        filter(is_validated) %>%
+        mutate(ordering_type = "real") %>%
+        bind_rows(
+            X %>%
+            group_by(assoc_method, regulon, cell_line) %>%
+            mutate(is_validated = sample(is_validated)) %>%
+            ungroup() %>%
+            group_by(assoc_method, regulon, cell_line, KD) %>%
+            arrange(protein_activity) %>% 
+            mutate(ranking = row_number()) %>%
+            ungroup() %>%
+            filter(is_validated) %>%
+            mutate(ordering_type = "random")
+        )
+    
+    plts[["viper_activities-specificity_within-violin"]] = x %>%
+        ggviolin(x="ordering_type", y="ranking", fill="ordering_type", color=NA, trim=TRUE) +
+        geom_boxplot(width=0.1, fill=NA, outlier.size=0.1) + 
+        facet_wrap(~assoc_method+regulon+cell_line, scales="free", ncol=2) +
+        theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        stat_compare_means(method="wilcox.test", size=FONT_SIZE, family=FONT_FAMILY) +
+        guides(fill="none") + 
+        labs(x="Sample Ranking", y="Viper Activity Ranking Across Experiments")
+        
+    
+    # protein activities for the same KD network in different cell systems
+    regulon_oi = "ENCORE_HepG2_regulons"
+    cells_oi = c("HepG2","K562")
+    x = X %>%
+        filter(regulon == regulon_oi) %>%
+        filter(cell_line %in% cells_oi) %>%
+        pivot_wider(
+            id_cols=c("is_validated","regulator","KD"), names_from="cell_line",
+            values_from="protein_activity"
+        ) %>%
+        drop_na()
+    plts[["viper_activities-hepg2_vs_k562-hepg2_regulons-scatter"]] = x %>%
+        ggplot(aes(x=HepG2, y=K562, color=is_validated)) +
+        geom_scattermore(pointsize=4, alpha=0.5, pixels=c(1000,1000)) +
+        theme_pubr() +
+        stat_cor(method="spearman") +
+        labs(color="Is KD", subtitle=regulon_oi)
+    
+    regulon_oi = "ENCORE_K562_regulons"
+    cells_oi = c("HepG2","K562")
+    x = X %>%
+        filter(regulon == regulon_oi) %>%
+        filter(cell_line %in% cells_oi) %>%
+        pivot_wider(
+            id_cols=c("is_validated","regulator","KD"), names_from="cell_line",
+            values_from="protein_activity"
+        ) %>%
+        drop_na()
+    plts[["viper_activities-hepg2_vs_k562-k562_regulons-scatter"]] = x %>%
+        ggplot(aes(x=HepG2, y=K562, color=is_validated)) +
+        geom_scattermore(pointsize=4, alpha=0.5, pixels=c(1000,1000)) +
+        theme_pubr() +
+        stat_cor(method="spearman") +
+        labs(color="Is KD", subtitle=regulon_oi)
     
     return(plts)
 }
@@ -192,7 +258,8 @@ save_plt = function(plts, plt_name, extension='.pdf',
 save_plots = function(plts, figs_dir){
     save_plt(plts, "viper_activities-fc_kds_vs_protein_activity-scatter", '.pdf', figs_dir, width=12, height=35)
     save_plt(plts, "viper_activities-fc_kds_vs_max_protein_activity-scatter", '.pdf', figs_dir, width=12, height=35)
-    save_plt(plts, "viper_activities-specificity-violin", '.pdf', figs_dir, width=12, height=35)
+    save_plt(plts, "viper_activities-specificity_between-violin", '.pdf', figs_dir, width=12, height=35)
+    save_plt(plts, "viper_activities-specificity_within-violin", '.pdf', figs_dir, width=12, height=35)
 }
 
 
