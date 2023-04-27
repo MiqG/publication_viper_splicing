@@ -251,7 +251,7 @@ rule regulons_pert_rnaseq:
         perts["regulator"] = perts["ENSEMBL"]
         perts["target"] = perts["EVENT"]
         perts["likelihood"] = np.abs(perts[dpsi_type])
-        perts["tfmode"] = np.sign(perts[dpsi_type])
+        perts["tfmode"] = (-1)*np.sign(perts[dpsi_type]) # they come from KD, decrease activity
         
         # save
         perts.to_csv(output[0], **SAVE_PARAMS)
