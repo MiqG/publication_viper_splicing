@@ -126,7 +126,10 @@ rule all:
         os.path.join(PREP_DIR,"event_psi","Lu2021-ALTA.tsv.gz"),
         os.path.join(PREP_DIR,"event_psi","Lu2021-ALTD.tsv.gz"),
         os.path.join(PREP_DIR,"event_psi","Lu2021-INT.tsv.gz"),
-        os.path.join(PREP_DIR,"genexpr_tpm","Lu2021.tsv.gz")
+        os.path.join(PREP_DIR,"genexpr_tpm","Lu2021.tsv.gz"),
+        
+        # preprocess MetMap
+        os.path.join(PREP_DIR,"metmap","CCLE.tsv.gz")
         
         
 rule preprocess_ccle:
@@ -940,4 +943,38 @@ rule preprocess_Lu2021:
         ## TPMs
         genexpr.reset_index().drop(columns='NAME').to_csv(output.genexpr, **SAVE_PARAMS)
         
-        print("Done!")  
+        print("Done!")
+        
+        
+rule preprocess_metmap:
+    input:
+        metmap = os.path.join(RAW_DIR,"DepMap","metmap","metmap500.xlsx"),
+        metadata = os.path.join(RAW_DIR,'DepMap','achilles_ccle','sample_info.csv')
+    output:
+        os.path.join(PREP_DIR,"metmap","CCLE.tsv.gz")
+    run:
+        import pandas as pd
+        
+        tissues = ["brain","lung","liver","bone","kidney","all5"]        
+        
+        # load
+        metadata = pd.read_csv(input.metadata)
+        metmap = pd.concat([
+            pd.read_excel(input.metmap, sheet_name=idx).rename(columns={
+                "Unnamed: 0":"CCLE_Name",
+                "CI.05": "CI.05_%s" % tissue,
+                "CI.95": "CI.95_%s" % tissue,
+                "mean": "mean_%s" % tissue,
+                "penetrance": "penetrance_%s" % tissue
+            }).set_index("CCLE_Name")
+            
+            for idx, tissue in enumerate(tissues)
+        ], axis=1).reset_index()
+        
+        # add depmap id
+        metmap = pd.merge(metmap, metadata[["CCLE_Name","DepMap_ID"]], how="left", on="CCLE_Name")
+        
+        # save
+        metmap.to_csv(output[0], **SAVE_PARAMS)
+        
+        print("Done!")

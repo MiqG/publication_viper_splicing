@@ -7,6 +7,7 @@ Outline
 1. Protein activity vs gene dependency: cancer-driver splicing factors
 2. Protein activity vs drugs IC50: drug-SF interaction
 3. Protein activity vs protein activity: splicing factors cross regulation
+4. Protein activity vs met map: metastatic potential
 """
 
 import os
@@ -125,3 +126,52 @@ rule associate_sf_activities_to_gene_dependency:
         corrs.to_csv(output[0], **SAVE_PARAMS)
         
         print("Done!")
+        
+        
+rule associate_sf_activities_to_metastatic_potential:
+    input:
+        sf_activities = os.path.join(RESULTS_DIR,"files","protein_activity","CCLE.tsv.gz"),
+        metmap = os.path.join(PREP_DIR,"metmap","CCLE.tsv.gz"),
+        gene_annotations = os.path.join(RAW_DIR,"HGNC","gene_annotations.tsv.gz")
+    output:
+        os.path.join(RESULTS_DIR,"files","protein_activity_vs_metmap","CCLE.tsv.gz")
+    run:
+        import pandas as pd
+        from scipy import stats
+        
+        tissues = ["brain","lung","liver","bone","kidney","all5"]        
+
+        # load
+        sf_activities = pd.read_table(input.sf_activities, index_col=0)
+        metmap = pd.read_table(input.metmap).set_index("DepMap_ID")
+        gene_annotations = pd.read_table(input.gene_annotations)
+        
+        # subset
+        common_samples = set(sf_activities.columns).intersection(metmap.index)
+        sf_activities = sf_activities[common_samples]
+        metmap = metmap.loc[common_samples]
+        
+        # correlate
+        corrs = []
+        for tissue in tissues:
+            pearson = sf_activities.apply(lambda row: stats.pearsonr(row, metmap["mean_%s" % tissue]), axis=1)
+            pearson = pd.DataFrame(pearson.to_list(), index=pearson.index, columns=["pearson_coef","pearson_pvalue"])
+            spearman = sf_activities.apply(lambda row: stats.spearmanr(row, metmap["mean_%s" % tissue]), axis=1)
+            spearman = pd.DataFrame(spearman.to_list(), index=spearman.index, columns=["spearman_coef","spearman_pvalue"])
+            corr = pd.concat([pearson, spearman], axis=1).reset_index()
+            corr["metastatic_tissue"] = tissue
+            corrs.append(corr)
+        corrs = pd.concat(corrs)
+            
+        # add gene symbols
+        corrs = corrs.rename(columns={"regulator":"ENSEMBL"})
+        corrs["GENE"] = [
+            gene_annotations.loc[gene_annotations["Ensembl gene ID"]==ensembl,"Approved symbol"].values[0] 
+            for ensembl in corrs["ENSEMBL"]
+        ]
+        
+        # save
+        corrs.to_csv(output[0], **SAVE_PARAMS)
+        
+        print("Done!")
+        
