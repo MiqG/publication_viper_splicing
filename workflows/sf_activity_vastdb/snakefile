@@ -4,9 +4,7 @@ Contact: miquelangladagirotto [at] gmail [dot] com
 
 Outline
 -------
-1. Protein activity vs drug treatment:
-    - indisulam targets RBM39
-    - MS023 targets PRMTs (methyltransferases)
+1. Protein activity vs sample: splicing factor programs
 """
 
 import os

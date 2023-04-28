@@ -165,9 +165,10 @@ rule evaluate_regulons:
         
         # ranking of KD across experiments
         df["ranking_between"] = df.groupby(vars_oi + ["regulator"])["protein_activity"].rank()
+        df["rankperc_between"] = df["ranking_between"] / df.groupby(vars_oi + ["regulator"])["ranking_between"].transform('max')
         # ranking of KD within experiments
         df["ranking_within"] = df.groupby(vars_oi + ["KD"])["protein_activity"].rank()
-        # add ranking type
+        df["rankperc_within"] = df["ranking_within"] / df.groupby(vars_oi + ["KD"])["ranking_within"].transform('max')
         df["eval_type"] = "real"
         # correlation between protein activities in both cell lines and regulons
         corrs = []
@@ -197,8 +198,10 @@ rule evaluate_regulons:
         df["protein_activity"] = df.groupby(vars_oi + ["KD"])["protein_activity"].sample(frac=1, random_state=1).values
         # ranking of KD across experiments
         df["ranking_between"] = df.groupby(vars_oi + ["regulator"])["protein_activity"].rank()
+        df["rankperc_between"] = df["ranking_between"] / df.groupby(vars_oi + ["regulator"])["ranking_between"].transform('max')
         # ranking of KD within experiments
         df["ranking_within"] = df.groupby(vars_oi + ["KD"])["protein_activity"].rank()
+        df["rankperc_within"] = df["ranking_within"] / df.groupby(vars_oi + ["KD"])["ranking_within"].transform('max')
         # add ranking type
         df["eval_type"] = "random"
         # correlation between protein activities in both cell lines and regulons

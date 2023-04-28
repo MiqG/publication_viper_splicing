@@ -32,7 +32,10 @@ rule all:
         os.path.join(RESULTS_DIR,"files","protein_activity","CCLE.tsv.gz"),
         
         # associate SF activities to gene dependencies
-        os.path.join(RESULTS_DIR,"files","protein_activity_vs_demeter2","CCLE.tsv.gz")
+        os.path.join(RESULTS_DIR,"files","protein_activity_vs_demeter2","CCLE.tsv.gz"),
+        
+        # associate SF 
+        os.path.join(RESULTS_DIR,"files","protein_activity_vs_metmap","CCLE.tsv.gz")
 
         
 rule compute_signature:
