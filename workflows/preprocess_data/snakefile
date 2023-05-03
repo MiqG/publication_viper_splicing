@@ -68,6 +68,8 @@ TCGA_N_SAMPLES = tcga_metadata["cancer_type"].value_counts().to_dict()
 
 DATASETS = ["CCLE"] + CANCER_TYPES
 
+ENCORE_DATASETS = ["ENCOREKD","ENCOREKO"]
+
 ##### RULES #####
 rule all:
     input:
@@ -80,12 +82,20 @@ rule all:
         os.path.join(PREP_DIR,"genexpr_tpm","CCLE.tsv.gz"),
 
         # preprocess ENCORE
-        os.path.join(PREP_DIR,"metadata","ENCORE.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","ENCORE-EX.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","ENCORE-ALTA.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","ENCORE-ALTD.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","ENCORE-INT.tsv.gz"),
-        os.path.join(PREP_DIR,"genexpr_tpm","ENCORE.tsv.gz"),    
+        os.path.join(PREP_DIR,"metadata","ENCOREKD.tsv.gz"),
+        os.path.join(PREP_DIR,"event_psi","ENCOREKD-EX.tsv.gz"),
+        os.path.join(PREP_DIR,"event_psi","ENCOREKD-ALTA.tsv.gz"),
+        os.path.join(PREP_DIR,"event_psi","ENCOREKD-ALTD.tsv.gz"),
+        os.path.join(PREP_DIR,"event_psi","ENCOREKD-INT.tsv.gz"),
+        os.path.join(PREP_DIR,"genexpr_tpm","ENCOREKD.tsv.gz"),    
+        
+        # preprocess ENCOREKO
+        os.path.join(PREP_DIR,"metadata","ENCOREKO.tsv.gz"),
+        os.path.join(PREP_DIR,"event_psi","ENCOREKO-EX.tsv.gz"),
+        os.path.join(PREP_DIR,"event_psi","ENCOREKO-ALTA.tsv.gz"),
+        os.path.join(PREP_DIR,"event_psi","ENCOREKO-ALTD.tsv.gz"),
+        os.path.join(PREP_DIR,"event_psi","ENCOREKO-INT.tsv.gz"),
+        os.path.join(PREP_DIR,"genexpr_tpm","ENCOREKO.tsv.gz"),    
 
         # preprocess TCGA
         expand(os.path.join(PREP_DIR,"metadata","{cancer}.tsv.gz"), cancer=CANCER_TYPES),
@@ -95,17 +105,17 @@ rule all:
         expand(os.path.join(PREP_DIR,"event_psi","{cancer}-INT.tsv.gz"), cancer=CANCER_TYPES),
         expand(os.path.join(PREP_DIR,'genexpr_tpm','{cancer}.tsv.gz'), cancer=CANCER_TYPES),
         
-        # ENCORE RBP KD SCREENS
+        # ENCORE RBP PERTURBATION SCREENS
         ## compute log FC TPM
-        expand(os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE',"{cell_line}",'log2_fold_change_tpm.tsv.gz'), cell_line=CELL_LINES),
+        expand(os.path.join(PREP_DIR,'pert_transcriptomes','{dataset}',"{cell_line}",'log2_fold_change_tpm.tsv.gz'), cell_line=CELL_LINES, dataset=ENCORE_DATASETS),
         ## compute delta PSI
-        expand(os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE',"{cell_line}",'delta_psi-{event_type}.tsv.gz'), event_type=EVENT_TYPES, cell_line=CELL_LINES),
-        expand(os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE',"{cell_line}",'delta_psi_rel-{event_type}.tsv.gz'), event_type=EVENT_TYPES, cell_line=CELL_LINES),
+        expand(os.path.join(PREP_DIR,'pert_transcriptomes','{dataset}',"{cell_line}",'delta_psi-{event_type}.tsv.gz'), event_type=EVENT_TYPES, cell_line=CELL_LINES, dataset=ENCORE_DATASETS),
+        expand(os.path.join(PREP_DIR,'pert_transcriptomes','{dataset}',"{cell_line}",'delta_psi_rel-{event_type}.tsv.gz'), event_type=EVENT_TYPES, cell_line=CELL_LINES, dataset=ENCORE_DATASETS),
         ## mask delta PSI
-        expand(os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'{dpsi_type}-{event_type}-masked.tsv.gz'), event_type=EVENT_TYPES, cell_line=CELL_LINES, dpsi_type=DPSI_TYPES),
+        expand(os.path.join(PREP_DIR,'ground_truth_pert','{dataset}',"{cell_line}",'{dpsi_type}-{event_type}-masked.tsv.gz'), event_type=EVENT_TYPES, cell_line=CELL_LINES, dpsi_type=DPSI_TYPES, dataset=ENCORE_DATASETS),
         ## simplify delta PSI and log FC TPM
-        expand(os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'{dpsi_type}-{event_type}.tsv.gz'), event_type=EVENT_TYPES, dpsi_type=DPSI_TYPES, cell_line=CELL_LINES),
-        expand(os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'log2_fold_change_tpm.tsv.gz'), cell_line=CELL_LINES),
+        expand(os.path.join(PREP_DIR,'ground_truth_pert','{dataset}',"{cell_line}",'{dpsi_type}-{event_type}.tsv.gz'), event_type=EVENT_TYPES, dpsi_type=DPSI_TYPES, cell_line=CELL_LINES, dataset=ENCORE_DATASETS),
+        expand(os.path.join(PREP_DIR,'ground_truth_pert','{dataset}',"{cell_line}",'log2_fold_change_tpm.tsv.gz'), cell_line=CELL_LINES, dataset=ENCORE_DATASETS),
         
         # impute event PSI
         #expand(os.path.join(PREP_DIR,'event_psi_imputed','{dataset}-{event_type}.tsv.gz'), dataset=DATASETS, event_type=EVENT_TYPES)
@@ -345,18 +355,18 @@ rule preprocess_TCGA:
         print("Done!")
 
 
-rule preprocess_encore:
+rule preprocess_encorekd:
     input:
         metadata = os.path.join(RAW_DIR,'ENCODE','ENCORE','metadata','ENCORE.tsv'),
         psi = os.path.join(RAW_DIR,'ENCODE','ENCORE','vast_out','PSI-minN_1-minSD_0-noVLOW-min_ALT_use25-Tidy.tab.gz'),
         genexpr = os.path.join(RAW_DIR,'ENCODE','ENCORE','vast_out','TPM-hg38-1097.tab.gz')
     output:
-        metadata = os.path.join(PREP_DIR,'metadata','ENCORE.tsv.gz'),
-        psi_EX = os.path.join(PREP_DIR,'event_psi','ENCORE-EX.tsv.gz'),
-        psi_ALTA = os.path.join(PREP_DIR,'event_psi','ENCORE-ALTA.tsv.gz'),
-        psi_ALTD = os.path.join(PREP_DIR,'event_psi','ENCORE-ALTD.tsv.gz'),
-        psi_INT = os.path.join(PREP_DIR,'event_psi','ENCORE-INT.tsv.gz'),
-        genexpr = os.path.join(PREP_DIR,'genexpr_tpm','ENCORE.tsv.gz')
+        metadata = os.path.join(PREP_DIR,'metadata','ENCOREKD.tsv.gz'),
+        psi_EX = os.path.join(PREP_DIR,'event_psi','ENCOREKD-EX.tsv.gz'),
+        psi_ALTA = os.path.join(PREP_DIR,'event_psi','ENCOREKD-ALTA.tsv.gz'),
+        psi_ALTD = os.path.join(PREP_DIR,'event_psi','ENCOREKD-ALTD.tsv.gz'),
+        psi_INT = os.path.join(PREP_DIR,'event_psi','ENCOREKD-INT.tsv.gz'),
+        genexpr = os.path.join(PREP_DIR,'genexpr_tpm','ENCOREKD.tsv.gz')
     run:
         import gc
         import pandas as pd
@@ -378,10 +388,11 @@ rule preprocess_encore:
         metadata["cell_line"] = metadata["Biosample term name"]
         depmapids = {"K562":"ACH-000551", "HepG2":"ACH-000739"}
         metadata["DepMap_ID"] = [depmapids[c] for c in metadata["cell_line"]]
-        ## KD info
-        metadata["KD_GENE"] = metadata["Experiment target"].str.replace("-human","")
-        gene_annot = genexpr.index.to_frame().rename(columns={"ID":"KD_ENSEMBL", "NAME":"KD_GENE"})
-        metadata = pd.merge(metadata, gene_annot, how="left", on="KD_GENE")
+        ## perturbation info
+        metadata["PERT_GENE"] = metadata["Experiment target"].str.replace("-human","")
+        gene_annot = genexpr.index.to_frame().rename(columns={"ID":"PERT_ENSEMBL", "NAME":"PERT_GENE"})
+        metadata = pd.merge(metadata, gene_annot, how="left", on="PERT_GENE")
+        metadata["PERT_TYPE"] = "SHRNAKD"
         ## experiment
         metadata["experiment"] = metadata["Experiment accession"]
         ## replicate
@@ -417,7 +428,7 @@ rule preprocess_encore:
         metadata["control_experiment"] = ctls_exps
         metadata["control_samples"] = ctls_samps
         
-        cols_oi = ['sampleID','cell_line', 'DepMap_ID', 'KD_GENE', 'KD_ENSEMBL', 'experiment', 
+        cols_oi = ['sampleID','cell_line', 'DepMap_ID', 'PERT_GENE', 'PERT_ENSEMBL', 'experiment', 
                    'control_experiment', 'control_samples','replicate']
         metadata = metadata[cols_oi].drop_duplicates()
         
@@ -440,6 +451,124 @@ rule preprocess_encore:
         print("Processing TPM matrix...")
         ## remove vast-tools' suffix
         genexpr.columns = [c.replace('_1','') for c in genexpr.columns]
+        ## log-transform
+        genexpr = np.log2(genexpr + 1)
+        
+        # save
+        print("Saving...")
+        ## metadata
+        metadata.to_csv(output.metadata, **SAVE_PARAMS)
+        
+        ## PSIs
+        psis["EX"].reset_index().to_csv(output.psi_EX, **SAVE_PARAMS)
+        psis["ALTD"].reset_index().to_csv(output.psi_ALTD, **SAVE_PARAMS)
+        psis["ALTA"].reset_index().to_csv(output.psi_ALTA, **SAVE_PARAMS)
+        psis["INT"].reset_index().to_csv(output.psi_INT, **SAVE_PARAMS)
+        
+        ## TPMs
+        genexpr.reset_index().drop(columns='NAME').to_csv(output.genexpr, **SAVE_PARAMS)
+        
+        print("Done!")
+        
+        
+rule preprocess_encoreko:
+    input:
+        metadata = os.path.join(RAW_DIR,'ENCODE','ENCORE','CRISPRKO','metadata','CRISPRKO.tsv'),
+        psi = os.path.join(RAW_DIR,'ENCODE','ENCORE','CRISPRKO','vast_out','PSI-minN_1-minSD_0-noVLOW-min_ALT_use25-Tidy.tab.gz'),
+        genexpr = os.path.join(RAW_DIR,'ENCODE','ENCORE','CRISPRKO','vast_out','TPM-hg38-924.tab.gz')
+    output:
+        metadata = os.path.join(PREP_DIR,'metadata','ENCOREKO.tsv.gz'),
+        psi_EX = os.path.join(PREP_DIR,'event_psi','ENCOREKO-EX.tsv.gz'),
+        psi_ALTA = os.path.join(PREP_DIR,'event_psi','ENCOREKO-ALTA.tsv.gz'),
+        psi_ALTD = os.path.join(PREP_DIR,'event_psi','ENCOREKO-ALTD.tsv.gz'),
+        psi_INT = os.path.join(PREP_DIR,'event_psi','ENCOREKO-INT.tsv.gz'),
+        genexpr = os.path.join(PREP_DIR,'genexpr_tpm','ENCOREKO.tsv.gz')
+    run:
+        import gc
+        import pandas as pd
+        import numpy as np
+        
+        # load
+        print("Loading data...")
+        metadata = pd.read_table(input.metadata)
+        psi = pd.read_table(input.psi, index_col=0)
+        genexpr = pd.read_table(input.genexpr, index_col=[0,1])
+        
+        gc.collect()
+        
+        # metadata
+        print("Processing metadata...")
+        ## sample names
+        metadata["sampleID"] = metadata["dbxrefs"].str.replace("SRA:","")
+        ## cell lines info
+        metadata["cell_line"] = metadata["Biosample term name"]
+        depmapids = {"K562":"ACH-000551", "HepG2":"ACH-000739"}
+        metadata["DepMap_ID"] = [depmapids[c] for c in metadata["cell_line"]]
+        ## perturbation info
+        metadata["PERT_GENE"] = metadata["Experiment target"].str.replace("-human","")
+        gene_annot = genexpr.index.to_frame().rename(columns={"ID":"PERT_ENSEMBL", "NAME":"PERT_GENE"})
+        metadata = pd.merge(metadata, gene_annot, how="left", on="PERT_GENE")
+        metadata["PERT_TYPE"] = "CRISPRKO"
+        ## experiment
+        metadata["experiment"] = metadata["Experiment accession"]
+        ## replicate
+        metadata["replicate"] = metadata["Biological replicate(s)"]
+        
+        ## controls
+        ctls_exps = []
+        ctls_samps = []
+        for idx, row in metadata.iterrows():
+            if isinstance(row["Controlled by"], str):
+                # get file accession controls
+                accs = row["Controlled by"]\
+                        .replace("files","")\
+                        .replace("/","")\
+                        .replace(" ","")\
+                        .split(",")
+                idx = metadata["File accession"].isin(accs)
+
+                # get experiment accession
+                exps = metadata.loc[idx, "experiment"].unique()
+                
+                # get sample accession
+                samps = metadata.loc[idx, "sampleID"].unique()
+                
+                # save
+                exps = ','.join(np.sort(exps))
+                samps = ','.join(np.sort(samps))
+                ctls_exps.append(exps)
+                ctls_samps.append(samps)
+            else:
+                ctls_exps.append(np.nan)
+                ctls_samps.append(np.nan)
+        metadata["control_experiment"] = ctls_exps
+        metadata["control_samples"] = ctls_samps
+        
+        cols_oi = ['sampleID','cell_line', 'DepMap_ID', 'PERT_GENE', 'PERT_ENSEMBL', 'experiment', 
+                   'control_experiment', 'control_samples','replicate']
+        metadata = metadata[cols_oi].drop_duplicates()
+        
+        # PSI
+        print("Processing PSI matrix...")
+        ## drop empty rows
+        is_na = psi.isnull()
+        non_missing = is_na.shape[1] - is_na.sum(1)
+        to_keep = non_missing >= 1
+        psi = psi.loc[to_keep]
+        
+        ## remove vast-tools' suffix
+        psi.columns = [c.replace('_1','') for c in psi.columns]
+        
+        ## split by event type
+        event_types = ["EX","ALTA","ALTD","INT"]
+        psis = {e: psi.loc[psi.index.str.contains(e)] for e in event_types}
+        
+        # TPM
+        print("Processing TPM matrix...")
+        ## remove vast-tools' suffix
+        genexpr.columns = [c.replace('_1','') for c in genexpr.columns]
+        ## log-transform
+        genexpr = np.log2(genexpr + 1)
         
         # save
         print("Saving...")
@@ -460,10 +589,10 @@ rule preprocess_encore:
 
 rule diff_tpm_encore:
     input:
-        metadata = os.path.join(PREP_DIR,'metadata','ENCORE.tsv.gz'),
-        genexpr = os.path.join(RAW_DIR,'ENCODE','ENCORE','vast_out','TPM-hg38-1097.tab.gz')
+        metadata = os.path.join(PREP_DIR,'metadata','{dataset}.tsv.gz'),
+        genexpr = os.path.join(PREP_DIR,'genexpr_tpm','{dataset}.tsv.gz')
     output:
-        diff_tpm = os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE',"{cell_line}",'log2_fold_change_tpm.tsv.gz')
+        diff_tpm = os.path.join(PREP_DIR,'pert_transcriptomes','{dataset}',"{cell_line}",'log2_fold_change_tpm.tsv.gz')
     params:
         cell_line = "{cell_line}"
     run:
@@ -471,15 +600,15 @@ rule diff_tpm_encore:
         import numpy as np
         
         metadata = pd.read_table(input.metadata)
-        genexpr = pd.read_table(input.genexpr, index_col=[0,1])
+        genexpr = pd.read_table(input.genexpr, index_col=0)
         cell_line = params.cell_line
         
         # subset by cell line
         metadata = metadata.loc[metadata["cell_line"]==cell_line].copy()
         
-        # log transform
-        genexpr = np.log2(genexpr + 1)
-        genexpr.columns = [c.replace("_1","") for c in genexpr.columns]
+        # log transform (already done)
+        #genexpr = np.log2(genexpr + 1)
+        #genexpr.columns = [c.replace("_1","") for c in genexpr.columns]
         
         # as the difference between conditions and the mean of the conditions
         diff_tpm = {}
@@ -509,11 +638,11 @@ rule diff_tpm_encore:
         
 rule delta_psi_encore:
     input:
-        metadata = os.path.join(PREP_DIR,'metadata','ENCORE.tsv.gz'),
-        psi = os.path.join(PREP_DIR,'event_psi','ENCORE-{event_type}.tsv.gz')
+        metadata = os.path.join(PREP_DIR,'metadata','{dataset}.tsv.gz'),
+        psi = os.path.join(PREP_DIR,'event_psi','{dataset}-{event_type}.tsv.gz')
     output:
-        delta_psi = os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE','{cell_line}','delta_psi-{event_type}.tsv.gz'),
-        delta_psi_rel = os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE','{cell_line}','delta_psi_rel-{event_type}.tsv.gz')
+        delta_psi = os.path.join(PREP_DIR,'pert_transcriptomes','{dataset}','{cell_line}','delta_psi-{event_type}.tsv.gz'),
+        delta_psi_rel = os.path.join(PREP_DIR,'pert_transcriptomes','{dataset}','{cell_line}','delta_psi_rel-{event_type}.tsv.gz')
     params:
         cell_line = "{cell_line}"
     run:
@@ -567,14 +696,14 @@ rule delta_psi_encore:
         print("Done!")
         
         
-rule prepare_ground_truth_kd_dpsi:
+rule prepare_ground_truth_pert_dpsi:
     input:
-        metadata = os.path.join(PREP_DIR,'metadata','ENCORE.tsv.gz'),
-        dpsi = os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE',"{cell_line}",'{dpsi_type}-{event_type}.tsv.gz'),
+        metadata = os.path.join(PREP_DIR,'metadata','{dataset}.tsv.gz'),
+        dpsi = os.path.join(PREP_DIR,'pert_transcriptomes','{dataset}',"{cell_line}",'{dpsi_type}-{event_type}.tsv.gz'),
     params:
         cell_line = "{cell_line}"
     output:
-        dpsi = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'{dpsi_type}-{event_type}.tsv.gz'),
+        dpsi = os.path.join(PREP_DIR,'ground_truth_pert','{dataset}',"{cell_line}",'{dpsi_type}-{event_type}.tsv.gz'),
     run:
         import pandas as pd
         
@@ -583,14 +712,14 @@ rule prepare_ground_truth_kd_dpsi:
         cell_line = params.cell_line
         
         # drop control samples
-        metadata = metadata.loc[~metadata["KD_ENSEMBL"].isnull()].copy()
+        metadata = metadata.loc[~metadata["PERT_ENSEMBL"].isnull()].copy()
         
         # subset by cell line
         metadata = metadata.loc[metadata["cell_line"]==cell_line].copy()
         
         dpsis = []
-        for ensembl in metadata["KD_ENSEMBL"].unique():
-            samples_oi = metadata.loc[metadata["KD_ENSEMBL"]==ensembl, "sampleID"]
+        for ensembl in metadata["PERT_ENSEMBL"].unique():
+            samples_oi = metadata.loc[metadata["PERT_ENSEMBL"]==ensembl, "sampleID"]
             
             dpsi_avg = dpsi[samples_oi].mean(axis=1)
             dpsi_avg.name = ensembl
@@ -605,10 +734,10 @@ rule prepare_ground_truth_kd_dpsi:
         
 rule mask_dpsi:
     input:
-        delta_psi = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE','{cell_line}','delta_psi-{event_type}.tsv.gz'),
-        delta_psi_tomask = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE','{cell_line}','{dpsi_type}-{event_type}.tsv.gz')
+        delta_psi = os.path.join(PREP_DIR,'ground_truth_pert','{dataset}','{cell_line}','delta_psi-{event_type}.tsv.gz'),
+        delta_psi_tomask = os.path.join(PREP_DIR,'ground_truth_pert','{dataset}','{cell_line}','{dpsi_type}-{event_type}.tsv.gz')
     output:
-        os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'{dpsi_type}-{event_type}-masked.tsv.gz')
+        os.path.join(PREP_DIR,'ground_truth_pert','{dataset}',"{cell_line}",'{dpsi_type}-{event_type}-masked.tsv.gz')
     params:
         thresh = -1
     run:
@@ -629,30 +758,30 @@ rule mask_dpsi:
         print("Done!")
         
         
-rule prepare_ground_truth_kd_logFCtpm:
+rule prepare_ground_truth_pert_logFCtpm:
     input:
-        metadata = os.path.join(PREP_DIR,'metadata','ENCORE.tsv.gz'),
-        diff_tpm = os.path.join(PREP_DIR,'kd_transcriptomes','ENCORE',"{cell_line}",'log2_fold_change_tpm.tsv.gz')
+        metadata = os.path.join(PREP_DIR,'metadata','{dataset}.tsv.gz'),
+        diff_tpm = os.path.join(PREP_DIR,'pert_transcriptomes','{dataset}',"{cell_line}",'log2_fold_change_tpm.tsv.gz')
     params:
         cell_line = "{cell_line}"
     output:
-        diff_tpm = os.path.join(PREP_DIR,'ground_truth_kd','ENCORE',"{cell_line}",'log2_fold_change_tpm.tsv.gz')
+        diff_tpm = os.path.join(PREP_DIR,'ground_truth_pert','{dataset}',"{cell_line}",'log2_fold_change_tpm.tsv.gz')
     run:
         import pandas as pd
         
         metadata = pd.read_table(input.metadata)
-        diff_tpm = pd.read_table(input.diff_tpm, index_col=0).drop(columns=["NAME"])
+        diff_tpm = pd.read_table(input.diff_tpm, index_col=0)
         cell_line = params.cell_line
         
         # drop control samples
-        metadata = metadata.loc[~metadata["KD_ENSEMBL"].isnull()].copy()
+        metadata = metadata.loc[~metadata["PERT_ENSEMBL"].isnull()].copy()
         
         # subset by cell line
         metadata = metadata.loc[metadata["cell_line"]==cell_line].copy()
         
         diff_tpms = []
-        for ensembl in metadata["KD_ENSEMBL"].unique():
-            samples_oi = metadata.loc[metadata["KD_ENSEMBL"]==ensembl, "sampleID"]
+        for ensembl in metadata["PERT_ENSEMBL"].unique():
+            samples_oi = metadata.loc[metadata["PERT_ENSEMBL"]==ensembl, "sampleID"]
             
             diff_tpm_avg = diff_tpm[samples_oi].mean(axis=1)
             diff_tpm_avg.name = ensembl
