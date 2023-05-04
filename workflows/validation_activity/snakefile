@@ -10,45 +10,98 @@ RAW_DIR = os.path.join(ROOT,"data","raw")
 PREP_DIR = os.path.join(ROOT,"data","prep")
 SUPPORT_DIR = os.path.join(ROOT,"support")
 RESULTS_DIR = os.path.join(ROOT,"results","validation_activity")
-REGINF_DIR = os.path.join(ROOT,"results","regulon_inference")
-REGEVAL_DIR = os.path.join(ROOT,"results","regulon_evaluation")
 SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
 
 THRESHS_DPSI = {
-    "morethan": [0,2.5,5,10,15,20,25,30,35],
-    "lessthan": [  2.5,5,10,15,20,25,30,35,101]
+    "morethan": [0,5,10,15,20,25,30,35],
+    "lessthan": [  5,10,15,20,25,30,35,101]
 }
 THRESH_TYPES = ["lessthan","morethan"]
 
-REGULONS = {
-    "ENCORE_HepG2": os.path.join(REGINF_DIR,"files","regulons","pert_rnaseq","ENCORE","HepG2","delta_psi-EX.tsv.gz"),
-    "ENCORE_K562": os.path.join(REGINF_DIR,"files","regulons","pert_rnaseq","ENCORE","K562","delta_psi-EX.tsv.gz")
-}
-
 CELL_LINES = ["K562","HepG2"]
+ENCORE_DATASETS = ["ENCOREKD","ENCOREKO"]
+REGULONS = {
+    "ENCOREKD_HepG2": os.path.join(RESULTS_DIR,"files","regulons","pert_rnaseq","ENCOREKD","HepG2","delta_psi-EX.tsv.gz"),
+    "ENCOREKD_K562": os.path.join(RESULTS_DIR,"files","regulons","pert_rnaseq","ENCOREKD","K562","delta_psi-EX.tsv.gz"),
+    "ENCOREKO_HepG2": os.path.join(RESULTS_DIR,"files","regulons","pert_rnaseq","ENCOREKO","HepG2","delta_psi-EX.tsv.gz"),
+    "ENCOREKO_K562": os.path.join(RESULTS_DIR,"files","regulons","pert_rnaseq","ENCOREKO","K562","delta_psi-EX.tsv.gz")
+}
 
 ##### RULES #####
 rule all:
-    input:
+    input:        
+        # make regulons
+        expand(os.path.join(RESULTS_DIR,"files","regulons","pert_rnaseq","{dataset}","{cell_line}","delta_psi-EX.tsv.gz"), dataset=ENCORE_DATASETS, cell_line=CELL_LINES),
+
         # evaluate ENCORE KD ground truth
         ## subset regulons with different dPSI thresholds
         expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","regulons","{dataset}","dpsi_lessthan_{thresh}.tsv.gz"), dataset=REGULONS.keys(), thresh=THRESHS_DPSI["lessthan"]),
         expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","regulons","{dataset}","dpsi_morethan_{thresh}.tsv.gz"), dataset=REGULONS.keys(), thresh=THRESHS_DPSI["morethan"]),
-        
+
         ## infer protein activities with those networks
-        expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","{dataset}","{cell_line}-dpsi_{thresh_type}_{thresh}.tsv.gz"), dataset=REGULONS.keys(), cell_line=CELL_LINES, thresh=THRESHS_DPSI["lessthan"], thresh_type="lessthan"),
-        expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","{dataset}","{cell_line}-dpsi_{thresh_type}_{thresh}.tsv.gz"), dataset=REGULONS.keys(), cell_line=CELL_LINES, thresh=THRESHS_DPSI["morethan"], thresh_type="morethan"),
-        
+        expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","{dataset_regulon}","{dataset_signature}-{cell_line}-dpsi_{thresh_type}_{thresh}.tsv.gz"), dataset_regulon=REGULONS.keys(), dataset_signature=ENCORE_DATASETS, cell_line=CELL_LINES, thresh=THRESHS_DPSI["lessthan"], thresh_type="lessthan"),
+        expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","{dataset_regulon}","{dataset_signature}-{cell_line}-dpsi_{thresh_type}_{thresh}.tsv.gz"), dataset_regulon=REGULONS.keys(), dataset_signature=ENCORE_DATASETS, cell_line=CELL_LINES, thresh=THRESHS_DPSI["morethan"], thresh_type="morethan"),
+
         ## combine inferred protein activities
         os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","merged.tsv.gz"),
-        
+
         ## evaluate inferred protein activities
         os.path.join(RESULTS_DIR,"files","subsetted_regulons","evaluation_rankings.tsv.gz"),
         os.path.join(RESULTS_DIR,"files","subsetted_regulons","evaluation_corrs.tsv.gz"),
-        
+
         # save selected regulons
-        expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","regulons_selected","{dataset}-dpsi_morethan_15.tsv.gz"), dataset=REGULONS.keys())
+        expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","regulons_selected","{dataset}-dpsi_morethan_15.tsv.gz"), dataset=REGULONS.keys()),
         
+        # figures evaluation networks
+        os.path.join(RESULTS_DIR,'figures','evaluation')
+        
+        
+rule regulons_pert_rnaseq:
+    input:
+        perts = os.path.join(PREP_DIR,'ground_truth_pert','{dataset}',"{cell_line}",'delta_psi-EX.tsv.gz'),
+        regulators = os.path.join(SUPPORT_DIR,"splicing_factors.tsv")
+    output:
+        os.path.join(RESULTS_DIR,"files","regulons","pert_rnaseq","{dataset}","{cell_line}","delta_psi-EX.tsv.gz")
+    params:
+        dpsi_type = "delta_psi-EX"
+    run:
+        import pandas as pd
+        import numpy as np
+        
+        # load
+        perts = pd.read_table(input.perts, index_col=0)
+        regulators = pd.read_table(input.regulators)
+        dpsi_type = params.dpsi_type
+        
+        # subset
+        idx = regulators["source"].isin(["Rogalska2022","Hegele2012","hand-curated"])
+        regulators = regulators.loc[idx]
+        common_regulators = set(perts.columns).intersection(regulators["ENSEMBL"])
+        perts = perts[common_regulators].copy()
+        
+        # prep regulators
+        regulators = regulators[["GENE","ENSEMBL"]]
+        
+        # prep perturbations
+        perts.index.name = "EVENT"
+        perts = perts.melt(
+            ignore_index=False, var_name="ENSEMBL", value_name=dpsi_type
+        ).dropna().reset_index().copy()
+        
+        # add gene symbols
+        perts = pd.merge(perts, regulators, on="ENSEMBL", how="left")
+        
+        # format
+        perts["regulator"] = perts["ENSEMBL"]
+        perts["target"] = perts["EVENT"]
+        perts["likelihood"] = np.abs(perts[dpsi_type])
+        perts["tfmode"] = (-1)*np.sign(perts[dpsi_type]) # they come from KD or KO, decrease activity
+        
+        # save
+        perts.to_csv(output[0], **SAVE_PARAMS)
+        
+        print("Done!")
+
         
 rule subset_regulons_lessthan:
     input:
@@ -92,10 +145,10 @@ rule subset_regulons_morethan:
         
 rule compute_protein_activity:
     input:
-        signature = os.path.join(PREP_DIR,"ground_truth_kd","ENCORE","{cell_line}","delta_psi-EX-masked.tsv.gz"),
-        regulons = os.path.join(RESULTS_DIR,"files","subsetted_regulons","regulons","{dataset}","dpsi_{thresh_type}_{thresh}.tsv.gz")
+        signature = os.path.join(PREP_DIR,"ground_truth_pert","{dataset_signature}","{cell_line}","delta_psi-EX.tsv.gz"),
+        regulons = os.path.join(RESULTS_DIR,"files","subsetted_regulons","regulons","{dataset_regulon}","dpsi_{thresh_type}_{thresh}.tsv.gz")
     output:
-        os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","{dataset}","{cell_line}-dpsi_{thresh_type}_{thresh}.tsv.gz")
+        os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","{dataset_regulon}","{dataset_signature}-{cell_line}-dpsi_{thresh_type}_{thresh}.tsv.gz")
     params:
         assoc_method = "ground_truth",
         actinf_method = "viper"
@@ -113,11 +166,11 @@ rule compute_protein_activity:
 rule combine_inferred_protein_activities:
     input:
         protein_activities = [
-            os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","{dataset}","{cell_line}-dpsi_{thresh_type}_{thresh}.tsv.gz").format(dataset=dataset, cell_line=cell_line, thresh_type="lessthan", thresh=thresh) for
-            dataset in REGULONS.keys() for cell_line in CELL_LINES for thresh in THRESHS_DPSI["lessthan"]
+            os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","{dataset_regulon}","{dataset_signature}-{cell_line}-dpsi_{thresh_type}_{thresh}.tsv.gz").format(dataset_regulon=dataset_regulon, dataset_signature=dataset_signature, cell_line=cell_line, thresh_type="lessthan", thresh=thresh) for
+            dataset_regulon in REGULONS.keys() for dataset_signature in ENCORE_DATASETS for cell_line in CELL_LINES for thresh in THRESHS_DPSI["lessthan"]
         ] + [
-            os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","{dataset}","{cell_line}-dpsi_{thresh_type}_{thresh}.tsv.gz").format(dataset=dataset, cell_line=cell_line, thresh_type="morethan", thresh=thresh) for
-            dataset in REGULONS.keys() for cell_line in CELL_LINES for thresh in THRESHS_DPSI["morethan"]
+            os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","{dataset_regulon}","{dataset_signature}-{cell_line}-dpsi_{thresh_type}_{thresh}.tsv.gz").format(dataset_regulon=dataset_regulon, dataset_signature=dataset_signature, cell_line=cell_line, thresh_type="morethan", thresh=thresh) for
+            dataset_regulon in REGULONS.keys() for dataset_signature in ENCORE_DATASETS for cell_line in CELL_LINES for thresh in THRESHS_DPSI["morethan"]
         ]
     output:
         os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","merged.tsv.gz")
@@ -127,15 +180,17 @@ rule combine_inferred_protein_activities:
         
         dfs = []
         for file in input.protein_activities:
-            dataset = os.path.basename(os.path.dirname(file))
-            cell_line = os.path.basename(file).split("-")[0]
-            thresh_type = os.path.basename(file).split("-")[1].replace(".tsv.gz","").split("_")[1]
-            thresh = os.path.basename(file).split("-")[1].replace(".tsv.gz","").split("_")[2]
+            dataset_regulon = os.path.basename(os.path.dirname(file))
+            dataset_signature = os.path.basename(file).split("-")[0]
+            cell_line = os.path.basename(file).split("-")[1]
+            thresh_type = os.path.basename(file).split("-")[2].replace(".tsv.gz","").split("_")[1]
+            thresh = os.path.basename(file).split("-")[2].replace(".tsv.gz","").split("_")[2]
             
             df = pd.read_table(file)
-            df = df.melt(id_vars="regulator", var_name="KD", value_name="protein_activity")
+            df = df.melt(id_vars="regulator", var_name="PERT_GENE", value_name="protein_activity")
             
-            df["regulon"] = dataset
+            df["dataset_regulon"] = dataset_regulon
+            df["dataset_signature"] = dataset_signature
             df["cell_line"] = cell_line
             df["thresh_type"] = thresh_type
             df["thresh"] = float(thresh)
@@ -161,27 +216,27 @@ rule evaluate_regulons:
         
         df = pd.read_table(input.protein_activity)
         
-        vars_oi = ["thresh_type","thresh","regulon","cell_line"]
+        vars_oi = ["thresh_type","thresh","dataset_regulon","dataset_signature","cell_line"]
         
-        # ranking of KD across experiments
+        # ranking of perturbations across experiments
         df["ranking_between"] = df.groupby(vars_oi + ["regulator"])["protein_activity"].rank()
         df["rankperc_between"] = df["ranking_between"] / df.groupby(vars_oi + ["regulator"])["ranking_between"].transform('max')
-        # ranking of KD within experiments
-        df["ranking_within"] = df.groupby(vars_oi + ["KD"])["protein_activity"].rank()
-        df["rankperc_within"] = df["ranking_within"] / df.groupby(vars_oi + ["KD"])["ranking_within"].transform('max')
+        # ranking of perturbations within experiments
+        df["ranking_within"] = df.groupby(vars_oi + ["PERT_GENE"])["protein_activity"].rank()
+        df["rankperc_within"] = df["ranking_within"] / df.groupby(vars_oi + ["PERT_GENE"])["ranking_within"].transform('max')
         df["eval_type"] = "real"
         # correlation between protein activities in both cell lines and regulons
         corrs = []
-        for regulon in df["regulon"].unique():
-            idx = (df["regulon"]==regulon) & (df["regulator"]==df["KD"])
+        for regulon in df["dataset_regulon"].unique():
+            idx = (df["dataset_regulon"]==regulon) & (df["regulator"]==df["PERT_GENE"])
             X = df.loc[idx].pivot(
-                index=["thresh_type","thresh","regulon","regulator","KD"],
+                index=["thresh_type","thresh","dataset_regulon","dataset_signature","regulator","PERT_GENE"],
                 columns="cell_line",
                 values="protein_activity"
             )
-            pearson_coef = X.reset_index().groupby(["thresh_type","thresh","regulon"])[["HepG2","K562"]].corr(method="pearson").iloc[0::2,-1]
+            pearson_coef = X.reset_index().groupby(["thresh_type","thresh","dataset_regulon","dataset_signature"])[["HepG2","K562"]].corr(method="pearson").iloc[0::2,-1]
             pearson_coef.name = "pearson_coef"
-            spearman_coef = X.reset_index().groupby(["thresh_type","thresh","regulon"])[["HepG2","K562"]].corr(method="spearman").iloc[0::2,-1]
+            spearman_coef = X.reset_index().groupby(["thresh_type","thresh","dataset_regulon","dataset_signature"])[["HepG2","K562"]].corr(method="spearman").iloc[0::2,-1]
             spearman_coef.name = "spearman_coef"
             corrs.append(
                 pd.concat([pearson_coef, spearman_coef], axis=1).reset_index()
@@ -195,34 +250,34 @@ rule evaluate_regulons:
         evaluation_corrs = corrs.copy()
 
         # randomize
-        df["protein_activity"] = df.groupby(vars_oi + ["KD"])["protein_activity"].sample(frac=1, random_state=1).values
-        # ranking of KD across experiments
+        df["protein_activity"] = df.groupby(vars_oi + ["PERT_GENE"])["protein_activity"].sample(frac=1, random_state=1).values
+        # ranking of perturbation across experiments
         df["ranking_between"] = df.groupby(vars_oi + ["regulator"])["protein_activity"].rank()
         df["rankperc_between"] = df["ranking_between"] / df.groupby(vars_oi + ["regulator"])["ranking_between"].transform('max')
-        # ranking of KD within experiments
-        df["ranking_within"] = df.groupby(vars_oi + ["KD"])["protein_activity"].rank()
-        df["rankperc_within"] = df["ranking_within"] / df.groupby(vars_oi + ["KD"])["ranking_within"].transform('max')
+        # ranking of perturbation within experiments
+        df["ranking_within"] = df.groupby(vars_oi + ["PERT_GENE"])["protein_activity"].rank()
+        df["rankperc_within"] = df["ranking_within"] / df.groupby(vars_oi + ["PERT_GENE"])["ranking_within"].transform('max')
         # add ranking type
         df["eval_type"] = "random"
         # correlation between protein activities in both cell lines and regulons
         corrs = []
-        for regulon in df["regulon"].unique():
-            idx = (df["regulon"]==regulon) & (df["regulator"]==df["KD"])
+        for regulon in df["dataset_regulon"].unique():
+            idx = (df["dataset_regulon"]==regulon) & (df["regulator"]==df["PERT_GENE"])
             X = df.loc[idx].pivot(
-                index=["thresh_type","thresh","regulon","regulator","KD"],
+                index=["thresh_type","thresh","dataset_regulon","dataset_signature","regulator","PERT_GENE"],
                 columns="cell_line",
                 values="protein_activity"
             )
-            pearson_coef = X.reset_index().groupby(["thresh_type","thresh","regulon"])[["HepG2","K562"]].corr(method="pearson").iloc[0::2,-1]
+            pearson_coef = X.reset_index().groupby(["thresh_type","thresh","dataset_regulon","dataset_signature"])[["HepG2","K562"]].corr(method="pearson").iloc[0::2,-1]
             pearson_coef.name = "pearson_coef"
-            spearman_coef = X.reset_index().groupby(["thresh_type","thresh","regulon"])[["HepG2","K562"]].corr(method="spearman").iloc[0::2,-1]
+            spearman_coef = X.reset_index().groupby(["thresh_type","thresh","dataset_regulon","dataset_signature"])[["HepG2","K562"]].corr(method="spearman").iloc[0::2,-1]
             spearman_coef.name = "spearman_coef"
             corrs.append(
                 pd.concat([pearson_coef, spearman_coef], axis=1).reset_index()
             )
         corrs = pd.concat(corrs)
         corrs["cell_line"] = "HepG2_vs_K562"
-        corrs["eval_type"] = "random"        
+        corrs["eval_type"] = "random"
         
         # store
         evaluation_rankings = pd.concat([evaluation_rankings, df])
@@ -234,6 +289,7 @@ rule evaluate_regulons:
         
         print("Done!")
 
+        
 rule selected_regulons:
     input:
         regulons = os.path.join(RESULTS_DIR,"files","subsetted_regulons","regulons","{dataset}","dpsi_morethan_15.tsv.gz")
@@ -246,4 +302,19 @@ rule selected_regulons:
         cp {input.regulons} {output.regulons}
         
         echo "Done!"
+        """
+
+
+rule figures_validation_activity_encore:
+    input:
+        evaluation_rankings = os.path.join(RESULTS_DIR,"files","subsetted_regulons","evaluation_rankings.tsv.gz"),
+        evaluation_corrs = os.path.join(RESULTS_DIR,"files","subsetted_regulons","evaluation_corrs.tsv.gz")
+    output:
+        directory(os.path.join(RESULTS_DIR,'figures','evaluation'))
+    shell:
+        """
+        Rscript scripts/figures_evaluation_activity_encore.R \
+                    --evaluation_rankings_file={input.evaluation_rankings} \
+                    --evaluation_corrs_file={input.evaluation_corrs} \
+                    --figs_dir={output}
         """
