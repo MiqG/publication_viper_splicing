@@ -35,7 +35,10 @@ rule all:
         os.path.join(RESULTS_DIR,"files","protein_activity_vs_demeter2","CCLE.tsv.gz"),
         
         # associate SF 
-        os.path.join(RESULTS_DIR,"files","protein_activity_vs_metmap","CCLE.tsv.gz")
+        os.path.join(RESULTS_DIR,"files","protein_activity_vs_metmap","CCLE.tsv.gz"),
+        
+        # figures
+        os.path.join(RESULTS_DIR,"figures","activity_ccle")
 
         
 rule compute_signature:
@@ -178,3 +181,17 @@ rule associate_sf_activities_to_metastatic_potential:
         
         print("Done!")
         
+        
+rule figures_activity_assocs_ccle:
+    input:
+        assocs_gene_dependency = os.path.join(RESULTS_DIR,"files","protein_activity_vs_demeter2","CCLE.tsv.gz"),
+        assocs_metastasis = os.path.join(RESULTS_DIR,"files","protein_activity_vs_metmap","CCLE.tsv.gz")
+    output:
+        directory(os.path.join(RESULTS_DIR,"figures","activity_ccle"))
+    shell:
+        """
+        Rscript scripts/figures_activity_assocs_ccle.R \
+                    --assocs_gene_dependency_file={input.assocs_gene_dependency} \
+                    --assocs_metastasis_file={input.assocs_metastasis} \
+                    --figs_dir={output}
+        """
