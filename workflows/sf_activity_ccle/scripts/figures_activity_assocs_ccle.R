@@ -88,7 +88,7 @@ plot_assocs_gene_dependency = function(assocs_gene_dependency){
             size=FONT_SIZE, family=FONT_FAMILY, segment.size=0.1
         ) +
         theme_pubr() +
-        theme(aspect.ratio=1)
+        theme(aspect.ratio=1) +
         labs(x="Ranking", y="Spearman Coef.")
     
     return(plts)

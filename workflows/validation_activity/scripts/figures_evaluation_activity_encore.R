@@ -54,48 +54,40 @@ plot_evaluation = function(evaluation_rankings, evaluation_corrs){
     #         labs(x="|DeltaPSI| Threshold", y="Ranking Between", fill="Ranking Type")
     
     # rankings between samples
-    plts[["evaluation-ranking_between-lessthan-violin"]] = evaluation_rankings %>%
+    plts[["evaluation-ranking_between-lessthan-box"]] = evaluation_rankings %>%
         filter(regulator==PERT_GENE & thresh_type=="lessthan") %>%
         mutate(thresh = sprintf("<=%s",thresh)) %>%
-        ggviolin(x="thresh", y="ranking_between", fill="eval_type", color=NA,
-                 position=position_dodge(0.9), trim=TRUE) +
-        geom_boxplot(aes(fill=eval_type), width=0.1, outlier.size=0.1, position=position_dodge(0.9)) +
+        ggboxplot(x="thresh", y="ranking_between", fill="eval_type", width=0.5, outlier.size=0.1) +
         fill_palette(PAL_DUAL) +
         theme_pubr(x.text.angle=70) +
         facet_wrap(~dataset_regulon+dataset_signature+cell_line) +
         theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         labs(x="|DeltaPSI| Threshold", y="Ranking Between", fill="Ranking Type")
     
-    plts[["evaluation-rankperc_between-lessthan-violin"]] = evaluation_rankings %>%
+    plts[["evaluation-rankperc_between-lessthan-box"]] = evaluation_rankings %>%
         filter(regulator==PERT_GENE & thresh_type=="lessthan") %>%
         mutate(thresh = sprintf("<=%s",thresh)) %>%
-        ggviolin(x="thresh", y="rankperc_between", fill="eval_type", color=NA,
-                 position=position_dodge(0.9), trim=TRUE) +
-        geom_boxplot(aes(fill=eval_type), width=0.1, outlier.size=0.1, position=position_dodge(0.9)) +
+        ggboxplot(x="thresh", y="rankperc_between", fill="eval_type", width=0.5, outlier.size=0.1) +
         fill_palette(PAL_DUAL) +
         theme_pubr(x.text.angle=70) +
         facet_wrap(~dataset_regulon+dataset_signature+cell_line) +
         theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         labs(x="|DeltaPSI| Threshold", y="Ranking Between %", fill="Ranking Type")
     
-    plts[["evaluation-ranking_between-morethan-violin"]] = evaluation_rankings %>%
+    plts[["evaluation-ranking_between-morethan-box"]] = evaluation_rankings %>%
         filter(regulator==PERT_GENE & thresh_type=="morethan") %>%
         mutate(thresh = sprintf(">=%s",thresh)) %>%
-        ggviolin(x="thresh", y="ranking_between", fill="eval_type", color=NA,
-                 position=position_dodge(0.9), trim=TRUE) +
-        geom_boxplot(aes(fill=eval_type), width=0.1, outlier.size=0.1, position=position_dodge(0.9)) +
+        ggboxplot(x="thresh", y="ranking_between", fill="eval_type", width=0.5, outlier.size=0.1) +
         fill_palette(PAL_DUAL) +
         theme_pubr(x.text.angle=70) +
         facet_wrap(~dataset_regulon+dataset_signature+cell_line) +
         theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         labs(x="|DeltaPSI| Threshold", y="Ranking Between", fill="Ranking Type")
     
-    plts[["evaluation-rankperc_between-morethan-violin"]] = evaluation_rankings %>%
+    plts[["evaluation-rankperc_between-morethan-box"]] = evaluation_rankings %>%
         filter(regulator==PERT_GENE & thresh_type=="morethan") %>%
         mutate(thresh = sprintf(">=%s",thresh)) %>%
-        ggviolin(x="thresh", y="rankperc_between", fill="eval_type", color=NA,
-                 position=position_dodge(0.9), trim=TRUE) +
-        geom_boxplot(aes(fill=eval_type), width=0.1, outlier.size=0.1, position=position_dodge(0.9)) +
+        ggboxplot(x="thresh", y="rankperc_between", fill="eval_type", width=0.5, outlier.size=0.1) +
         fill_palette(PAL_DUAL) +
         theme_pubr(x.text.angle=70) +
         facet_wrap(~dataset_regulon+dataset_signature+cell_line) +
@@ -103,48 +95,40 @@ plot_evaluation = function(evaluation_rankings, evaluation_corrs){
         labs(x="|DeltaPSI| Threshold", y="Ranking Between %", fill="Ranking Type")
     
     # rankings within samples
-    plts[["evaluation-ranking_within-lessthan-violin"]] = evaluation_rankings %>%
+    plts[["evaluation-ranking_within-lessthan-box"]] = evaluation_rankings %>%
         filter(regulator==PERT_GENE & thresh_type=="lessthan") %>%
         mutate(thresh = sprintf("<=%s",thresh)) %>%
-        ggviolin(x="thresh", y="ranking_within", fill="eval_type", color=NA,
-                 position=position_dodge(0.9), trim=TRUE) +
-        geom_boxplot(aes(fill=eval_type), width=0.1, outlier.size=0.1, position=position_dodge(0.9)) +
+        ggboxplot(x="thresh", y="ranking_within", fill="eval_type", width=0.5, outlier.size=0.1) +
         fill_palette(PAL_DUAL) +
         theme_pubr(x.text.angle=70) +
         facet_wrap(~dataset_regulon+dataset_signature+cell_line) +
         theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         labs(x="|DeltaPSI| Threshold", y="Ranking Within", fill="Ranking Type")
     
-    plts[["evaluation-rankperc_within-lessthan-violin"]] = evaluation_rankings %>%
+    plts[["evaluation-rankperc_within-lessthan-box"]] = evaluation_rankings %>%
         filter(regulator==PERT_GENE & thresh_type=="lessthan") %>%
         mutate(thresh = sprintf("<=%s",thresh)) %>%
-        ggviolin(x="thresh", y="rankperc_within", fill="eval_type", color=NA,
-                 position=position_dodge(0.9), trim=TRUE) +
-        geom_boxplot(aes(fill=eval_type), width=0.1, outlier.size=0.1, position=position_dodge(0.9)) +
+        ggboxplot(x="thresh", y="rankperc_within", fill="eval_type", width=0.5, outlier.size=0.1) +
         fill_palette(PAL_DUAL) +
         theme_pubr(x.text.angle=70) +
         facet_wrap(~dataset_regulon+dataset_signature+cell_line) +
         theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         labs(x="|DeltaPSI| Threshold", y="Ranking Within %", fill="Ranking Type")
     
-    plts[["evaluation-ranking_within-morethan-violin"]] = evaluation_rankings %>%
+    plts[["evaluation-ranking_within-morethan-box"]] = evaluation_rankings %>%
         filter(regulator==PERT_GENE & thresh_type=="morethan") %>%
         mutate(thresh = sprintf(">=%s",thresh)) %>%
-        ggviolin(x="thresh", y="ranking_within", fill="eval_type", color=NA,
-                 position=position_dodge(0.9), trim=TRUE) +
-        geom_boxplot(aes(fill=eval_type), width=0.1, outlier.size=0.1, position=position_dodge(0.9)) +
+        ggboxplot(x="thresh", y="ranking_within", fill="eval_type", width=0.5, outlier.size=0.1) +
         fill_palette(PAL_DUAL) +
         theme_pubr(x.text.angle=70) +
         facet_wrap(~dataset_regulon+dataset_signature+cell_line) +
         theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         labs(x="|DeltaPSI| Threshold", y="Ranking Within", fill="Ranking Type")
     
-    plts[["evaluation-rankperc_within-morethan-violin"]] = evaluation_rankings %>%
+    plts[["evaluation-rankperc_within-morethan-box"]] = evaluation_rankings %>%
         filter(regulator==PERT_GENE & thresh_type=="morethan") %>%
         mutate(thresh = sprintf(">=%s",thresh)) %>%
-        ggviolin(x="thresh", y="rankperc_within", fill="eval_type", color=NA,
-                 position=position_dodge(0.9), trim=TRUE) +
-        geom_boxplot(aes(fill=eval_type), width=0.1, outlier.size=0.1, position=position_dodge(0.9)) +
+        ggboxplot(x="thresh", y="rankperc_within", fill="eval_type", width=0.5, outlier.size=0.1) +
         fill_palette(PAL_DUAL) +
         theme_pubr(x.text.angle=70) +
         facet_wrap(~dataset_regulon+dataset_signature+cell_line) +
@@ -213,14 +197,14 @@ save_plt = function(plts, plt_name, extension='.pdf',
 
 
 save_plots = function(plts, figs_dir){
-    save_plt(plts, "evaluation-ranking_between-lessthan-violin", '.pdf', figs_dir, width=15, height=30)
-    save_plt(plts, "evaluation-rankperc_between-lessthan-violin", '.pdf', figs_dir, width=15, height=30)
-    save_plt(plts, "evaluation-ranking_between-morethan-violin", '.pdf', figs_dir, width=15, height=30)
-    save_plt(plts, "evaluation-rankperc_between-morethan-violin", '.pdf', figs_dir, width=15, height=30)
-    save_plt(plts, "evaluation-ranking_within-lessthan-violin", '.pdf', figs_dir, width=15, height=30)
-    save_plt(plts, "evaluation-rankperc_within-lessthan-violin", '.pdf', figs_dir, width=15, height=30)
-    save_plt(plts, "evaluation-ranking_within-morethan-violin", '.pdf', figs_dir, width=15, height=30)
-    save_plt(plts, "evaluation-rankperc_within-morethan-violin", '.pdf', figs_dir, width=15, height=30)
+    save_plt(plts, "evaluation-ranking_between-lessthan-box", '.pdf', figs_dir, width=25, height=35)
+    save_plt(plts, "evaluation-rankperc_between-lessthan-box", '.pdf', figs_dir, width=25, height=35)
+    save_plt(plts, "evaluation-ranking_between-morethan-box", '.pdf', figs_dir, width=25, height=35)
+    save_plt(plts, "evaluation-rankperc_between-morethan-box", '.pdf', figs_dir, width=25, height=35)
+    save_plt(plts, "evaluation-ranking_within-lessthan-box", '.pdf', figs_dir, width=25, height=35)
+    save_plt(plts, "evaluation-rankperc_within-lessthan-box", '.pdf', figs_dir, width=25, height=35)
+    save_plt(plts, "evaluation-ranking_within-morethan-box", '.pdf', figs_dir, width=25, height=35)
+    save_plt(plts, "evaluation-rankperc_within-morethan-box", '.pdf', figs_dir, width=25, height=35)
     save_plt(plts, "evaluation-corrs-lessthan-bar", '.pdf', figs_dir, width=15, height=30)
     save_plt(plts, "evaluation-corrs-morethan-bar", '.pdf', figs_dir, width=15, height=30)
 }
