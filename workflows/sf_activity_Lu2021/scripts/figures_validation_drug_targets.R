@@ -22,7 +22,7 @@ FONT_SIZE = 2 # for additional labels
 FONT_FAMILY = "Arial"
 
 PAL_DARK = "darkgrey"
-PAL_ACCENT = "orange"
+PAL_ACCENT = "darkred"
 PAL_DUAL = c(PAL_DARK, PAL_ACCENT)
 PAL_CONTRAST = c("darkgrey","darkred")
 PAL_CELL_LINES = "Dark2"
@@ -47,11 +47,12 @@ plot_genexpr_gene_oi = function(genexpr, metadata, gene_oi){
     X = genexpr %>%
         filter(ID == gene_oi) %>%
         pivot_longer(-ID, names_to="sampleID", values_to="genexpr_tpm") %>%
-        left_join(metadata, by="sampleID")
+        left_join(metadata, by="sampleID") %>%
+        drop_na(condition)
     
     plts[["genexpr-box"]] = X %>%
         ggplot(aes(x=condition, y=genexpr_tpm)) +
-        geom_point(aes(color=cell_line_name), position=position_jitter(0.1)) +
+        geom_point(aes(color=cell_line_name), position=position_jitter(0.1), size=1) +
         geom_boxplot(fill=NA, width=0.25, outlier.size=0.1) +
         color_palette(PAL_CELL_LINES) +
         theme_pubr() +
@@ -70,16 +71,36 @@ plot_activity_gene_oi = function(protein_activity, metadata, gene_oi){
     X = protein_activity %>%
         filter(regulator == gene_oi) %>%
         pivot_longer(-regulator, names_to="sampleID", values_to="activity") %>%
-        left_join(metadata, by="sampleID")
+        left_join(metadata, by="sampleID") %>%
+        drop_na(condition)
     
     plts[["activity-box"]] = X %>%
         ggplot(aes(x=condition, y=activity)) +
-        geom_point(aes(color=cell_line_name), position=position_jitter(0.1)) +
+        geom_point(aes(color=cell_line_name), position=position_jitter(0.1), size=1) +
         geom_boxplot(fill=NA, width=0.25, outlier.size=0.1) +
         color_palette(PAL_CELL_LINES) +
         theme_pubr() +
         stat_compare_means(method="t.test", label="p.signif", size=FONT_SIZE, family=FONT_FAMILY, ref.group="DMSO") + 
         labs(x="Condition", y="Protein Activity", color="Cell Line", subtitle=gene_oi)
+    
+    X = protein_activity %>%
+        pivot_longer(-regulator, names_to="sampleID", values_to="activity") %>%
+        left_join(metadata, by="sampleID") %>%
+        drop_na(condition) %>%
+        group_by(sampleID) %>%
+        arrange(activity) %>%
+        mutate(activity_ranking = row_number()) %>%
+        ungroup() %>%
+        mutate(is_regulator_oi = regulator==gene_oi)
+    
+    plts[["activity-ranking-scatter"]] = X %>%
+        ggplot(aes(x=activity_ranking, y=activity)) +
+        geom_scattermore(data = . %>% filter(!is_regulator_oi), pixels=c(1000,1000), pointsize=4, color=PAL_DARK, alpha=0.5) +
+        geom_scattermore(data = . %>% filter(is_regulator_oi), pixels=c(1000,1000), pointsize=5, color=PAL_ACCENT) +
+        theme_pubr() +
+        facet_wrap(~condition) +
+        theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Ranking", y="Protein Activity", color=sprintf("Is %s", gene_oi))
     
     names(plts) = sprintf("%s-%s",names(plts),gene_oi)
     
@@ -98,9 +119,10 @@ make_plots = function(genexpr, protein_activity, metadata){
 
 make_figdata = function(genexpr, protein_activity, metadata){
     figdata = list(
-        "assocs_evaluation" = list(
-            "associations" = assocs,
-            "summary_statisitcs" = summary_stats,
+        "validation_drug_target_activity" = list(
+            "genexpr" = genexpr,
+            "protein_activity" = protein_activity,
+            "metadata" = metadata
         )
     )
     return(figdata)
@@ -123,7 +145,9 @@ save_plt = function(plts, plt_name, extension='.pdf',
 
 
 save_plots = function(plts, figs_dir){
-    save_plt(plts, "examples-high_mi_vs_low_spear-scatter", '.pdf', figs_dir, width=4, height=4)
+    save_plt(plts, "genexpr-box-ENSG00000131051", '.pdf', figs_dir, width=5, height=6)
+    save_plt(plts, "activity-box-ENSG00000131051", '.pdf', figs_dir, width=5, height=6)
+    save_plt(plts, "activity-ranking-scatter-ENSG00000131051", '.pdf', figs_dir, width=10, height=6)
     
 }
 
@@ -175,7 +199,8 @@ main = function(){
     
     # prep
     metadata = metadata %>%
-        mutate(condition = factor(condition, levels=c("DMSO","INDISULAM","MS023")))
+        mutate(condition = factor(condition, levels=c("DMSO","INDISULAM","MS023"))) %>%
+        filter(condition %in% c("DMSO","INDISULAM"))
     
     # plot
     plts = make_plots(genexpr, protein_activity, metadata)
@@ -186,7 +211,7 @@ main = function(){
 
     # save
     save_plots(plts, figs_dir)
-    #save_figdata(figdata, figs_dir)
+    save_figdata(figdata, figs_dir)
 }
 
 

@@ -28,7 +28,10 @@ rule all:
         os.path.join(RESULTS_DIR,"files","signatures","Lu2021-EX.tsv.gz"),
         
         # compute viper SF activities
-        os.path.join(RESULTS_DIR,"files","protein_activity","Lu2021.tsv.gz")
+        os.path.join(RESULTS_DIR,"files","protein_activity","Lu2021.tsv.gz"),
+        
+        # figures
+        os.path.join(RESULTS_DIR,"figures","validation_drug_targets")
         
         
 rule compute_signature:
@@ -82,4 +85,21 @@ rule compute_protein_activity:
                     --signature_file={input.signature} \
                     --regulons_dir={input.regulons_dir} \
                     --output_file={output}
+        """
+
+
+rule validation_drug_targets:
+    input:
+        genexpr = os.path.join(PREP_DIR,"genexpr_tpm","Lu2021.tsv.gz"),
+        protein_activity = os.path.join(RESULTS_DIR,"files","protein_activity","Lu2021.tsv.gz"),
+        metadata = os.path.join(PREP_DIR,"metadata","Lu2021.tsv.gz")
+    output:
+        directory(os.path.join(RESULTS_DIR,"figures","validation_drug_targets"))
+    shell:
+        """
+        Rscript scripts/figures_validation_drug_targets.R \
+                    --genexpr_file={input.genexpr} \
+                    --protein_activity_file={input.protein_activity} \
+                    --metadata_file={input.metadata} \
+                    --figs_dir={output}
         """
