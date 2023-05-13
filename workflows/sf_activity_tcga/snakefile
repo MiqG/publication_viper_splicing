@@ -1,0 +1,179 @@
+"""
+Author: Miquel Anglada Girotto
+Contact: miquelangladagirotto [at] gmail [dot] com
+
+Outline
+-------
+- SF activities in PT vs STN (median STN as reference)
+- SF activities in MET vs PT (median PT as reference)
+- SF activities within PT --> see differences with mutations
+"""
+
+import os
+import pandas as pd
+
+# variables
+ROOT = os.path.dirname(os.path.dirname(os.getcwd()))
+RAW_DIR = os.path.join(ROOT,"data","raw")
+PREP_DIR = os.path.join(ROOT,"data","prep")
+SUPPORT_DIR = os.path.join(ROOT,"support")
+BIN_DIR = os.path.join(ROOT,"bin")
+RESULTS_DIR = os.path.join(ROOT,"results","sf_activity_tcga")
+ACTVAL_DIR = os.path.join(ROOT,"results","validation_activity")
+SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
+
+metadata = pd.read_table(os.path.join(RAW_DIR,"TCGA","metadata","PANCAN.tsv.gz"))
+metadata = metadata.groupby(
+    ["sample_type_clean","cancer_type"]
+).size().reset_index().rename(columns={0:"n"})
+metadata = metadata.loc[metadata["n"]>=3]
+
+CANCER_TYPES = metadata["cancer_type"].values
+SAMPLE_TYPES = metadata["sample_type_clean"].values
+
+CANCER_TYPES_PTSTN = [
+    'BLCA',
+    'BRCA',
+    'COAD',
+    'HNSC',
+    'KICH',
+    'KIRC',
+    'KIRP',
+    'LIHC',
+    'LUAD',
+    'LUSC',
+    'PRAD',
+    'STAD',
+    'THCA',
+    'UCEC'
+]
+CANCER_TYPES_METPT = ["BRCA","SKCM","THCA"]
+CANCER_TYPES_PT = metadata.loc[metadata["sample_type_clean"]=="PrimaryTumor","cancer_type"].values
+
+##### RULES #####
+rule all:
+    input:
+        # split by cancer type and sample type
+        expand(os.path.join(PREP_DIR,"event_psi","{cancer}-{sample}-EX.tsv.gz"), zip, cancer=CANCER_TYPES, sample=SAMPLE_TYPES),
+        
+        # calculate signatures
+        expand(os.path.join(RESULTS_DIR,"files","signatures","{cancer}-PrimaryTumor_vs_SolidTissueNormal-EX.tsv.gz"), cancer=CANCER_TYPES_PTSTN),
+        expand(os.path.join(RESULTS_DIR,"files","signatures","{cancer}-Metastatic_vs_PrimaryTumor-EX.tsv.gz"), cancer=CANCER_TYPES_METPT),
+        expand(os.path.join(RESULTS_DIR,"files","signatures","{cancer}-{sample}-EX.tsv.gz"), zip, cancer=CANCER_TYPES, sample=SAMPLE_TYPES),
+
+        # compute viper SF activities
+        ## PT vs STN
+        expand(os.path.join(RESULTS_DIR,"files","protein_activity","{cancer}-{sample}-EX.tsv.gz"), cancer=CANCER_TYPES_PTSTN, sample=["PrimaryTumor_vs_SolidTissueNormal"]),
+        ## MET vs PT
+        expand(os.path.join(RESULTS_DIR,"files","protein_activity","{cancer}-{sample}-EX.tsv.gz"), cancer=CANCER_TYPES_METPT, sample=["Metastatic_vs_PrimaryTumor"]),
+        ## within
+        expand(os.path.join(RESULTS_DIR,"files","protein_activity","{cancer}-{sample}-EX.tsv.gz"), zip, cancer=CANCER_TYPES, sample=SAMPLE_TYPES)
+        
+
+rule split_by_cancer_and_sample_type:
+    input:
+        metadata = os.path.join(PREP_DIR,"metadata","{cancer}.tsv.gz"),
+        psi = os.path.join(PREP_DIR,"event_psi","{cancer}-EX.tsv.gz")
+    output:
+        psi = os.path.join(PREP_DIR,"event_psi","{cancer}-{sample}-EX.tsv.gz")
+    params:
+        cancer_type = "{cancer}",
+        sample_type = "{sample}"
+    run:
+        import pandas as pd
+        
+        metadata = pd.read_table(input.metadata)
+        psi = pd.read_table(input.psi, index_col=0)
+        cancer_type = params.cancer_type
+        sample_type = params.sample_type
+        
+        idx = (metadata["cancer_type"]==cancer_type) & (metadata["sample_type_clean"]==sample_type)
+        samples_oi = metadata.loc[idx,"sampleID"].values
+        
+        psi = psi[samples_oi]
+        print(psi.shape)
+        
+        if psi.shape[1]>0:
+            psi.reset_index().to_csv(output.psi, **SAVE_PARAMS)
+        
+        print("Done!")
+
+rule compute_signature_pt_vs_stn:
+    input:
+        splicing_pt = os.path.join(PREP_DIR,"event_psi","{cancer}-PrimaryTumor-EX.tsv.gz"),
+        splicing_stn = os.path.join(PREP_DIR,"event_psi","{cancer}-SolidTissueNormal-EX.tsv.gz")
+    output:
+        signature = os.path.join(RESULTS_DIR,"files","signatures","{cancer}-PrimaryTumor_vs_SolidTissueNormal-EX.tsv.gz")
+    run:
+        import pandas as pd
+        
+        splicing_pt = pd.read_table(input.splicing_pt, index_col=0)
+        splicing_stn = pd.read_table(input.splicing_stn, index_col=0)
+        
+        # subtract median STN
+        signature = pd.concat([splicing_pt, splicing_stn], axis=1)
+        signature = signature - splicing_stn.median(axis=1).values.reshape(-1,1)
+        
+        # save
+        signature.reset_index().to_csv(output.signature, **SAVE_PARAMS)
+        
+        print("Done!")
+        
+rule compute_signature_met_vs_pt:
+    input:
+        splicing_pt = os.path.join(PREP_DIR,"event_psi","{cancer}-PrimaryTumor-EX.tsv.gz"),
+        splicing_met = os.path.join(PREP_DIR,"event_psi","{cancer}-Metastatic-EX.tsv.gz")
+    output:
+        signature = os.path.join(RESULTS_DIR,"files","signatures","{cancer}-Metastatic_vs_PrimaryTumor-EX.tsv.gz")
+    run:
+        import pandas as pd
+        
+        splicing_pt = pd.read_table(input.splicing_pt, index_col=0)
+        splicing_met = pd.read_table(input.splicing_met, index_col=0)
+        
+        # subtract median PT
+        signature = pd.concat([splicing_pt, splicing_met], axis=1)
+        signature = signature - splicing_pt.median(axis=1).values.reshape(-1,1)
+        
+        # save
+        signature.reset_index().to_csv(output.signature, **SAVE_PARAMS)
+        
+        print("Done!")
+
+ruleorder: compute_signature_pt_vs_stn > compute_signature_within
+ruleorder: compute_signature_met_vs_pt > compute_signature_within
+rule compute_signature_within:
+    input:
+        splicing_pt = os.path.join(PREP_DIR,"event_psi","{cancer}-{sample}-EX.tsv.gz"),
+    output:
+        signature = os.path.join(RESULTS_DIR,"files","signatures","{cancer}-{sample}-EX.tsv.gz")
+    run:
+        import pandas as pd
+        
+        splicing_pt = pd.read_table(input.splicing_pt, index_col=0)
+        
+        # subtract median PT
+        signature = splicing_pt
+        signature = signature - splicing_pt.median(axis=1).values.reshape(-1,1)
+        
+        # save
+        signature.reset_index().to_csv(output.signature, **SAVE_PARAMS)
+        
+        print("Done!")
+
+        
+rule compute_protein_activity:
+    input:
+        signature = os.path.join(RESULTS_DIR,"files","signatures","{cancer}-{sample}-EX.tsv.gz"),
+        regulons_dir = os.path.join(ACTVAL_DIR,"files","subsetted_regulons","regulons_selected")
+    output:
+        os.path.join(RESULTS_DIR,"files","protein_activity","{cancer}-{sample}-EX.tsv.gz")
+    params:
+        script_dir = BIN_DIR
+    shell:
+        """
+        Rscript {params.script_dir}/compute_protein_activity.R \
+                    --signature_file={input.signature} \
+                    --regulons_dir={input.regulons_dir} \
+                    --output_file={output}
+        """
