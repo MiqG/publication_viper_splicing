@@ -27,12 +27,40 @@ REGULONS = {
     "ENCOREKO_K562": os.path.join(RESULTS_DIR,"files","regulons","pert_rnaseq","ENCOREKO","K562","delta_psi-EX.tsv.gz")
 }
 
+# ARACNe
+TARGETS_FILES = {
+    #"event_psi_imputed": os.path.join(PREP_DIR,"event_psi_imputed","{dataset}-EX.tsv.gz"),
+    #"event_psi": os.path.join(PREP_DIR,"event_psi","{dataset}-EX.tsv.gz"),
+    "genexpr_tpm": os.path.join(PREP_DIR,"genexpr_tpm","{dataset}.tsv.gz")
+}
+
+ARACNE_OMICS = ["genexpr_tpm"]
+ARACNE_DATASETS = ["LIHC","LAML","CCLE"]
+N_BOOTSTRAPS = 100
+BOOTSTRAPS = list(range(N_BOOTSTRAPS))
+
 ##### RULES #####
 rule all:
     input:        
         # make regulons
+        ## from perturbation RNA seqs
         expand(os.path.join(RESULTS_DIR,"files","regulons","pert_rnaseq","{dataset}","{cell_line}","delta_psi-EX.tsv.gz"), dataset=ENCORE_DATASETS, cell_line=CELL_LINES),
-
+        ## from ARACNe genexpr vs genexpr
+        ### prep inputs aracne
+        expand(os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}","upstream_regs.tsv"), omic=ARACNE_OMICS, dataset=ARACNE_DATASETS),
+        expand(os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}","upstream_regulators.txt"), omic=ARACNE_OMICS, dataset=ARACNE_DATASETS),
+        expand(os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}","targets.tsv"), omic=ARACNE_OMICS, dataset=ARACNE_DATASETS),
+        ### infer threshold
+        expand(os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}",".done_threshold"), omic=ARACNE_OMICS, dataset=ARACNE_DATASETS),
+        ### bootstrap
+        expand(os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}",".done_bootstrap_{boot_i}"), omic=ARACNE_OMICS, dataset=ARACNE_DATASETS, boot_i=BOOTSTRAPS),
+        ### consolidate
+        expand(os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}","network.txt"), omic=ARACNE_OMICS, dataset=ARACNE_DATASETS),
+        ### compute spearman correlations (tfmode)
+        expand(os.path.join(RESULTS_DIR,"files","regulons","correlation_spearman","{omic}","{dataset}.tsv.gz"), omic=ARACNE_OMICS, dataset=ARACNE_DATASETS),
+        ### prep outputs for viper
+        expand(os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}","regulons.tsv.gz"), omic=ARACNE_OMICS, dataset=ARACNE_DATASETS),
+        
         # evaluate ENCORE KD ground truth
         ## subset regulons with different dPSI thresholds
         expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","regulons","{dataset}","dpsi_lessthan_{thresh}.tsv.gz"), dataset=REGULONS.keys(), thresh=THRESHS_DPSI["lessthan"]),
@@ -103,6 +131,293 @@ rule regulons_pert_rnaseq:
         print("Done!")
 
         
+rule target_inference_arache_java_prep_inputs:
+    input:
+        regulators = os.path.join(PREP_DIR,"genexpr_tpm","{dataset}.tsv.gz"),
+        regulators_oi = os.path.join(SUPPORT_DIR,"splicing_factors-ensembl.txt"),
+        targets = lambda wildcards: TARGETS_FILES[wildcards.omic] if wildcards.omic!="event_psi" else TARGETS_FILES[wildcards.omic+"_imputed"],
+    output:
+        regulators = os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}","upstream_regs.tsv"),
+        regulators_oi = os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}","upstream_regulators.txt"),
+        targets = os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}","targets.tsv")
+    threads: 1
+    resources:
+        runtime = 3600*1, # h
+        memory = 5,
+    run:
+        import pandas as pd
+        
+        # load
+        regulators = pd.read_table(input.regulators, index_col=0)
+        regulators_oi = list(pd.read_table(input.regulators_oi, header=None)[0])
+        targets = pd.read_table(input.regulators, index_col=0)
+        
+        # indices
+        regulators.index.name = "regulator"
+        targets.index.name = "target"
+        
+        # subset
+        common_regulators = set(regulators_oi).intersection(regulators.index)
+        regulators = regulators.loc[common_regulators].copy()
+        
+        # check order
+        common_samples = set(targets.columns).intersection(regulators.columns)
+        targets = targets[common_samples].copy()
+        regulators = regulators[common_samples].copy()
+
+        # drop events and genes with no variation
+        targets = targets.loc[targets.std(1) > 0]
+        regulators = regulators.loc[regulators.std(1) > 0]
+        
+        # save
+        regulators.reset_index().to_csv(output.regulators, sep="\t", index=None)
+        pd.DataFrame(regulators.index).to_csv(
+            output.regulators_oi, sep="\t", index=None, header=False
+        )
+        targets.reset_index().to_csv(output.targets, sep="\t", index=None)
+        
+        print("Done!")
+        
+
+rule target_inference_aracne_java_threshold:
+    input:
+        regulators = os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}","upstream_regs.tsv"),
+        regulators_oi = os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}","upstream_regulators.txt"),
+        targets = os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}","targets.tsv")
+    output:
+        touch(os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}",".done_threshold")),
+    params:
+        aracne_bin = "~/repositories/ARACNe-AP/dist/aracne.jar",
+        random_seed = 1,
+        output_dir = os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}"),
+        mi_pvalue_thresh = "1E-8"
+    threads: 12
+    resources:
+        runtime = 3600*12, # h (event PSI needs more time)
+        memory = 5,
+    shell:
+        """
+        java -Xmx{resources.memory}G -jar {params.aracne_bin} \
+                --expfile_upstream {input.regulators} \
+                --tfs {input.regulators_oi} \
+                --expfile_downstream {input.targets} \
+                --output {params.output_dir} \
+                --pvalue {params.mi_pvalue_thresh} \
+                --seed {params.random_seed} \
+                --threads {threads} \
+                --calculateThreshold
+        """
+        
+        
+rule target_inference_aracne_java_bootstrap:
+    input:
+        os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}",".done_threshold"),
+        regulators = os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}","upstream_regs.tsv"),
+        regulators_oi = os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}","upstream_regulators.txt"),
+        targets = os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}","targets.tsv")
+    output:
+        touch(os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}",".done_bootstrap_{boot_i}"))
+    params:
+        aracne_bin = "~/repositories/ARACNe-AP/dist/aracne.jar",
+        output_dir = os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}"),
+        random_seed = "{boot_i}"
+    threads: 6
+    resources:
+        runtime = 3600*12, # h (event PSI needs more time)
+        memory = 5,
+    shell:
+        """
+        java -Xmx{resources.memory}G -jar {params.aracne_bin} \
+                --expfile_upstream {input.regulators} \
+                --tfs {input.regulators_oi} \
+                --expfile_downstream {input.targets} \
+                --output {params.output_dir} \
+                --pvalue 1E-8 \
+                --seed {params.random_seed} \
+                --threads {threads}
+        """
+        
+        
+rule target_inference_aracne_java_consolidation:
+    input:
+        os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}",".done_threshold"),
+        [os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}",".done_bootstrap_{boot_i}").format(boot_i=boot_i, omic="{omic}", dataset="{dataset}") for boot_i in BOOTSTRAPS]
+    output:
+        os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}","network.txt")
+    params:
+        aracne_bin = "~/repositories/ARACNe-AP/dist/aracne.jar",
+        output_dir = os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}"),
+        consolidate_pvalue = 0.05
+    threads: 12
+    resources:
+        runtime = 3600*12, # h (event PSI needs more time)
+        memory = 15,
+    shell:
+        """
+        java -Xmx{resources.memory}G -jar {params.aracne_bin} \
+                --output {params.output_dir} \
+                --threads {threads} \
+                --consolidatepvalue {params.consolidate_pvalue} \
+                --consolidate
+        """
+        
+        
+rule target_inference_aracne_spearman_correlation:
+    input:
+        regulators = os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}","upstream_regs.tsv"),
+        regulators_oi = os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}","upstream_regulators.txt"),
+        targets = os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}","targets.tsv")        
+    output:
+        os.path.join(RESULTS_DIR,"files","regulons","correlation_spearman","{omic}","{dataset}.tsv.gz")
+    threads: 12
+    run:
+        from scipy import stats
+        from statsmodels.stats import multitest
+        import numpy as np
+        import pandas as pd
+        from joblib import Parallel, delayed
+        from tqdm import tqdm
+
+        def corr(a, b, method):
+            idx = np.isfinite(a) & np.isfinite(b)
+            a = a[idx]
+            b = b[idx]
+
+            corr_funcs = {
+                "correlation_spearman": stats.spearmanr,
+                "correlation_pearson": stats.pearsonr,
+            }
+            corr_func = corr_funcs[method]
+
+            try:
+                statistic, pvalue = corr_func(a, b)
+                result = pd.Series(
+                    {
+                        "statistic": statistic,
+                        "pvalue": pvalue,
+                        "n_samples": len(a),
+                        "method": method,
+                    }
+                )
+            except:
+                result = pd.Series(
+                    {
+                        "statistic": np.nan,
+                        "pvalue": np.nan,
+                        "n_samples": np.nan,
+                        "method": method,
+                    }
+                )
+
+            return result
+
+
+        def compute_correlation_single(targets, upstream_reg_single, method):
+            correl = targets.apply(
+                lambda x: corr(x, upstream_reg_single, method), axis=1
+            ).dropna()
+            correl["regulator"] = upstream_reg_single.name
+            correl = correl.reset_index()
+
+            # prepare regulon
+            ## likelihood
+            correl["likelihood"] = np.abs(correl["statistic"])
+            ## tfmode
+            correl["tfmode"] = correl["statistic"]
+            ## keep only significant correlations
+            correl["padj"] = np.nan
+            _, fdr, _, _ = multitest.multipletests(
+                correl.loc[np.isfinite(correl["pvalue"]), "pvalue"], method="fdr_bh"
+            )
+            correl.loc[np.isfinite(correl["pvalue"]), "padj"] = fdr
+            ## filter out irrelevant associations
+            #correl = correl.loc[correl["padj"] < THRESH_FDR].copy()
+
+            return correl
+
+
+        def compute_correlations(targets, regulators, n_jobs, method):
+            correls = Parallel(n_jobs=n_jobs)(
+                delayed(compute_correlation_single)(targets, regulators.loc[reg_oi], method)
+                for reg_oi in tqdm(regulators.index)
+            )
+            result = pd.concat(correls)
+            result = result.reset_index()
+
+            return result        
+        
+        # load data
+        ## load
+        targets = pd.read_table(input.targets, index_col=0)
+        regulators = pd.read_table(input.regulators, index_col=0)
+        regulators_oi = list(pd.read_table(input.regulators_oi, header=None)[0])
+        n_jobs = threads
+        ## index
+        targets.index.name = "target"
+        regulators.index.name = "regulator"
+        ## subset
+        genes_oi = set(regulators_oi).intersection(regulators.index)
+        regulators = regulators.loc[genes_oi].copy()
+        ## check order
+        common_samples = set(targets.columns).intersection(regulators.columns)
+        targets = targets[common_samples].copy()
+        regulators = regulators[common_samples].copy()        
+        
+        print(targets.shape, regulators.shape)
+        
+        # compute correlations
+        result = compute_correlations(
+            targets, regulators, n_jobs, "correlation_spearman"
+        )
+        
+        # save
+        print("Saving data...")
+        result.to_csv(output[0], **SAVE_PARAMS)
+        
+        print("Done!")
+        
+    
+rule target_inference_aracne_java_prep_output:
+    input:
+        regulons = os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}","network.txt"),
+        spearman = os.path.join(RESULTS_DIR,"files","regulons","correlation_spearman","{omic}","{dataset}.tsv.gz")
+    output:
+        regulons = os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}","regulons.tsv.gz")
+    resources:
+        runtime = 3600*12, # h (event PSI needs more time)
+        memory = 15,
+    run:
+        import pandas as pd
+        
+        # load
+        regulons = pd.read_table(input.regulons)
+        spearman = pd.read_table(input.spearman)
+        
+        
+        # prepare regulon
+        ## "regulator" and "target" columns
+        regulons["regulator"] = regulons["Regulator"]
+        regulons["target"] = regulons["Target"]
+        
+        ## likelihood
+        regulons["likelihood"] = regulons["MI"]
+        
+        ## tfmode
+        regulons = pd.merge(
+            regulons,
+            spearman[["regulator", "target", "tfmode"]],
+            on=["regulator", "target"],
+            how="left",
+        )
+        
+        regulons.loc[regulons["tfmode"].isnull(), "tfmode"] = 0
+        
+        # save
+        regulons.reset_index().to_csv(output.regulons, sep="\t", index=None, compression="gzip")
+
+        print("Done!")
+        
+
 rule subset_regulons_lessthan:
     input:
         regulons = lambda wildcards: REGULONS[wildcards.dataset]
