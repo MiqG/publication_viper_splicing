@@ -4,6 +4,9 @@
 #
 # Script purpose
 # --------------
+# - Validate whether protein activity inferrence indicates that indisulam targets RBM39
+# - Investigate the effect of MS023, inhibitor of Type I PRMT enzymes
+#     - no cell growth effect in vitro, but strong suppression of tumor growth in vivo
 
 require(optparse)
 require(tidyverse)
@@ -50,7 +53,18 @@ plot_genexpr_gene_oi = function(genexpr, metadata, gene_oi){
         left_join(metadata, by="sampleID") %>%
         drop_na(condition)
     
-    plts[["genexpr-box"]] = X %>%
+    plts[["genexpr-indisulam_vs_dmso-box"]] = X %>%
+        filter(condition %in% c("DMSO","INDISULAM")) %>%
+        ggplot(aes(x=condition, y=genexpr_tpm)) +
+        geom_point(aes(color=cell_line_name), position=position_jitter(0.1), size=1) +
+        geom_boxplot(fill=NA, width=0.25, outlier.size=0.1) +
+        color_palette(PAL_CELL_LINES) +
+        theme_pubr() +
+        stat_compare_means(method="t.test", label="p.signif", size=FONT_SIZE, family=FONT_FAMILY, ref.group="DMSO") + 
+        labs(x="Condition", y="log2(TPM+1)", color="Cell Line", subtitle=gene_oi)
+    
+    plts[["genexpr-MS023_vs_dmso-box"]] = X  %>%
+        filter(condition %in% c("DMSO","MS023")) %>%
         ggplot(aes(x=condition, y=genexpr_tpm)) +
         geom_point(aes(color=cell_line_name), position=position_jitter(0.1), size=1) +
         geom_boxplot(fill=NA, width=0.25, outlier.size=0.1) +
@@ -74,7 +88,18 @@ plot_activity_gene_oi = function(protein_activity, metadata, gene_oi){
         left_join(metadata, by="sampleID") %>%
         drop_na(condition)
     
-    plts[["activity-box"]] = X %>%
+    plts[["activity-indisulam_vs_dmso-box"]] = X %>%
+        filter(condition %in% c("DMSO","INDISULAM")) %>%
+        ggplot(aes(x=condition, y=activity)) +
+        geom_point(aes(color=cell_line_name), position=position_jitter(0.1), size=1) +
+        geom_boxplot(fill=NA, width=0.25, outlier.size=0.1) +
+        color_palette(PAL_CELL_LINES) +
+        theme_pubr() +
+        stat_compare_means(method="t.test", label="p.signif", size=FONT_SIZE, family=FONT_FAMILY, ref.group="DMSO") + 
+        labs(x="Condition", y="Protein Activity", color="Cell Line", subtitle=gene_oi)
+    
+    plts[["activity-MS023_vs_dmso-box"]] = X %>%
+        filter(condition %in% c("DMSO","MS023")) %>%
         ggplot(aes(x=condition, y=activity)) +
         geom_point(aes(color=cell_line_name), position=position_jitter(0.1), size=1) +
         geom_boxplot(fill=NA, width=0.25, outlier.size=0.1) +
@@ -93,7 +118,18 @@ plot_activity_gene_oi = function(protein_activity, metadata, gene_oi){
         ungroup() %>%
         mutate(is_regulator_oi = regulator==gene_oi)
     
-    plts[["activity-ranking-scatter"]] = X %>%
+    plts[["activity-indisulam_vs_dmso-ranking-scatter"]] = X %>%
+        filter(condition %in% c("DMSO","INDISULAM")) %>%
+        ggplot(aes(x=activity_ranking, y=activity)) +
+        geom_scattermore(data = . %>% filter(!is_regulator_oi), pixels=c(1000,1000), pointsize=4, color=PAL_DARK, alpha=0.5) +
+        geom_scattermore(data = . %>% filter(is_regulator_oi), pixels=c(1000,1000), pointsize=5, color=PAL_ACCENT) +
+        theme_pubr() +
+        facet_wrap(~condition) +
+        theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Ranking", y="Protein Activity", color=sprintf("Is %s", gene_oi))
+    
+    plts[["activity-MS023_vs_dmso-ranking-scatter"]] = X %>%
+        filter(condition %in% c("DMSO","MS023")) %>%
         ggplot(aes(x=activity_ranking, y=activity)) +
         geom_scattermore(data = . %>% filter(!is_regulator_oi), pixels=c(1000,1000), pointsize=4, color=PAL_DARK, alpha=0.5) +
         geom_scattermore(data = . %>% filter(is_regulator_oi), pixels=c(1000,1000), pointsize=5, color=PAL_ACCENT) +
@@ -145,9 +181,12 @@ save_plt = function(plts, plt_name, extension='.pdf',
 
 
 save_plots = function(plts, figs_dir){
-    save_plt(plts, "genexpr-box-ENSG00000131051", '.pdf', figs_dir, width=5, height=6)
-    save_plt(plts, "activity-box-ENSG00000131051", '.pdf', figs_dir, width=5, height=6)
-    save_plt(plts, "activity-ranking-scatter-ENSG00000131051", '.pdf', figs_dir, width=10, height=6)
+    save_plt(plts, "genexpr-indisulam_vs_dmso-box-ENSG00000131051", '.pdf', figs_dir, width=5, height=6)
+    save_plt(plts, "genexpr-MS023_vs_dmso-box-ENSG00000131051", '.pdf', figs_dir, width=5, height=6)
+    save_plt(plts, "activity-indisulam_vs_dmso-box-ENSG00000131051", '.pdf', figs_dir, width=5, height=6)
+    save_plt(plts, "activity-MS023_vs_dmso-box-ENSG00000131051", '.pdf', figs_dir, width=5, height=6)
+    save_plt(plts, "activity-indisulam_vs_dmso-ranking-scatter-ENSG00000131051", '.pdf', figs_dir, width=10, height=6)
+    save_plt(plts, "activity-MS023_vs_dmso-ranking-scatter-ENSG00000131051", '.pdf', figs_dir, width=10, height=6)
     
 }
 
@@ -199,8 +238,7 @@ main = function(){
     
     # prep
     metadata = metadata %>%
-        mutate(condition = factor(condition, levels=c("DMSO","INDISULAM","MS023"))) %>%
-        filter(condition %in% c("DMSO","INDISULAM"))
+        mutate(condition = factor(condition, levels=c("DMSO","INDISULAM","MS023")))
     
     # plot
     plts = make_plots(genexpr, protein_activity, metadata)
