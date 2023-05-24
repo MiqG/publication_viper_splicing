@@ -39,6 +39,8 @@ ARACNE_DATASETS = ["LIHC","LAML","CCLE"]
 N_BOOTSTRAPS = 100
 BOOTSTRAPS = list(range(N_BOOTSTRAPS))
 
+OMIC_TYPES = ["fc_tpm","dpsi"]
+
 ##### RULES #####
 rule all:
     input:        
@@ -61,7 +63,7 @@ rule all:
         ### prep outputs for viper
         expand(os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}","regulons.tsv.gz"), omic=ARACNE_OMICS, dataset=ARACNE_DATASETS),
         
-        # evaluate ENCORE KD ground truth
+        # evaluate ground truth
         ## subset regulons with different dPSI thresholds
         expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","regulons","{dataset}","dpsi_lessthan_{thresh}.tsv.gz"), dataset=REGULONS.keys(), thresh=THRESHS_DPSI["lessthan"]),
         expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","regulons","{dataset}","dpsi_morethan_{thresh}.tsv.gz"), dataset=REGULONS.keys(), thresh=THRESHS_DPSI["morethan"]),
@@ -70,18 +72,21 @@ rule all:
         expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","{dataset_regulon}","{dataset_signature}-{cell_line}-dpsi_{thresh_type}_{thresh}.tsv.gz"), dataset_regulon=REGULONS.keys(), dataset_signature=ENCORE_DATASETS, cell_line=CELL_LINES, thresh=THRESHS_DPSI["lessthan"], thresh_type="lessthan"),
         expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","{dataset_regulon}","{dataset_signature}-{cell_line}-dpsi_{thresh_type}_{thresh}.tsv.gz"), dataset_regulon=REGULONS.keys(), dataset_signature=ENCORE_DATASETS, cell_line=CELL_LINES, thresh=THRESHS_DPSI["morethan"], thresh_type="morethan"),
 
-        ## combine inferred protein activities
-        os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","merged.tsv.gz"),
-
-        ## evaluate inferred protein activities
-        os.path.join(RESULTS_DIR,"files","subsetted_regulons","evaluation_rankings.tsv.gz"),
-        os.path.join(RESULTS_DIR,"files","subsetted_regulons","evaluation_corrs.tsv.gz"),
-
-        # save selected regulons
+        ## save selected regulons
         expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","regulons_selected","{dataset}-dpsi_morethan_15.tsv.gz"), dataset=REGULONS.keys()),
         
+        # compute protein activitiess genexpr networks
+        expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","{dataset_regulon}","{dataset_signature}-{cell_line}-fc_tpm.tsv.gz"), dataset_regulon=ARACNE_DATASETS, dataset_signature=ENCORE_DATASETS, cell_line=CELL_LINES),
+        
+        # combine protein activities
+        expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","merged-{omic_type}.tsv.gz"), omic_type=OMIC_TYPES),
+        
+        # evaluate inferred protein activities        
+        expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","evaluation_rankings-{omic_type}.tsv.gz"), omic_type=OMIC_TYPES),
+        expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","evaluation_corrs-{omic_type}.tsv.gz"), omic_type=OMIC_TYPES),
+        
         # figures evaluation networks
-        os.path.join(RESULTS_DIR,'figures','evaluation')
+        expand(os.path.join(RESULTS_DIR,'figures','evaluation-{omic_type}'), omic_type=OMIC_TYPES)
         
         
 rule regulons_pert_rnaseq:
@@ -458,7 +463,7 @@ rule subset_regulons_morethan:
         print("Done!")
 
         
-rule compute_protein_activity:
+rule compute_protein_activity_splicing:
     input:
         signature = os.path.join(PREP_DIR,"ground_truth_pert","{dataset_signature}","{cell_line}","delta_psi-EX.tsv.gz"),
         regulons = os.path.join(RESULTS_DIR,"files","subsetted_regulons","regulons","{dataset_regulon}","dpsi_{thresh_type}_{thresh}.tsv.gz")
@@ -476,9 +481,9 @@ rule compute_protein_activity:
                     --assoc_method={params.assoc_method} \
                     --actinf_method={params.actinf_method}
         """
-
         
-rule combine_inferred_protein_activities:
+        
+rule combine_inferred_protein_activities_splicing:
     input:
         protein_activities = [
             os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","{dataset_regulon}","{dataset_signature}-{cell_line}-dpsi_{thresh_type}_{thresh}.tsv.gz").format(dataset_regulon=dataset_regulon, dataset_signature=dataset_signature, cell_line=cell_line, thresh_type="lessthan", thresh=thresh) for
@@ -488,7 +493,7 @@ rule combine_inferred_protein_activities:
             dataset_regulon in REGULONS.keys() for dataset_signature in ENCORE_DATASETS for cell_line in CELL_LINES for thresh in THRESHS_DPSI["morethan"]
         ]
     output:
-        os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","merged.tsv.gz")
+        os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","merged-dpsi.tsv.gz")
     run:
         import os
         import pandas as pd
@@ -517,14 +522,73 @@ rule combine_inferred_protein_activities:
         dfs.to_csv(output[0], **SAVE_PARAMS)
         
         print("Done!")
+        
+        
+rule compute_protein_activity_genexpr:
+    input:
+        signature = os.path.join(PREP_DIR,"ground_truth_pert","{dataset_signature}","{cell_line}","log2_fold_change_tpm.tsv.gz"),
+        regulons = os.path.join(RESULTS_DIR,"files","regulons","aracne","genexpr_tpm","{dataset_regulon}","regulons.tsv.gz")
+    output:
+        os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","{dataset_regulon}","{dataset_signature}-{cell_line}-fc_tpm.tsv.gz")
+    params:
+        assoc_method = "ground_truth",
+        actinf_method = "viper"
+    shell:
+        """
+        Rscript scripts/infer_protein_activity.R \
+                    --signature_file={input.signature} \
+                    --regulons_file={input.regulons} \
+                    --output_file={output} \
+                    --assoc_method={params.assoc_method} \
+                    --actinf_method={params.actinf_method}
+        """
+        
+
+rule combine_inferred_protein_activities_genexpr:
+    input:
+        protein_activities = [
+            os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","{dataset_regulon}","{dataset_signature}-{cell_line}-fc_tpm.tsv.gz").format(dataset_regulon=dataset_regulon, dataset_signature=dataset_signature, cell_line=cell_line) for
+            dataset_regulon in ARACNE_DATASETS for dataset_signature in ENCORE_DATASETS for cell_line in CELL_LINES
+        ]
+    output:
+        os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","merged-fc_tpm.tsv.gz")
+    run:
+        import os
+        import pandas as pd
+        import numpy as np
+        
+        dfs = []
+        for file in input.protein_activities:
+            dataset_regulon = os.path.basename(os.path.dirname(file))
+            dataset_signature = os.path.basename(file).split("-")[0]
+            cell_line = os.path.basename(file).split("-")[1]
+            thresh_type = "aracne"
+            thresh = "aracne"
+            
+            df = pd.read_table(file)
+            df = df.melt(id_vars="regulator", var_name="PERT_GENE", value_name="protein_activity")
+            
+            df["dataset_regulon"] = dataset_regulon
+            df["dataset_signature"] = dataset_signature
+            df["cell_line"] = cell_line
+            df["thresh_type"] = thresh_type
+            df["thresh"] = thresh
+            
+            dfs.append(df)
+            
+        dfs = pd.concat(dfs)
+        
+        dfs.to_csv(output[0], **SAVE_PARAMS)
+        
+        print("Done!")
 
         
 rule evaluate_regulons:
     input:
-        protein_activity = os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","merged.tsv.gz")
+        protein_activity = os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","merged-{data_type}.tsv.gz")
     output:
-        evaluation_rankings = os.path.join(RESULTS_DIR,"files","subsetted_regulons","evaluation_rankings.tsv.gz"),
-        evaluation_corrs = os.path.join(RESULTS_DIR,"files","subsetted_regulons","evaluation_corrs.tsv.gz")
+        evaluation_rankings = os.path.join(RESULTS_DIR,"files","subsetted_regulons","evaluation_rankings-{data_type}.tsv.gz"),
+        evaluation_corrs = os.path.join(RESULTS_DIR,"files","subsetted_regulons","evaluation_corrs-{data_type}.tsv.gz")
     run:
         import pandas as pd
         from scipy import stats
@@ -622,14 +686,17 @@ rule selected_regulons:
 
 rule figures_validation_activity_encore:
     input:
-        evaluation_rankings = os.path.join(RESULTS_DIR,"files","subsetted_regulons","evaluation_rankings.tsv.gz"),
-        evaluation_corrs = os.path.join(RESULTS_DIR,"files","subsetted_regulons","evaluation_corrs.tsv.gz")
+        evaluation_rankings = os.path.join(RESULTS_DIR,"files","subsetted_regulons","evaluation_rankings-{omic_type}.tsv.gz"),
+        evaluation_corrs = os.path.join(RESULTS_DIR,"files","subsetted_regulons","evaluation_corrs-{omic_type}.tsv.gz")
     output:
-        directory(os.path.join(RESULTS_DIR,'figures','evaluation'))
+        directory(os.path.join(RESULTS_DIR,'figures','evaluation-{omic_type}'))
+    params:
+        omic_type = "{omic_type}"
     shell:
         """
         Rscript scripts/figures_evaluation_activity_encore.R \
                     --evaluation_rankings_file={input.evaluation_rankings} \
                     --evaluation_corrs_file={input.evaluation_corrs} \
+                    --omic_type={params.omic_type} \
                     --figs_dir={output}
         """

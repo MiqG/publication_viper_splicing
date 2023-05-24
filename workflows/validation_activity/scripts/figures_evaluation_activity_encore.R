@@ -33,25 +33,14 @@ PAL_DUAL = c("grey","orange") # '#1B9E77''#7570B3'
 # RESULTS_DIR = file.path(ROOT,"results","validation_activity")
 # SUPPORT_DIR = file.path(ROOT,"support")
 
-# evaluation_rankings_file = file.path(RESULTS_DIR,"files","subsetted_regulons","evaluation_rankings.tsv.gz")
-# evaluation_corrs_file = file.path(RESULTS_DIR,"files","subsetted_regulons","evaluation_corrs.tsv.gz")
-
-# figs_dir = file.path(RESULTS_DIR,'figures','evaluation')
+# evaluation_rankings_file = file.path(RESULTS_DIR,"files","subsetted_regulons","evaluation_rankings-fc_tpm.tsv.gz")
+# evaluation_corrs_file = file.path(RESULTS_DIR,"files","subsetted_regulons","evaluation_corrs-fc_tpm.tsv.gz")
+# omic_type = "fc_tpm"
+# figs_dir = file.path(RESULTS_DIR,'figures','evaluation-fc_tpm')
 
 ##### FUNCTIONS #####
-plot_evaluation = function(evaluation_rankings, evaluation_corrs){
+plot_evaluation_dpsi = function(evaluation_rankings, evaluation_corrs){
     plts = list()
-    
-    # number of regulators per threshold (TODO) - few overlaps regulator-KD between ENCORE screens!
-    #     plts[["evaluation-thresh_vs_n_regulators-lessthan"]] = evaluation_rankings %>% 
-    #         filter(regulator==PERT_GENE & thresh_type=="lessthan" & eval_type=="real") %>%
-    #         mutate(thresh = sprintf("<=%s",thresh)) %>%
-    #         count(thresh, thresh_type, eval_type, dataset_regulon, dataset_signature, cell_line) %>% 
-    #         ggboxplot(x="thresh", y="n") +
-    #         theme_pubr(x.text.angle=70) +
-    #         facet_wrap(~dataset_regulon+dataset_signature+cell_line) +
-    #         theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
-    #         labs(x="|DeltaPSI| Threshold", y="Ranking Between", fill="Ranking Type")
     
     # rankings between samples
     plts[["evaluation-ranking_between-lessthan-box"]] = evaluation_rankings %>%
@@ -160,7 +149,68 @@ plot_evaluation = function(evaluation_rankings, evaluation_corrs){
 }
 
 
-make_plots = function(evaluation_rankings, evaluation_corrs){
+plot_evaluation_fc_tpm = function(evaluation_rankings, evaluation_corrs){
+    plts = list()
+    
+    # rankings between samples
+    plts[["evaluation-ranking_between-box"]] = evaluation_rankings %>%
+        filter(regulator==PERT_GENE) %>%
+        ggboxplot(x="cell_line", y="ranking_between", fill="eval_type", width=0.5, outlier.size=0.1) +
+        fill_palette(PAL_DUAL) +
+        theme_pubr(x.text.angle=70) +
+        facet_wrap(~dataset_regulon+dataset_signature) +
+        theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Cell Line", y="Ranking Between", fill="Ranking Type")
+    
+    plts[["evaluation-rankperc_between-box"]] = evaluation_rankings %>%
+        filter(regulator==PERT_GENE) %>%
+        ggboxplot(x="cell_line", y="rankperc_between", fill="eval_type", width=0.5, outlier.size=0.1) +
+        fill_palette(PAL_DUAL) +
+        theme_pubr(x.text.angle=70) +
+        facet_wrap(~dataset_regulon+dataset_signature) +
+        theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Cell Line", y="Ranking Between %", fill="Ranking Type")
+    
+    # rankings within samples
+    plts[["evaluation-ranking_within-box"]] = evaluation_rankings %>%
+        filter(regulator==PERT_GENE) %>%
+        ggboxplot(x="cell_line", y="ranking_within", fill="eval_type", width=0.5, outlier.size=0.1) +
+        fill_palette(PAL_DUAL) +
+        theme_pubr(x.text.angle=70) +
+        facet_wrap(~dataset_regulon+dataset_signature) +
+        theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Cell Line", y="Ranking Within", fill="Ranking Type")
+    
+    plts[["evaluation-rankperc_within-box"]] = evaluation_rankings %>%
+        filter(regulator==PERT_GENE) %>%
+        ggboxplot(x="cell_line", y="rankperc_within", fill="eval_type", width=0.5, outlier.size=0.1) +
+        fill_palette(PAL_DUAL) +
+        theme_pubr(x.text.angle=70) +
+        facet_wrap(~dataset_regulon+dataset_signature) +
+        theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Cell Line", y="Ranking Within %", fill="Ranking Type")
+    
+    # how good are correlations between dataset signatures with the different thresholded networks?
+    plts[["evaluation-corrs-bar"]] = evaluation_corrs %>%
+        ggbarplot(x="dataset_signature", y="pearson_coef", fill="eval_type", color=NA, position=position_dodge(0.9)) +
+        fill_palette(PAL_DUAL) +
+        theme_pubr(x.text.angle=70) +
+        facet_wrap(~dataset_regulon+cell_line, nrow=1) +
+        theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Cell Line", y="Pearson Coef.", fill="Ranking Type")
+    
+    return(plts)    
+}
+
+
+make_plots = function(evaluation_rankings, evaluation_corrs, omic_type){
+    
+    plot_evaluation = switch(
+        omic_type,
+        "dpsi" = plot_evaluation_dpsi,
+        "fc_tpm" = plot_evaluation_fc_tpm
+    )
+    
     plts = list(
         plot_evaluation(evaluation_rankings, evaluation_corrs)
     )
@@ -196,17 +246,26 @@ save_plt = function(plts, plt_name, extension='.pdf',
 }
 
 
-save_plots = function(plts, figs_dir){
-    save_plt(plts, "evaluation-ranking_between-lessthan-box", '.pdf', figs_dir, width=25, height=35)
-    save_plt(plts, "evaluation-rankperc_between-lessthan-box", '.pdf', figs_dir, width=25, height=35)
-    save_plt(plts, "evaluation-ranking_between-morethan-box", '.pdf', figs_dir, width=25, height=35)
-    save_plt(plts, "evaluation-rankperc_between-morethan-box", '.pdf', figs_dir, width=25, height=35)
-    save_plt(plts, "evaluation-ranking_within-lessthan-box", '.pdf', figs_dir, width=25, height=35)
-    save_plt(plts, "evaluation-rankperc_within-lessthan-box", '.pdf', figs_dir, width=25, height=35)
-    save_plt(plts, "evaluation-ranking_within-morethan-box", '.pdf', figs_dir, width=25, height=35)
-    save_plt(plts, "evaluation-rankperc_within-morethan-box", '.pdf', figs_dir, width=25, height=35)
-    save_plt(plts, "evaluation-corrs-lessthan-bar", '.pdf', figs_dir, width=15, height=30)
-    save_plt(plts, "evaluation-corrs-morethan-bar", '.pdf', figs_dir, width=15, height=30)
+save_plots = function(plts, figs_dir, omic_type){
+    if(omic_type=="dpsi"){
+        save_plt(plts, "evaluation-ranking_between-lessthan-box", '.pdf', figs_dir, width=25, height=35)
+        save_plt(plts, "evaluation-rankperc_between-lessthan-box", '.pdf', figs_dir, width=25, height=35)
+        save_plt(plts, "evaluation-ranking_between-morethan-box", '.pdf', figs_dir, width=25, height=35)
+        save_plt(plts, "evaluation-rankperc_between-morethan-box", '.pdf', figs_dir, width=25, height=35)
+        save_plt(plts, "evaluation-ranking_within-lessthan-box", '.pdf', figs_dir, width=25, height=35)
+        save_plt(plts, "evaluation-rankperc_within-lessthan-box", '.pdf', figs_dir, width=25, height=35)
+        save_plt(plts, "evaluation-ranking_within-morethan-box", '.pdf', figs_dir, width=25, height=35)
+        save_plt(plts, "evaluation-rankperc_within-morethan-box", '.pdf', figs_dir, width=25, height=35)
+        save_plt(plts, "evaluation-corrs-lessthan-bar", '.pdf', figs_dir, width=15, height=30)
+        save_plt(plts, "evaluation-corrs-morethan-bar", '.pdf', figs_dir, width=15, height=30)
+        
+    } else if (omic_type=="fc_tpm"){
+        save_plt(plts, "evaluation-ranking_between-box", '.pdf', figs_dir, width=12, height=12)
+        save_plt(plts, "evaluation-rankperc_between-box", '.pdf', figs_dir, width=12, height=12)
+        save_plt(plts, "evaluation-ranking_within-box", '.pdf', figs_dir, width=12, height=12)
+        save_plt(plts, "evaluation-rankperc_within-box", '.pdf', figs_dir, width=12, height=12)
+        save_plt(plts, "evaluation-corrs-bar", '.pdf', figs_dir, width=12, height=8)    
+    }
 }
 
 
@@ -230,6 +289,7 @@ parseargs = function(){
     option_list = list( 
         make_option("--evaluation_rankings_file", type="character"),
         make_option("--evaluation_corrs_file", type="character"),
+        make_option("--omic_type", type="character"),
         make_option("--figs_dir", type="character")
     )
 
@@ -243,6 +303,7 @@ main = function(){
     
     evaluation_rankings_file = args[["evaluation_rankings_file"]]
     evaluation_corrs_file = args[["evaluation_corrs_file"]]
+    omic_type = args[["omic_type"]]
     figs_dir = args[["figs_dir"]]
     
     dir.create(figs_dir, recursive = TRUE)
@@ -252,13 +313,13 @@ main = function(){
     evaluation_corrs = read_tsv(evaluation_corrs_file)
     
     # plot
-    plts = make_plots(evaluation_rankings, evaluation_corrs)
+    plts = make_plots(evaluation_rankings, evaluation_corrs, omic_type)
     
     # make figdata
     figdata = make_figdata(evaluation_rankings, evaluation_corrs)
 
     # save
-    save_plots(plts, figs_dir)
+    save_plots(plts, figs_dir, omic_type)
     save_figdata(figdata, figs_dir)
 }
 
