@@ -21,6 +21,7 @@ BIN_DIR = os.path.join(ROOT,"bin")
 RESULTS_DIR = os.path.join(ROOT,"results","sf_activity_tcga")
 ACTVAL_DIR = os.path.join(ROOT,"results","validation_activity")
 SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
+PADJ_METHOD = 'fdr_bh'
 
 metadata = pd.read_table(os.path.join(RAW_DIR,"TCGA","metadata","PANCAN.tsv.gz"))
 metadata = metadata.groupby(
@@ -50,6 +51,26 @@ CANCER_TYPES_PTSTN = [
 CANCER_TYPES_METPT = ["BRCA","SKCM","THCA"]
 CANCER_TYPES_PT = metadata.loc[metadata["sample_type_clean"]=="PrimaryTumor","cancer_type"].values
 
+DIFF_CONDITIONS = {
+    "PrimaryTumor_vs_SolidTissueNormal":{
+        "a":"PrimaryTumor",
+        "b":"SolidTissueNormal"
+    },
+    "Metastatic_vs_PrimaryTumor":{
+        "a":"Metastatic",
+        "b":"PrimaryTumor"
+    }
+}
+
+DIFF_CANCER_TYPES = {
+    "PrimaryTumor_vs_SolidTissueNormal": CANCER_TYPES_PTSTN,
+    "Metastatic_vs_PrimaryTumor": CANCER_TYPES_METPT
+}
+
+CANCER_TYPES_BY_SAMPLETYPE = {
+    s: metadata.loc[metadata["sample_type_clean"]==s,"cancer_type"].values for s in metadata["sample_type_clean"].unique()
+}
+
 ##### RULES #####
 rule all:
     input:
@@ -67,7 +88,15 @@ rule all:
         ## MET vs PT
         expand(os.path.join(RESULTS_DIR,"files","protein_activity","{cancer}-{sample}-EX.tsv.gz"), cancer=CANCER_TYPES_METPT, sample=["Metastatic_vs_PrimaryTumor"]),
         ## within
-        expand(os.path.join(RESULTS_DIR,"files","protein_activity","{cancer}-{sample}-EX.tsv.gz"), zip, cancer=CANCER_TYPES, sample=SAMPLE_TYPES)
+        expand(os.path.join(RESULTS_DIR,"files","protein_activity","{cancer}-{sample}-EX.tsv.gz"), zip, cancer=CANCER_TYPES, sample=SAMPLE_TYPES),
+        expand(os.path.join(RESULTS_DIR,"files","protein_activity","PANCAN-{sample}-EX.tsv.gz"), sample=CANCER_TYPES_BY_SAMPLETYPE),
+        
+        # differential SF activities
+        ## compute
+        expand(os.path.join(RESULTS_DIR,'files',"diff_protein_activity",'{cancer}-{comparison}.tsv.gz'), comparison=["PrimaryTumor_vs_SolidTissueNormal"], cancer=CANCER_TYPES_PTSTN),
+        expand(os.path.join(RESULTS_DIR,'files',"diff_protein_activity",'{cancer}-{comparison}.tsv.gz'), comparison=["Metastatic_vs_PrimaryTumor"], cancer=CANCER_TYPES_METPT),
+        ## merge
+        expand(os.path.join(RESULTS_DIR,'files','PANCAN','mannwhitneyu-{comparison}.tsv.gz'), comparison=DIFF_CANCER_TYPES.keys())
         
 
 rule split_by_cancer_and_sample_type:
@@ -177,3 +206,78 @@ rule compute_protein_activity:
                     --regulons_dir={input.regulons_dir} \
                     --output_file={output}
         """
+
+rule combine_protein_activity:
+    input:
+        protein_activity = lambda wildcards: [os.path.join(RESULTS_DIR,"files","protein_activity","{cancer}-{sample}-EX.tsv.gz").format(cancer=cancer, sample=wildcards.sample) for cancer in CANCER_TYPES_BY_SAMPLETYPE[wildcards.sample]]
+    output:
+        os.path.join(RESULTS_DIR,"files","protein_activity","PANCAN-{sample}-EX.tsv.gz")
+    run:
+        import pandas as pd
+        
+        dfs = pd.concat([
+            pd.read_table(f).melt(id_vars="regulator", var_name="sampleID", value_name="activity")
+            for f in input.protein_activity
+        ])
+        
+        dfs.to_csv(output[0], **SAVE_PARAMS)
+        
+        print("Done!")
+        
+        
+rule compute_differential_protein_activity:
+    input:
+        protein_activity = os.path.join(RESULTS_DIR,"files","protein_activity","{cancer}-{comparison}-EX.tsv.gz"),
+        metadata = os.path.join(PREP_DIR,'metadata','{cancer}.tsv.gz')
+    output:
+        os.path.join(RESULTS_DIR,'files',"diff_protein_activity",'{cancer}-{comparison}.tsv.gz')
+    params:
+        script_dir = BIN_DIR,
+        padj_method = PADJ_METHOD,
+        condition_a = lambda wildcards: DIFF_CONDITIONS[wildcards.comparison]["a"],
+        condition_b = lambda wildcards: DIFF_CONDITIONS[wildcards.comparison]["b"],
+        comparison_col = "sample_type_clean",
+        sample_col = "sampleID"
+    shell:
+        """
+        python {params.script_dir}/MannWhitneyU.py \
+                    --data_file={input.protein_activity} \
+                    --metadata_file={input.metadata} \
+                    --sample_col={params.sample_col} \
+                    --comparison_col={params.comparison_col} \
+                    --condition_a={params.condition_a} \
+                    --condition_b={params.condition_b} \
+                    --output_file={output} \
+                    --padj_method={params.padj_method} 
+        """    
+        
+        
+rule combine_differential_protein_activity_results:
+    input:
+        diff_files = lambda wildcards: [os.path.join(RESULTS_DIR,'files',"diff_protein_activity",'{cancer}-{comparison}.tsv.gz').format(cancer=cancer, comparison=wildcards.comparison) for cancer in DIFF_CANCER_TYPES[wildcards.comparison]],
+    params:
+        comparison = '{comparison}'
+    output:
+        os.path.join(RESULTS_DIR,'files','PANCAN','mannwhitneyu-{comparison}.tsv.gz')
+    run:
+        import os
+        import pandas as pd
+        
+        dfs = []
+        for diff_file in input.diff_files:
+            # combine
+            df = pd.read_table(diff_file)
+            
+            # add cancer type
+            cancer_type = os.path.basename(diff_file).replace(".tsv.gz","").split("-")[0]
+            print(cancer_type)
+            df['cancer_type'] = cancer_type
+            
+            dfs.append(df)
+            
+            del df
+            
+        dfs = pd.concat(dfs)  
+        dfs.to_csv(output[0], sep='\t', index=False, compression='gzip')
+        
+        print("Done!")

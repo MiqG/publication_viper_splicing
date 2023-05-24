@@ -1,0 +1,229 @@
+#
+# Author: Miquel Anglada Girotto
+# Contact: miquel [dot] anglada [at] crg [dot] eu
+#
+# Script purpose
+# --------------
+# - Validate whether protein activity inferrence indicates that indisulam targets RBM39
+# - Investigate the effect of MS023, inhibitor of Type I PRMT enzymes
+#     - no cell growth effect in vitro, but strong suppression of tumor growth in vivo
+
+require(optparse)
+require(tidyverse)
+require(ggpubr)
+require(cowplot)
+require(scattermore)
+require(extrafont)
+require(ggrepel)
+
+# variables
+THRESH_FDR = 0.05
+
+# formatting
+LINE_SIZE = 0.25
+
+FONT_SIZE = 2 # for additional labels
+FONT_FAMILY = "Arial"
+
+# Development
+# -----------
+# ROOT = here::here()
+# RAW_DIR = file.path(ROOT,'data','raw')
+# PREP_DIR = file.path(ROOT,'data','prep')
+# SUPPORT_DIR = file.path(ROOT,"support")
+# RESULTS_DIR = file.path(ROOT,"results","sf_activity_tcga")
+# diff_protein_activity_file = file.path(RESULTS_DIR,'files','PANCAN','mannwhitneyu-Metastatic_vs_PrimaryTumor.tsv.gz')
+# gene_annotation_file = file.path(RAW_DIR,"HGNC","gene_annotations.tsv.gz")
+# figs_dir = file.path(RESULTS_DIR,"figures","tcga_metastasis")
+
+
+##### FUNCTIONS #####
+plot_diff_protein_activity = function(diff_protein_activity){
+    plts = list()
+    
+    X = diff_protein_activity
+    cancer_types = unique(X[["cancer_type"]])
+    palette = setNames(get_palette("Paired", length(cancer_types)), cancer_types)
+    
+    plts[["diff_protein_activity-volcano-scatter"]] = X %>%
+        ggplot(aes(x=`condition_a-median`, y=log10_padj)) +
+        geom_scattermore(aes(color=cancer_type), pixels=c(1000,1000), pointsize=6, alpha=0.5) +
+        color_palette(palette) + 
+        geom_text_repel(
+            aes(label=GENE),
+            . %>% slice_max(abs(`condition_a-median`*log10_padj), n=10),
+            size=FONT_SIZE, family=FONT_FAMILY, segment.size=0.1, max.overlaps=50
+        ) +
+        theme_pubr() +
+        guides(color = guide_legend(override.aes = list(alpha = 1))) +
+        labs(x="Protein Activity", 
+             y="-log10(FDR)", color="Cancer Type")
+
+    plts[["diff_protein_activity-n_signif-bar"]] = X %>%
+        filter(is_significant) %>%
+        count(cancer_type) %>%
+        arrange(-n) %>%
+        ggbarplot(x="cancer_type", y="n", fill="cancer_type", color=NA, palette=palette,
+                  label=TRUE, lab.size=FONT_SIZE, lab.family=FONT_FAMILY) +
+        guides(fill="none") +
+        theme_pubr(x.text.angle=70) +
+        labs(x="Cancer Type", y="Count")
+    
+    top_oncogenes = X %>%
+        filter(is_significant) %>%
+        group_by(GENE) %>%
+        summarize(med = median(`condition_a-median`)) %>%
+        ungroup() %>%
+        slice_max(med, n=10) %>%
+        pull(GENE)
+    plts[["diff_protein_activity-top_oncogenes-box"]] = X %>%
+        filter(GENE %in% top_oncogenes) %>%
+        group_by(GENE) %>%
+        mutate(med = median(`condition_a-median`)) %>%
+        ungroup() %>%
+        mutate(GENE = fct_reorder(GENE, med, max)) %>%
+        ggplot(aes(x=GENE, y=`condition_a-median`)) +
+        geom_point(aes(color=cancer_type), size=1) +
+        #geom_boxplot(outlier.shape=NA, fill=NA, width=0.5) +
+        color_palette(palette) +
+        theme_pubr(x.text.angle=70) +
+        labs(x="Splicing Factor", y="Protein Activity", color="Cancer Type")    
+   
+    top_tsgenes = X %>%
+        filter(is_significant) %>%
+        group_by(GENE) %>%
+        summarize(med = median(`condition_a-median`)) %>%
+        ungroup() %>%
+        slice_min(med, n=10) %>%
+        pull(GENE)
+    plts[["diff_protein_activity-top_tsgenes-box"]] = X %>%
+        filter(GENE %in% top_tsgenes) %>%
+        group_by(GENE) %>%
+        mutate(med = median(`condition_a-median`)) %>%
+        ungroup() %>%
+        mutate(GENE = fct_reorder(GENE, -med, max)) %>%
+        ggplot(aes(x=GENE, y=`condition_a-median`)) +
+        geom_point(aes(color=cancer_type), size=1) +
+        #geom_boxplot(outlier.shape=NA, fill=NA, width=0.5) +
+        color_palette(palette) +
+        theme_pubr(x.text.angle=70) +
+        labs(x="Splicing Factor", y="Protein Activity", color="Cancer Type")
+    
+    return(plts)
+}
+
+
+make_plots = function(diff_protein_activity){
+    plts = list(
+        plot_diff_protein_activity(diff_protein_activity)
+    )
+    plts = do.call(c,plts)
+    return(plts)
+}
+
+
+make_figdata = function(diff_protein_activity){
+    figdata = list(
+        "tcga_metastasis" = list(
+            "diff_protein_activity" = diff_protein_activity
+        )
+    )
+    return(figdata)
+}
+
+
+save_plt = function(plts, plt_name, extension='.pdf', 
+                    directory='', dpi=350, format=TRUE,
+                    width = par("din")[1], height = par("din")[2]){
+    print(plt_name)
+    plt = plts[[plt_name]]
+    if (format){
+        plt = ggpar(plt, font.title=8, font.subtitle=8, font.caption=8, 
+                    font.x=8, font.y=8, font.legend=6,
+                    font.tickslab=6, font.family=FONT_FAMILY, device=cairo_pdf)   
+    }
+    filename = file.path(directory,paste0(plt_name,extension))
+    save_plot(filename, plt, base_width=width, base_height=height, dpi=dpi, units='cm')
+}
+
+
+save_plots = function(plts, figs_dir){
+    save_plt(plts, "diff_protein_activity-volcano-scatter", '.pdf', figs_dir, width=5, height=8)
+    save_plt(plts, "diff_protein_activity-n_signif-bar", '.pdf', figs_dir, width=6, height=5)
+    save_plt(plts, "diff_protein_activity-top_oncogenes-box", '.pdf', figs_dir, width=5, height=8)
+    save_plt(plts, "diff_protein_activity-top_tsgenes-box", '.pdf', figs_dir, width=5, height=8)
+}
+
+save_figdata = function(figdata, dir){
+    lapply(names(figdata), function(x){
+        d = file.path(dir,'figdata',x)
+        dir.create(d, recursive=TRUE)
+        lapply(names(figdata[[x]]), function(nm){
+            df = figdata[[x]][[nm]]
+            filename = file.path(d, paste0(nm,'.tsv.gz'))
+            write_tsv(df, filename)
+            
+            print(filename)
+        })
+    })
+}
+
+parseargs = function(){
+    
+    option_list = list( 
+        make_option("--diff_protein_activity_file", type="character"),
+        make_option("--gene_annotation_file", type="character"),
+        make_option("--figs_dir", type="character")
+    )
+
+    args = parse_args(OptionParser(option_list=option_list))
+    
+    return(args)
+}
+
+main = function(){
+    args = parseargs()
+    
+    print(args)
+    
+    diff_protein_activity_file = args[["diff_protein_activity_file"]]
+    gene_annotation_file = args[["gene_annotation_file"]]
+    figs_dir = args[["figs_dir"]]
+    
+    dir.create(figs_dir, recursive = TRUE)
+    
+    # load
+    diff_protein_activity = read_tsv(diff_protein_activity_file)
+    gene_annotation = read_tsv(gene_annotation_file) %>%
+        dplyr::rename(
+            GENE = `Approved symbol`,
+            ENSEMBL = `Ensembl gene ID`
+        )
+    
+    # prep
+    diff_protein_activity = diff_protein_activity %>%
+        mutate(
+            is_significant = padj < THRESH_FDR
+        ) %>%
+        left_join(
+            gene_annotation[,c("ENSEMBL","GENE")],
+            by = c("regulator"="ENSEMBL")
+        )
+    
+    # plot
+    plts = make_plots(diff_protein_activity)
+    
+    # make figdata
+    figdata = make_figdata(diff_protein_activity)
+
+    # save
+    save_plots(plts, figs_dir)
+    save_figdata(figdata, figs_dir)
+}
+
+
+##### SCRIPT #####
+if (sys.nframe() == 0L) {
+    main()
+    print("Done!")
+}
