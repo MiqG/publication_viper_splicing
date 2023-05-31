@@ -1,0 +1,133 @@
+"""
+Author: Miquel Anglada Girotto
+Contact: miquelangladagirotto [at] gmail [dot] com
+
+Outline
+-------
+1. Protein activity vs drug treatment
+"""
+
+import os
+
+# variables
+ROOT = os.path.dirname(os.path.dirname(os.getcwd()))
+RAW_DIR = os.path.join(ROOT,"data","raw")
+PREP_DIR = os.path.join(ROOT,"data","prep")
+SUPPORT_DIR = os.path.join(ROOT,"support")
+BIN_DIR = os.path.join(ROOT,"bin")
+RESULTS_DIR = os.path.join(ROOT,"results","sf_activity_sf_drugs")
+ACTVAL_DIR = os.path.join(ROOT,"results","validation_activity")
+SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
+
+##### RULES #####
+rule all:
+    input:
+        # calculate signature
+        os.path.join(RESULTS_DIR,"files","signatures","sf_drugs-EX.tsv.gz"),
+        
+        # compute viper SF activities
+        os.path.join(RESULTS_DIR,"files","protein_activity","sf_drugs.tsv.gz"),
+        
+        # figures
+        #os.path.join(RESULTS_DIR,"figures","validation_drug_targets")
+        
+        
+rule compute_signature:
+    input:
+        splicing = os.path.join(PREP_DIR,"event_psi","sf_drugs-EX.tsv.gz"),
+        metadata = os.path.join(PREP_DIR,"metadata","sf_drugs.tsv.gz")
+    output:
+        signatures = os.path.join(RESULTS_DIR,"files","signatures","sf_drugs-EX.tsv.gz")
+    run:
+        import pandas as pd
+        
+        splicing = pd.read_table(input.splicing, index_col=0)
+        metadata = pd.read_table(input.metadata)
+        
+        # subtract median DMSO to corresponding cell type and study
+        signatures = []
+        for study in metadata["study_accession"].unique():
+            
+            metadata_oi = metadata.loc[metadata["study_accession"]==study]
+            signature = []
+            for cell_line_oi in metadata_oi["cell_line_name"].unique():
+                samples_cell_line = metadata_oi.loc[
+                    metadata_oi["cell_line_name"] == cell_line_oi,
+                    "sampleID"
+                ]
+                
+                # DMSO by default
+                samples_ctl = metadata_oi.loc[
+                    (metadata_oi["cell_line_name"] == cell_line_oi) &\
+                    (metadata_oi["condition"] == "DMSO"),
+                    "sampleID"
+                ]
+
+                signature = (
+                    splicing[samples_cell_line] - \
+                    splicing[samples_ctl].median(axis=1).values.reshape(-1,1)
+                )
+                
+                # spliceostatin A is diluted in methanol
+                if any(metadata_oi["condition"]=="SPLICEOSTATIN_A"):
+                    samples_ctl = metadata_oi.loc[
+                        (metadata_oi["cell_line_name"] == cell_line_oi) &\
+                        (metadata_oi["condition"] == "METHANOL"),
+                        "sampleID"
+                    ].tolist()
+                    
+                    samples_spliceostatin = metadata_oi.loc[
+                        (metadata_oi["cell_line_name"] == cell_line_oi) &\
+                        (metadata_oi["condition"] == "SPLICEOSTATIN_A"),
+                        "sampleID"
+                    ].tolist()
+                    
+                    samples_oi = samples_ctl + samples_spliceostatin
+                    
+                    signature.loc[:,samples_oi] = (
+                        splicing[samples_oi] - \
+                        splicing[samples_ctl].median(axis=1).values.reshape(-1,1)
+                    )
+                    
+                signatures.append(signature)
+                
+        signatures = pd.concat(signatures, axis=1)
+        
+        # save
+        signatures.reset_index().to_csv(output.signatures, **SAVE_PARAMS)
+        
+        print("Done!")
+        
+        
+rule compute_protein_activity:
+    input:
+        signature = os.path.join(RESULTS_DIR,"files","signatures","sf_drugs-EX.tsv.gz"),
+        regulons_dir = os.path.join(ACTVAL_DIR,"files","subsetted_regulons","regulons_selected")
+    output:
+        os.path.join(RESULTS_DIR,"files","protein_activity","sf_drugs.tsv.gz")
+    params:
+        script_dir = BIN_DIR
+    shell:
+        """
+        Rscript {params.script_dir}/compute_protein_activity.R \
+                    --signature_file={input.signature} \
+                    --regulons_dir={input.regulons_dir} \
+                    --output_file={output}
+        """
+
+
+rule validation_drug_targets:
+    input:
+        genexpr = os.path.join(PREP_DIR,"genexpr_tpm","sf_drugs.tsv.gz"),
+        protein_activity = os.path.join(RESULTS_DIR,"files","protein_activity","sf_drugs.tsv.gz"),
+        metadata = os.path.join(PREP_DIR,"metadata","sf_drugs.tsv.gz")
+    output:
+        directory(os.path.join(RESULTS_DIR,"figures","validation_drug_targets"))
+    shell:
+        """
+        Rscript scripts/figures_validation_drug_targets.R \
+                    --genexpr_file={input.genexpr} \
+                    --protein_activity_file={input.protein_activity} \
+                    --metadata_file={input.metadata} \
+                    --figs_dir={output}
+        """
