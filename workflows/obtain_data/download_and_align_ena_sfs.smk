@@ -14,18 +14,19 @@ rule all:
         ## create ENA query to find samples with splicing factors
         ".done_query_sfs",
         ## download ENA metadata table to find samples
-        expand(os.path.join(RAW_DIR,"ENA","splicing_factors","metadata","sf_experiments-{field}.tsv"), field=["alias","title"]),
+        expand(os.path.join(RAW_DIR,"ENA","splicing_factors","metadata","sf_experiments-{field}.tsv"), field=["run_alias","sample_alias","title"]),
         ## merge tables
         os.path.join(RAW_DIR,"ENA","splicing_factors","metadata","sf_experiments_merged.tsv.gz"),
         ## clean SF ENA metadata
         os.path.join(RAW_DIR,"ENA","splicing_factors","metadata","sf_experiments_clean.tsv.gz"),
         ## download full SF ENA metadata for selected studies
-        os.path.join(RAW_DIR,"ENA","splicing_factors","metadata","sf_experiments_clean-selected.tsv")
+        os.path.join(RAW_DIR,"ENA","splicing_factors","metadata","sf_experiments_clean-selected.tsv"),
         ## clean selected ENA metadata
+        os.path.join(RAW_DIR,"ENA","splicing_factors","metadata","sf_experiments_clean-selected-with_sfs.tsv")
         
 rule create_ena_query_sfs:
     input:
-        sfs = os.path.join(SUPPORT_DIR,"splicing_factors.tsv")
+        sfs = os.path.join(SUPPORT_DIR,"splicing_factors","splicing_factors.tsv")
     output:
         touch(".done_query_sfs")
     run:
@@ -33,11 +34,19 @@ rule create_ena_query_sfs:
         
         sfs = pd.read_table(input.sfs)
         
-        # alias
+        # run alias
         sfs_query = (
             " OR ".join((
-                'sample_alias="*'+sfs["GENE"]+'*" OR ' +\
                 'run_alias="*'+sfs["GENE"]+'*"'
+            ).values)
+        )
+        query = 'tax_eq(9606) AND library_strategy="RNA-Seq" AND library_source="TRANSCRIPTOMIC" AND ('+sfs_query + ")"
+        print(query)
+        
+        # sample alias
+        sfs_query = (
+            " OR ".join((
+                'sample_alias="*'+sfs["GENE"]+'*"'
             ).values)
         )
         query = 'tax_eq(9606) AND library_strategy="RNA-Seq" AND library_source="TRANSCRIPTOMIC" AND ('+sfs_query + ")"
@@ -46,7 +55,6 @@ rule create_ena_query_sfs:
         # title
         sfs_query = (
             " OR ".join((
-                #'study_title="*'+sfs["GENE"]+'*" OR ' +\
                 'sample_title="*'+sfs["GENE"]+'*" OR ' +\
                 'experiment_title="*'+sfs["GENE"]+'*"'
             ).values)
@@ -71,11 +79,13 @@ rule download_metadata_sfs:
         echo "Done!"
         """
     
+    
 rule merge_ena_sfs_metadata:
     input:
-        metadata_alias = os.path.join(RAW_DIR,"ENA","splicing_factors","metadata","sf_experiments-alias.tsv"),
+        metadata_run_alias = os.path.join(RAW_DIR,"ENA","splicing_factors","metadata","sf_experiments-run_alias.tsv"),
+        metadata_sample_alias = os.path.join(RAW_DIR,"ENA","splicing_factors","metadata","sf_experiments-sample_alias.tsv"),
         metadata_title = os.path.join(RAW_DIR,"ENA","splicing_factors","metadata","sf_experiments-title.tsv"),
-        sfs = os.path.join(SUPPORT_DIR,"splicing_factors.tsv")
+        sfs = os.path.join(SUPPORT_DIR,"splicing_factors","splicing_factors.tsv")
     output:
         metadata = os.path.join(RAW_DIR,"ENA","splicing_factors","metadata","sf_experiments_merged.tsv.gz")
     threads: 24
@@ -84,13 +94,14 @@ rule merge_ena_sfs_metadata:
         from joblib import Parallel, delayed
         from tqdm import tqdm
         
-        metadata_alias = pd.read_table(input.metadata_alias, low_memory=False)
+        metadata_run_alias = pd.read_table(input.metadata_run_alias, low_memory=False)
+        metadata_sample_alias = pd.read_table(input.metadata_sample_alias, low_memory=False)
         metadata_title = pd.read_table(input.metadata_title, low_memory=False)
         sfs = pd.read_table(input.sfs)
         threads = threads
         
         # combine metadata
-        metadata = pd.concat([metadata_title, metadata_alias]).drop_duplicates()
+        metadata = pd.concat([metadata_title, metadata_run_alias, metadata_sample_alias]).drop_duplicates()
         
         # filter by instrument platform
         metadata = metadata.loc[metadata["instrument_platform"]=="ILLUMINA"]
@@ -275,7 +286,10 @@ rule merge_ena_sfs_metadata:
 rule clean_ena_metadata:
     input:
         metadata = os.path.join(RAW_DIR,"ENA","splicing_factors","metadata","sf_experiments_merged.tsv.gz"),
-        sfs = os.path.join(SUPPORT_DIR,"splicing_factors.tsv")
+        sfs = os.path.join(SUPPORT_DIR,"splicing_factors","splicing_factors.tsv"),
+        encore_ko = os.path.join(SUPPORT_DIR,"ENCORE_KO-ensembl.txt"),
+        encore_kd = os.path.join(SUPPORT_DIR,"ENCORE_KD-ensembl.txt"),
+        kd_screen = os.path.join(SUPPORT_DIR,"kd_screen-symbol.txt")
     output:
         metadata = os.path.join(RAW_DIR,"ENA","splicing_factors","metadata","sf_experiments_clean.tsv.gz")
     run:
@@ -284,6 +298,10 @@ rule clean_ena_metadata:
         # load
         metadata = pd.read_table(input.metadata, low_memory=False)
         sfs = pd.read_table(input.sfs)
+        kd_screen = pd.read_table(input.kd_screen, header=None)[0].tolist()
+        encore_ko = pd.read_table(input.encore_ko, header=None)[0].tolist()
+        encore_kd = pd.read_table(input.encore_kd, header=None)[0].tolist()
+        encore = encore_ko + encore_kd
         
         # combine iformation of matches
         cols_oi = [col for col in metadata.columns if "found_sfs" in col]
@@ -292,9 +310,8 @@ rule clean_ena_metadata:
         )
         metadata = metadata.explode("found_sfs").drop_duplicates().copy()
 
-        # consider only those SFs hand curated, in Rogalska, in Hegele
-        idx = sfs["source"].isin(["Rogalska2022","hand-curated","Hegele2012"]) & sfs["in_hegele2012"]
-        sfs = sfs.loc[idx].copy()
+        # consider only SFs for which we don't have KD profiles
+        sfs = sfs.loc[(~sfs["GENE"].isin(kd_screen)) & (~sfs["ENSEMBL"].isin(encore))]
         metadata = metadata.loc[metadata["found_sfs"].isin(sfs["GENE"])].copy()
 
         # filter out bad matches
@@ -324,7 +341,7 @@ rule clean_ena_metadata:
         
         # how many SFs we found data for?
         found_sfs = metadata.loc[metadata["found_sfs"].isin(sfs["GENE"]),"found_sfs"].unique()
-        new_sfs = set(found_sfs) - set(sfs.loc[~sfs["in_encore_kd"],"GENE"])
+        new_sfs = set(found_sfs) - set(sfs.loc[sfs["ENSEMBL"].isin(encore),"GENE"])
         missing_sfs = set(sfs["GENE"]) - set(found_sfs)
         print("Found %s SFs in total, %s of them not in ENCORE KDs. We are missing %s SFs" %\
               (len(found_sfs), len(new_sfs), len(missing_sfs)))
@@ -335,7 +352,7 @@ rule clean_ena_metadata:
         study_sfs = metadata[["study_accession","found_sfs"]].drop_duplicates().copy()
         avail_studies = set(study_sfs["study_accession"])
         studies_ois = set()
-        for it in range(2): # search 2 times
+        for it in range(1): # search 2 times
             studies_oi = set()
             prev_found_missing = set()
             prev_found_total = set()
@@ -372,7 +389,7 @@ rule clean_ena_metadata:
         # print the new query for ENA
         sfs_query = (
             " OR ".join((
-                'study_accession="'+list(studies_ois)+'"'
+                'study_accession="'+pd.Series(list(studies_ois))+'"'
             ).values)
         )
         query = 'tax_eq(9606) AND library_strategy="RNA-Seq" AND library_source="TRANSCRIPTOMIC" AND ('+sfs_query + ")"
@@ -535,4 +552,28 @@ rule download_metadata_sfs_selection:
         
         echo "Done!"
         """
+        
 
+rule clean_metadata_sfs_selection:
+    input:
+        metadata_selected = os.path.join(RAW_DIR,"ENA","splicing_factors","metadata","sf_experiments_clean-selected.tsv"),
+        metadata_experiments = os.path.join(RAW_DIR,"ENA","splicing_factors","metadata","sf_experiments_merged.tsv.gz")
+    output:
+        os.path.join(RAW_DIR,"ENA","splicing_factors","metadata","sf_experiments_clean-selected-with_sfs.tsv")
+    run:
+        import pandas as pd
+        
+        # load
+        metadata_selected = pd.read_table(input.metadata_selected, low_memory=False)
+        metadata_experiments = pd.read_table(input.metadata_experiments, low_memory=False)
+        
+        # add SFs
+        cols_oi = ["run_accession","found_sfs_in_run_alias","found_sfs_in_sample_alias",
+                   "found_sfs_in_sample_title","found_sfs_in_experiment_title","found_sfs_in_study_title"]
+        metadata = pd.merge(metadata_selected, metadata_experiments[cols_oi], on="run_accession", how="left")
+        metadata["is_match"] = metadata["run_accession"].isin(metadata_experiments["run_accession"])
+        
+        # save
+        metadata.to_csv(output[0], sep="\t", index=False)
+        
+        print("Done!")

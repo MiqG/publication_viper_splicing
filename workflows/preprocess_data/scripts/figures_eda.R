@@ -35,7 +35,9 @@ PAL_SINGLE_DARK = "darkgreen"
 # RESULTS_DIR = file.path(ROOT,"results","preprocess_data")
 # SUPPORT_DIR = file.path(ROOT,"support")
 
-# splicing_factors_file = file.path(SUPPORT_DIR,"splicing_factors.tsv")
+# splicing_factors_file = file.path(SUPPORT_DIR,"splicing_factors","splicing_factors.tsv")
+# metadata_encore_kd_file = file.path(PREP_DIR,"metadata","ENCOREKD.tsv.gz")
+# metadata_encore_ko_file = file.path(PREP_DIR,"metadata","ENCOREKO.tsv.gz")
 
 # figs_dir = file.path(RESULTS_DIR,'figures','eda')
 
@@ -48,18 +50,20 @@ plot_splicing_factors = function(splicing_factors){
     # upset plot - splicing factors considered in this analysis
     ## only SF lists
     sfs_oi = list(
-        "Rogalska2022" = X %>% filter(in_Rogalska2022) %>% pull(ENSEMBL),
-        "Hegele2012" = X %>% filter(in_Hegele2012) %>% pull(ENSEMBL),
-        "Hand-curated" = X %>% filter(in_handcurated) %>% pull(ENSEMBL)
+        "Rogalska2022" = X %>% filter(in_rogalska) %>% pull(ENSEMBL),
+        "Hegele2012" = X %>% filter(in_hegele) %>% pull(ENSEMBL),
+        "Hand-curated" = X %>% filter(in_handcurated) %>% pull(ENSEMBL),
+        "Seiler2018" = X %>% filter(in_seiler) %>% pull(ENSEMBL),
+        "Papasaikas2015" = X %>% filter(in_papasaikas) %>% pull(ENSEMBL)
     )
 
-    plts[["splicing_factors-only_sf_lists-venn"]] = sfs_oi %>%
-        ggvenn(
-            fill_color = get_palette("Dark2",3),
-            stroke_color = NA,
-            set_name_size = FONT_SIZE+0.5,
-            text_size = FONT_SIZE
-        )
+    #     plts[["splicing_factors-only_sf_lists-venn"]] = sfs_oi %>%
+    #         ggvenn(
+    #             fill_color = get_palette("Dark2",3),
+    #             stroke_color = NA,
+    #             set_name_size = FONT_SIZE+0.5,
+    #             text_size = FONT_SIZE
+    #         )
 
     m = sfs_oi %>% 
         list_to_matrix() %>% 
@@ -75,9 +79,9 @@ plot_splicing_factors = function(splicing_factors){
     
     ## covered
     sfs_oi = list(
-        "AllSFs" = X %>% filter(in_Rogalska2022 | in_Hegele2012 | in_handcurated) %>% pull(ENSEMBL),
-        "ENCORE KD" = X %>% filter(in_encore_kd) %>% pull(ENSEMBL),
-        "ENCORE KO" = X %>% filter(in_encore_ko) %>% pull(ENSEMBL)
+        "AllSFs" = X %>% pull(ENSEMBL),
+        "ENCORE KD or KO" = X %>% filter(in_encore_ko | in_encore_kd) %>% pull(ENSEMBL),
+        "NetSF" = X %>% filter(in_rogalska) %>% pull(ENSEMBL)
     )
     
     plts[["splicing_factors-all_datasets-venn"]] = sfs_oi %>%
@@ -165,6 +169,8 @@ parseargs = function(){
     
     option_list = list( 
         make_option("--splicing_factors_file", type="character"),
+        make_option("--metadata_encore_kd_file", type="character"),
+        make_option("--metadata_encore_ko_file", type="character"),
         make_option("--figs_dir", type="character")
     )
 
@@ -177,12 +183,23 @@ main = function(){
     args = parseargs()
     
     splicing_factors_file = args[["splicing_factors_file"]]
+    metadata_encore_kd_file = args[["metadata_encore_kd_file"]]
+    metadata_encore_ko_file = args[["metadata_encore_ko_file"]]
     figs_dir = args[["figs_dir"]]
     
     dir.create(figs_dir, recursive = TRUE)
     
     # load
     splicing_factors = read_tsv(splicing_factors_file)
+    metadata_encore_kd = read_tsv(metadata_encore_kd_file)
+    metadata_encore_ko = read_tsv(metadata_encore_ko_file)
+    
+    # prep
+    splicing_factors = splicing_factors %>%
+        mutate(
+            in_encore_kd = GENE %in% metadata_encore_kd[["PERT_GENE"]],
+            in_encore_ko = GENE %in% metadata_encore_ko[["PERT_GENE"]]
+        )
     
     # plot
     plts = make_plots(splicing_factors)

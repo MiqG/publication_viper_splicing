@@ -1,0 +1,5 @@
+- Papasaikas2015MolCell (supplementary table 2): https://doi.org/10.1016/j.molcel.2014.10.030
+- Seiler2018CellReports: https://doi.org/10.1016/j.celrep.2018.01.088
+- Rogalska2022NatRevGen: https://doi.org/10.1038/s41576-022-00556-8
+- Hegele2012MolCell: https://doi.org/10.1016/j.molcel.2011.12.034
+- SpliceosomeDB: https://doi.org/10.1093/nar/gks999 

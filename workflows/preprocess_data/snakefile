@@ -79,6 +79,9 @@ N_SAMPLES_ENA = {
 ##### RULES #####
 rule all:
     input:
+        # get list of splicing factors
+        os.path.join(PREP_DIR,"references","splicing_factors"),
+        
         # preprocess CCLE
         os.path.join(PREP_DIR,"metadata","CCLE.tsv.gz"),
         os.path.join(PREP_DIR,"event_psi","CCLE-EX.tsv.gz"),
@@ -153,9 +156,183 @@ rule all:
         expand(os.path.join(PREP_DIR,"genexpr_tpm","{dataset}.tsv.gz"), dataset=N_SAMPLES_ENA.keys()),
         
         # preprocess MetMap
-        os.path.join(PREP_DIR,"metmap","CCLE.tsv.gz")
+        os.path.join(PREP_DIR,"metmap","CCLE.tsv.gz")        
+
         
+rule make_list_splicing_factors:
+    input:
+        spliceosome_db = os.path.join(SUPPORT_DIR,"splicing_factors","literature_suptabs","SpliceosomeDB-human.csv"),
+        handcurated = os.path.join(SUPPORT_DIR,"splicing_factors","splicing_factors_handcurated-ensembl.txt"),
+        rogalska = os.path.join(SUPPORT_DIR,"splicing_factors","literature_suptabs","Rogalska2022NatRevGen-suptab1.xlsx"),
+        hegele = os.path.join(SUPPORT_DIR,"splicing_factors","literature_suptabs","Hegele2012MolCell-suptab1.xls"),
+        seiler = os.path.join(SUPPORT_DIR,"splicing_factors","literature_suptabs","Seiler2018CellReports-suptab1.xlsx"),
+        papasaikas = os.path.join(SUPPORT_DIR,"splicing_factors","literature_suptabs","Papasaikas2015MolCell-suptab2.xlsx"),
+        go_rna_splicing = os.path.join(SUPPORT_DIR,"splicing_factors","splicing_factors_handcurated-ensembl.txt"),
+        go_rna_binding = os.path.join(SUPPORT_DIR,"splicing_factors","splicing_factors_handcurated-ensembl.txt"),
+        annot_hgnc = os.path.join(RAW_DIR,"HGNC","gene_annotations.tsv.gz"),
+        annot_ensembl = os.path.join(RAW_DIR,"references","annotation-entrez_ensembl_symbol.tsv")
+    output:
+        directory(os.path.join(PREP_DIR,"references","splicing_factors"))
+    run:
+        import pandas as pd
+        import numpy as np
         
+        # load data
+        spliceosome_db = pd.read_csv(input.spliceosome_db)
+        rogalska = pd.read_excel(input.rogalska)
+        hegele = pd.read_excel(input.hegele)
+        seiler = pd.read_excel(input.seiler, skiprows=3, nrows=404)
+        papasaikas = pd.read_excel(input.papasaikas)
+        handcurated = pd.read_table(input.handcurated, header=None)[0].tolist()
+        go_rna_splicing = pd.read_table(input.go_rna_splicing, header=None)[0].tolist()
+        go_rna_binding = pd.read_table(input.go_rna_binding, header=None)[0].tolist()
+        annot_hgnc = pd.read_table(input.annot_hgnc)
+        
+        # prepare symbol cleanup
+        cleanup = annot_hgnc[["Approved symbol","Ensembl gene ID","NCBI Gene ID","Alias symbols","Previous symbols"]].copy()
+        cleanup["aliases"] = cleanup["Alias symbols"] + ", " + cleanup["Previous symbols"]
+        cleanup["aliases"] = cleanup["aliases"].str.split(", ")
+        cleanup = cleanup.explode("aliases")
+        
+        annot = annot_hgnc[["Approved symbol","Ensembl gene ID","NCBI Gene ID"]].drop_duplicates().copy()
+        annot = annot.rename(columns={
+            "Approved symbol":"GENE", "Ensembl gene ID":"ENSEMBL", "NCBI Gene ID":"ENTREZ"
+        })
+        
+        # add ensembl in all lists
+        ## Rogalska
+        ### Fix with HGNC
+        X = pd.merge(rogalska, annot[["GENE"]], left_on="SYMBOL", right_on="GENE", how="left")
+        idx_notfound = X["GENE"].isnull()
+        X.loc[idx_notfound,"GENE"] = pd.merge(X.loc[idx_notfound], cleanup, left_on="SYMBOL", right_on="aliases", how="left")["Approved symbol"].values
+        ### Fix manually
+        X.loc[X["SYMBOL"]=="HNRPLL", "GENE"] = "HNRNPLL"
+        ### standardize
+        X = pd.merge(X[["SYMBOL","CLASS","FULL_NAME","GENE"]], annot, on="GENE", how="left")
+        ### save
+        rogalska = X.copy()
+        rogalska["dataset"] = "Rogalska2022"
+        
+        ## Hegele
+        ### Fix with HGNC
+        X = pd.merge(hegele, annot[["GENE"]], left_on="Symbol", right_on="GENE", how="left")
+        idx_notfound = X["GENE"].isnull()
+        X.loc[idx_notfound,"GENE"] = pd.merge(X.loc[idx_notfound], cleanup, left_on="Symbol", right_on="aliases", how="left")["Approved symbol"].values
+        ### Fix manually
+        X.loc[X["Symbol"]=="SF3B14", "GENE"] = "SF3B6"
+        ### standardize
+        cols_oi = ["Symbol","Category","Group_short"] + ["GENE"]
+        X = pd.merge(X[cols_oi], annot, on="GENE", how="left")
+        ### save
+        hegele = X.copy()
+        hegele["dataset"] = "Hegele2012"
+        
+        ## Seiler
+        ### Fix with HGNC
+        X = pd.merge(seiler, annot[["GENE"]], left_on="Gene Symbol", right_on="GENE", how="left")
+        idx_notfound = X["GENE"].isnull()
+        X.loc[idx_notfound,"GENE"] = pd.merge(X.loc[idx_notfound], cleanup, left_on="Gene Symbol", right_on="aliases", how="left")["Approved symbol"].values
+        ### drop not found (LOC649330)
+        idx_notfound = X["GENE"].isnull()
+        X = X.loc[~idx_notfound]
+        ### standardize
+        cols_oi = ["GENE"]
+        X = pd.merge(X[cols_oi], annot, on="GENE", how="left")
+        ### save
+        seiler = X.copy()
+        seiler["dataset"] = "Seiler2018"
+        
+        ## Papasaikas
+        ### drop experimental columns
+        papasaikas = papasaikas.drop(columns=["SiRNA","Well","Pool Catalog Number","Duplex Catalog Number","Robin Reed classification"]).drop_duplicates().copy()
+        papasaikas = papasaikas.loc[~(papasaikas["GENE ID"]=="-")].copy()
+        ### Fix with HGNC
+        X = pd.merge(papasaikas, annot[["GENE"]], left_on="Gene Symbol", right_on="GENE", how="left")
+        X["GENE ID"] = X["GENE ID"].astype(float)
+        idx_notfound = X["GENE"].isnull()
+        X.loc[idx_notfound,"GENE"] = pd.merge(X.loc[idx_notfound], annot, left_on=["GENE ID"], right_on=["ENTREZ"], how="left")["GENE_y"].values
+        ### standardize
+        cols_oi = ['Gene Symbol', 'GENE ID', 'Luhrmann classification', 'Network Classification        (1st level )', 'Network Classification        (2nd level )'] + ["GENE"]
+        X = pd.merge(X[cols_oi], annot, on="GENE", how="left")
+        ### save
+        papasaikas = X.copy()
+        papasaikas["dataset"] = "Papasaikas2015"
+        
+        ## SpliceosomeDB
+        X = spliceosome_db.copy()
+        ### Fix manually
+        X.loc[X["Gene Symbol"]=="C11orf2", "Gene Symbol"] = "VPS51"
+        X = X.loc[~X["Ensemble Gene ID"].isnull()]
+        ### Fix with HGNC
+        X = pd.merge(X, annot[["GENE"]], left_on="Gene Symbol", right_on="GENE", how="left")
+        idx_notfound = X["GENE"].isnull()
+        X.loc[idx_notfound,"GENE"] = pd.merge(X.loc[idx_notfound], cleanup, left_on="Gene Symbol", right_on="aliases", how="left")["Approved symbol"].values
+        ### Fix with HGNC - ENSEMBL
+        idx_notfound = X["GENE"].isnull()
+        X.loc[idx_notfound,"GENE"] = pd.merge(X.loc[idx_notfound], annot[["GENE","ENSEMBL"]], left_on="Ensemble Gene ID", right_on="ENSEMBL", how="left")["GENE_y"].values
+        ### Fix manually
+        idx_notfound = X["GENE"].isnull()
+        X.loc[idx_notfound]
+        X.loc[X["Gene Symbol"]=="HIST1H4A", "GENE"] = "H4C1"
+        X.loc[X["Gene Symbol"]=="HIST2H4A", "GENE"] = "H4C14"
+        ### standardize
+        cols_oi = ['Gene Symbol', 'Complex', 'Ensemble Gene ID', 'Class / family'] + ["GENE"]
+        X = pd.merge(X[cols_oi], annot, on="GENE", how="left")
+        ### save
+        spliceosome_db = X.copy()
+        spliceosome_db["dataset"] = "SpliceosomeDB"
+        
+        ## Hand-curated
+        handcurated = annot.loc[annot["ENSEMBL"].isin(handcurated)].copy()
+        handcurated["dataset"] = "HandCurated"
+        
+        # combine datasets
+        cols_oi = ["GENE","ENSEMBL","ENTREZ","dataset"]
+        sfs_combined = pd.concat([
+            rogalska[cols_oi],
+            hegele[cols_oi],
+            seiler[cols_oi],
+            papasaikas[cols_oi],
+            handcurated[cols_oi]
+        ])
+        
+        # select splicing factors
+        splicing_factors = sfs_combined[["GENE","ENSEMBL","ENTREZ"]].drop_duplicates()
+        
+        # fix missing values
+        splicing_factors.loc[splicing_factors["GENE"]=="RNU2-1","ENSEMBL"] = "ENSG00000274585"
+        splicing_factors.loc[splicing_factors["GENE"]=="EIF3A","ENSEMBL"] = "ENSG00000107581"
+        splicing_factors.loc[splicing_factors["GENE"]=="EIF3A","ENTREZ"] = 8661.0
+        
+        # add info
+        splicing_factors["in_rogalska"] = splicing_factors["GENE"].isin(rogalska["GENE"])
+        splicing_factors["in_hegele"] = splicing_factors["GENE"].isin(hegele["GENE"])
+        splicing_factors["in_seiler"] = splicing_factors["GENE"].isin(seiler["GENE"])
+        splicing_factors["in_papasaikas"] = splicing_factors["GENE"].isin(papasaikas["GENE"])
+        splicing_factors["in_handcurated"] = splicing_factors["GENE"].isin(handcurated["GENE"])
+        splicing_factors["in_spliceosome_db"] = splicing_factors["GENE"].isin(spliceosome_db["GENE"])
+        splicing_factors["in_go_sf"] = splicing_factors["ENSEMBL"].isin(go_rna_splicing)
+        splicing_factors["in_go_rbp"] = splicing_factors["ENSEMBL"].isin(go_rna_binding)
+        
+        # add spliceosome DB complex info
+        splicing_factors = pd.merge(
+            splicing_factors, 
+            spliceosome_db.rename(columns={
+                "Complex":"spliceosome_db_complex","Class / family":"spliceosome_db_class"
+            })[["ENSEMBL","spliceosome_db_complex","spliceosome_db_class"]].drop_duplicates().dropna(), 
+            on="ENSEMBL",
+            how="left"
+        )
+        
+        # save
+        os.makedirs(output[0], exist_ok=True)
+        splicing_factors.to_csv(os.path.join(output[0],"splicing_factors.tsv"), index=False, sep="\t")
+        splicing_factors[["ENSEMBL"]].to_csv(os.path.join(output[0],"splicing_factors-ensembl.txt"), index=False, sep="\t", header=None)
+        splicing_factors[["GENE"]].to_csv(os.path.join(output[0],"splicing_factors-symbol.txt"), index=False, sep="\t", header=None)
+        
+        print("Done!")
+    
+    
 rule preprocess_ccle:
     input:
         sample_info = os.path.join(RAW_DIR,"DepMap","achilles_ccle","sample_info.csv"),
