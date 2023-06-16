@@ -12,6 +12,8 @@ SUPPORT_DIR = os.path.join(ROOT,"support")
 RESULTS_DIR = os.path.join(ROOT,"results","validation_activity")
 SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
 
+EVENT_TYPE = ["EX","ALT5","ALT3","INT"] # TODO
+
 THRESHS_DPSI = {
     "morethan": [0,5,10,15,20,25,30,35],
     "lessthan": [  5,10,15,20,25,30,35,101]
@@ -27,6 +29,9 @@ REGULONS = {
     "ENCOREKO_K562": os.path.join(RESULTS_DIR,"files","regulons","pert_rnaseq","ENCOREKO","K562","delta_psi-EX.tsv.gz")
 }
 
+# regulon inference from delta PSI based on splicing factor features
+DIFF_TYPES = ["diff_genexpr","diff_mutation"]
+
 # ARACNe
 TARGETS_FILES = {
     "event_psi_imputed": os.path.join(PREP_DIR,"event_psi_imputed","{dataset}-EX.tsv.gz"),
@@ -39,7 +44,9 @@ ARACNE_DATASETS = ["LIHC","LAML","CCLE"]
 N_BOOTSTRAPS = 100
 BOOTSTRAPS = list(range(N_BOOTSTRAPS))
 
-OMIC_TYPES = ["fc_tpm","dpsi","dpsi_diff_genexpr"] # dpsi_diff_mutation (TODO)
+# evaluation
+OMIC_TYPES = ["fc_tpm","dpsi","dpsi_diff_genexpr","dpsi_diff_mutation"]
+
 
 ##### RULES #####
 rule all:
@@ -52,7 +59,7 @@ rule all:
         ### between samples with differentially expressed SFs
         expand(os.path.join(RESULTS_DIR,"files","regulons","diff_genexpr","{omic}","{dataset}","delta_psi-EX.tsv.gz"), omic=["event_psi"], dataset=ARACNE_DATASETS),
         ### between samples with mutated SFs
-        #expand(os.path.join(RESULTS_DIR,"files","regulons","diff_mutation","{omic}","{dataset}","delta_psi-EX.tsv.gz"), omic=["event_psi"], dataset=ARACNE_DATASETS),
+        expand(os.path.join(RESULTS_DIR,"files","regulons","diff_mutation","{omic}","{dataset}","delta_psi-EX.tsv.gz"), omic=["event_psi"], dataset=ARACNE_DATASETS),
 
         ## from ARACNe genexpr vs genexpr and genexpr vs PSI
         ### prep inputs aracne
@@ -83,14 +90,14 @@ rule all:
         expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","regulons_selected","{dataset}-dpsi_morethan_15.tsv.gz"), dataset=REGULONS.keys()),
         
         # compute protein activities delta PSI networks
-        expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","{dataset_regulon}","{dataset_signature}-{cell_line}-dpsi_{diff_type}.tsv.gz"), dataset_regulon=ARACNE_DATASETS, dataset_signature=ENCORE_DATASETS, cell_line=CELL_LINES, diff_type=["diff_genexpr"]),
+        expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","{dataset_regulon}","{dataset_signature}-{cell_line}-dpsi_{diff_type}.tsv.gz"), dataset_regulon=ARACNE_DATASETS, dataset_signature=ENCORE_DATASETS, cell_line=CELL_LINES, diff_type=DIFF_TYPES),
         
         # compute protein activities genexpr networks
         expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","{dataset_regulon}","{dataset_signature}-{cell_line}-fc_tpm.tsv.gz"), dataset_regulon=ARACNE_DATASETS, dataset_signature=ENCORE_DATASETS, cell_line=CELL_LINES),
 
         # combine protein activities
         expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","merged-{omic_type}.tsv.gz"), omic_type=OMIC_TYPES),
-        expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","merged-dpsi_{diff_type}.tsv.gz"), diff_type=["diff_genexpr"]),
+        expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","merged-dpsi_{diff_type}.tsv.gz"), diff_type=DIFF_TYPES),
         
         # evaluate inferred protein activities        
         expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","evaluation_rankings-{omic_type}.tsv.gz"), omic_type=OMIC_TYPES),
@@ -228,8 +235,7 @@ rule regulon_inference_diff_mutation:
         regulators = os.path.join(PREP_DIR,"genexpr_tpm","{dataset}.tsv.gz"),
         regulators_oi = os.path.join(SUPPORT_DIR,"splicing_factors","splicing_factors-ensembl.txt"),
         targets = os.path.join(PREP_DIR,"{omic}","{dataset}-EX.tsv.gz"),
-        mutations = os.path.join(RAW_DIR,"DepMap","achilles_ccle","CCLE_mutations.csv"),
-        annot = os.path.join(RAW_DIR,"HGNC","gene_annotations.tsv.gz")
+        mutations = os.path.join(PREP_DIR,"mutations","{dataset}.tsv.gz")
     output:
         os.path.join(RESULTS_DIR,"files","regulons","diff_mutation","{omic}","{dataset}","delta_psi-EX.tsv.gz")
     params:
@@ -247,47 +253,39 @@ rule regulon_inference_diff_mutation:
         regulators_oi = pd.read_table(input.regulators_oi, header=None)[0].tolist()
         targets = pd.read_table(input.targets, index_col=0)
         mutations = pd.read_csv(input.mutations, low_memory=False)
-        annot = pd.read_table(input.annot)
         dpsi_type = params.dpsi_type
         n_jobs = threads
         
         gc.collect()
 
-        # prep mutations
-        mutations = pd.merge(
-            mutations, annot[["Approved symbol","Ensembl gene ID"]], 
-            left_on="Hugo_Symbol", right_on="Approved symbol", how="left"
-        )
-        
         # subset
         ## samples
         common_samples = set(regulators.columns).intersection(targets.columns)
         regulators = regulators[common_samples].copy()
         targets = targets[common_samples].copy()
-        mutations = mutations.loc[mutations["DepMap_ID"].isin(common_samples)].copy()
+        mutations = mutations.loc[mutations["sampleID"].isin(common_samples)].copy()
         
         ## regulators
         regulators = regulators.loc[~regulators.isnull().all(axis=1)].copy()
         common_regulators = set(
             regulators_oi
-        ).intersection(regulators.index).intersection(mutations["Ensembl gene ID"])
+        ).intersection(regulators.index).intersection(mutations["ENSEMBL"])
         regulators = regulators.loc[regulators.index.isin(common_regulators)].copy()
-        mutations = mutations.loc[mutations["Ensembl gene ID"].isin(common_regulators)].copy()
+        mutations = mutations.loc[mutations["ENSEMBL"].isin(common_regulators)].copy()
 
         ## consider only regulators with some aberrant mutations
-        mutations_oi = ["Frame_Shift_Del","Frame_Shift_Ins","De_novo_Start_OutOfFrame"]
         regulators_mutated = mutations.loc[
-            mutations["Variant_Classification"].isin(mutations_oi),"Ensembl gene ID"
+            mutations["is_aberrant"],"ENSEMBL"
         ].unique()
         regulators = regulators.loc[regulators_mutated].copy()
-        mutations = mutations.loc[mutations["Ensembl gene ID"].isin(regulators_mutated)].copy()
+        mutations = mutations.loc[mutations["ENSEMBL"].isin(regulators_mutated)].copy()
         
         # make regulons
-        def make_regulon(regulator_genexpr, targets, mutations, mutations_oi):
+        def make_regulon(regulator_genexpr, targets, mutations):
             # get mutated samples
-            idx_regulator_mutated = (mutations["Ensembl gene ID"]==regulator_genexpr.name)
+            idx_regulator_mutated = (mutations["ENSEMBL"]==regulator_genexpr.name)
             samples_mutated = mutations.loc[
-                 idx_regulator_mutated & mutations["Variant_Classification"].isin(mutations_oi), 
+                 idx_regulator_mutated & mutations["is_aberrant"], 
                 "DepMap_ID"
             ].unique()
             
@@ -320,8 +318,7 @@ rule regulon_inference_diff_mutation:
             delayed(make_regulon)(
                 regulators.loc[regulator],
                 targets,
-                mutations, 
-                mutations_oi
+                mutations
             )
             for regulator in tqdm(regulators.index)
         )
