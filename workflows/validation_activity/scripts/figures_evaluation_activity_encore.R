@@ -39,7 +39,7 @@ PAL_DUAL = c("grey","orange") # '#1B9E77''#7570B3'
 # figs_dir = file.path(RESULTS_DIR,'figures','evaluation-fc_tpm')
 
 ##### FUNCTIONS #####
-plot_evaluation_dpsi = function(evaluation_rankings, evaluation_corrs){
+plot_evaluation_thresholds = function(evaluation_rankings, evaluation_corrs){
     plts = list()
     
     # rankings between samples
@@ -149,7 +149,7 @@ plot_evaluation_dpsi = function(evaluation_rankings, evaluation_corrs){
 }
 
 
-plot_evaluation_fc_tpm = function(evaluation_rankings, evaluation_corrs){
+plot_evaluation_inferred_regulons = function(evaluation_rankings, evaluation_corrs){
     plts = list()
     
     # rankings between samples
@@ -207,8 +207,10 @@ make_plots = function(evaluation_rankings, evaluation_corrs, omic_type){
     
     plot_evaluation = switch(
         omic_type,
-        "dpsi" = plot_evaluation_dpsi,
-        "fc_tpm" = plot_evaluation_fc_tpm
+        "dpsi" = plot_evaluation_thresholds,
+        "fc_tpm" = plot_evaluation_inferred_regulons,
+        "dpsi_diff_genexpr" = plot_evaluation_inferred_regulons,
+        "dpsi_diff_mutation" = plot_evaluation_inferred_regulons,
     )
     
     plts = list(
@@ -247,7 +249,7 @@ save_plt = function(plts, plt_name, extension='.pdf',
 
 
 save_plots = function(plts, figs_dir, omic_type){
-    if(omic_type=="dpsi"){
+    if(omic_type %in% c("dpsi")){
         save_plt(plts, "evaluation-ranking_between-lessthan-box", '.pdf', figs_dir, width=25, height=35)
         save_plt(plts, "evaluation-rankperc_between-lessthan-box", '.pdf', figs_dir, width=25, height=35)
         save_plt(plts, "evaluation-ranking_between-morethan-box", '.pdf', figs_dir, width=25, height=35)
@@ -259,7 +261,7 @@ save_plots = function(plts, figs_dir, omic_type){
         save_plt(plts, "evaluation-corrs-lessthan-bar", '.pdf', figs_dir, width=15, height=30)
         save_plt(plts, "evaluation-corrs-morethan-bar", '.pdf', figs_dir, width=15, height=30)
         
-    } else if (omic_type=="fc_tpm"){
+    } else if (omic_type %in% c("fc_tpm","dpsi_diff_mutation","dpsi_diff_genexpr")){
         save_plt(plts, "evaluation-ranking_between-box", '.pdf', figs_dir, width=12, height=12)
         save_plt(plts, "evaluation-rankperc_between-box", '.pdf', figs_dir, width=12, height=12)
         save_plt(plts, "evaluation-ranking_within-box", '.pdf', figs_dir, width=12, height=12)

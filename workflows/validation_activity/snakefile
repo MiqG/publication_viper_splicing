@@ -29,25 +29,32 @@ REGULONS = {
 
 # ARACNe
 TARGETS_FILES = {
-    #"event_psi_imputed": os.path.join(PREP_DIR,"event_psi_imputed","{dataset}-EX.tsv.gz"),
-    #"event_psi": os.path.join(PREP_DIR,"event_psi","{dataset}-EX.tsv.gz"),
+    "event_psi_imputed": os.path.join(PREP_DIR,"event_psi_imputed","{dataset}-EX.tsv.gz"),
+    "event_psi": os.path.join(PREP_DIR,"event_psi","{dataset}-EX.tsv.gz"),
     "genexpr_tpm": os.path.join(PREP_DIR,"genexpr_tpm","{dataset}.tsv.gz")
 }
 
-ARACNE_OMICS = ["genexpr_tpm"]
+ARACNE_OMICS = ["genexpr_tpm","event_psi"]
 ARACNE_DATASETS = ["LIHC","LAML","CCLE"]
 N_BOOTSTRAPS = 100
 BOOTSTRAPS = list(range(N_BOOTSTRAPS))
 
-OMIC_TYPES = ["fc_tpm","dpsi"]
+OMIC_TYPES = ["fc_tpm","dpsi","dpsi_diff_genexpr"] # dpsi_diff_mutation (TODO)
 
 ##### RULES #####
 rule all:
     input:        
         # make regulons
-        ## from perturbation RNA seqs
+        ## from perturbation RNA seqs (ground truth)
         expand(os.path.join(RESULTS_DIR,"files","regulons","pert_rnaseq","{dataset}","{cell_line}","delta_psi-EX.tsv.gz"), dataset=ENCORE_DATASETS, cell_line=CELL_LINES),
-        ## from ARACNe genexpr vs genexpr
+        
+        ## from differential splicing
+        ### between samples with differentially expressed SFs
+        expand(os.path.join(RESULTS_DIR,"files","regulons","diff_genexpr","{omic}","{dataset}","delta_psi-EX.tsv.gz"), omic=["event_psi"], dataset=ARACNE_DATASETS),
+        ### between samples with mutated SFs
+        #expand(os.path.join(RESULTS_DIR,"files","regulons","diff_mutation","{omic}","{dataset}","delta_psi-EX.tsv.gz"), omic=["event_psi"], dataset=ARACNE_DATASETS),
+
+        ## from ARACNe genexpr vs genexpr and genexpr vs PSI
         ### prep inputs aracne
         expand(os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}","upstream_regs.tsv"), omic=ARACNE_OMICS, dataset=ARACNE_DATASETS),
         expand(os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}","upstream_regulators.txt"), omic=ARACNE_OMICS, dataset=ARACNE_DATASETS),
@@ -62,7 +69,7 @@ rule all:
         expand(os.path.join(RESULTS_DIR,"files","regulons","correlation_spearman","{omic}","{dataset}.tsv.gz"), omic=ARACNE_OMICS, dataset=ARACNE_DATASETS),
         ### prep outputs for viper
         expand(os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}","regulons.tsv.gz"), omic=ARACNE_OMICS, dataset=ARACNE_DATASETS),
-        
+
         # evaluate ground truth
         ## subset regulons with different dPSI thresholds
         expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","regulons","{dataset}","dpsi_lessthan_{thresh}.tsv.gz"), dataset=REGULONS.keys(), thresh=THRESHS_DPSI["lessthan"]),
@@ -75,16 +82,20 @@ rule all:
         ## save selected regulons
         expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","regulons_selected","{dataset}-dpsi_morethan_15.tsv.gz"), dataset=REGULONS.keys()),
         
-        # compute protein activitiess genexpr networks
-        expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","{dataset_regulon}","{dataset_signature}-{cell_line}-fc_tpm.tsv.gz"), dataset_regulon=ARACNE_DATASETS, dataset_signature=ENCORE_DATASETS, cell_line=CELL_LINES),
+        # compute protein activities delta PSI networks
+        expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","{dataset_regulon}","{dataset_signature}-{cell_line}-dpsi_{diff_type}.tsv.gz"), dataset_regulon=ARACNE_DATASETS, dataset_signature=ENCORE_DATASETS, cell_line=CELL_LINES, diff_type=["diff_genexpr"]),
         
+        # compute protein activities genexpr networks
+        expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","{dataset_regulon}","{dataset_signature}-{cell_line}-fc_tpm.tsv.gz"), dataset_regulon=ARACNE_DATASETS, dataset_signature=ENCORE_DATASETS, cell_line=CELL_LINES),
+
         # combine protein activities
         expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","merged-{omic_type}.tsv.gz"), omic_type=OMIC_TYPES),
+        expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","merged-dpsi_{diff_type}.tsv.gz"), diff_type=["diff_genexpr"]),
         
         # evaluate inferred protein activities        
         expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","evaluation_rankings-{omic_type}.tsv.gz"), omic_type=OMIC_TYPES),
         expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","evaluation_corrs-{omic_type}.tsv.gz"), omic_type=OMIC_TYPES),
-        
+
         # figures evaluation networks
         expand(os.path.join(RESULTS_DIR,'figures','evaluation-{omic_type}'), omic_type=OMIC_TYPES)
         
@@ -92,7 +103,7 @@ rule all:
 rule regulons_pert_rnaseq:
     input:
         perts = os.path.join(PREP_DIR,'ground_truth_pert','{dataset}',"{cell_line}",'delta_psi-EX.tsv.gz'),
-        regulators = os.path.join(SUPPORT_DIR,"splicing_factors.tsv")
+        regulators = os.path.join(SUPPORT_DIR,"splicing_factors","splicing_factors.tsv")
     output:
         os.path.join(RESULTS_DIR,"files","regulons","pert_rnaseq","{dataset}","{cell_line}","delta_psi-EX.tsv.gz")
     params:
@@ -107,8 +118,6 @@ rule regulons_pert_rnaseq:
         dpsi_type = params.dpsi_type
         
         # subset
-        idx = regulators["source"].isin(["Rogalska2022","Hegele2012","hand-curated"])
-        regulators = regulators.loc[idx]
         common_regulators = set(perts.columns).intersection(regulators["ENSEMBL"])
         perts = perts[common_regulators].copy()
         
@@ -134,12 +143,203 @@ rule regulons_pert_rnaseq:
         perts.to_csv(output[0], **SAVE_PARAMS)
         
         print("Done!")
-
         
-rule target_inference_arache_java_prep_inputs:
+        
+rule regulon_inference_diff_genexpr:
     input:
         regulators = os.path.join(PREP_DIR,"genexpr_tpm","{dataset}.tsv.gz"),
-        regulators_oi = os.path.join(SUPPORT_DIR,"splicing_factors-ensembl.txt"),
+        regulators_oi = os.path.join(SUPPORT_DIR,"splicing_factors","splicing_factors-ensembl.txt"),
+        targets = os.path.join(PREP_DIR,"{omic}","{dataset}-EX.tsv.gz")
+    output:
+        os.path.join(RESULTS_DIR,"files","regulons","diff_genexpr","{omic}","{dataset}","delta_psi-EX.tsv.gz")
+    params:
+        dpsi_type = "delta_psi-EX"
+    threads: 12
+    run:
+        import pandas as pd
+        import numpy as np
+        from joblib import Parallel, delayed
+        from tqdm import tqdm
+        
+        # load
+        regulators = pd.read_table(input.regulators, index_col=0)
+        regulators_oi = pd.read_table(input.regulators_oi, header=None)[0].tolist()
+        targets = pd.read_table(input.targets, index_col=0)
+        dpsi_type = params.dpsi_type
+        n_jobs = threads
+        
+        # subset
+        regulators = regulators.loc[regulators.index.isin(regulators_oi)].copy()
+        regulators = regulators.loc[~regulators.isnull().all(axis=1)].copy()
+        
+        common_samples = set(regulators.columns).intersection(targets.columns)
+        regulators = regulators[common_samples].copy()
+        targets = targets[common_samples].copy()
+        
+        # make regulons
+        def make_regulon(regulator_genexpr, targets, n_samples=5):
+            # get top n_samples of regulator genexpr
+            x = regulator_genexpr.sort_values()
+            samples_low = x.head(n_samples).index
+            samples_high = x.tail(n_samples).index
+            
+            # compute delta PSI (simulate over expression)
+            delta_psi = targets[samples_high].median(axis=1) - targets[samples_low].median(axis=1)
+            
+            # prep regulon
+            regulon = pd.DataFrame({
+                "ENSEMBL": regulator_genexpr.name,
+                "EVENT": delta_psi.index,
+                dpsi_type: delta_psi.values,
+                "n_obs_low": len(samples_low),
+                "n_obs_high": len(samples_high),
+                "n_missing_low": targets[samples_low].isnull().sum(axis=1),
+                "n_missing_high": targets[samples_high].isnull().sum(axis=1)
+            })
+            regulon["regulator"] = regulon["ENSEMBL"]
+            regulon["target"] = regulon["EVENT"]
+            regulon["likelihood"] = np.abs(regulon[dpsi_type])
+            regulon["tfmode"] = np.sign(regulon[dpsi_type])
+            
+            regulon = regulon.dropna().copy()
+            
+            return regulon
+        
+        regulons = Parallel(n_jobs=n_jobs)(
+            delayed(make_regulon)(
+                regulators.loc[regulator],
+                targets
+            )
+            for regulator in tqdm(regulators.index)
+        )
+        regulons = pd.concat(regulons)
+        
+        # prune
+        regulons = regulons.loc[regulons["likelihood"] >= 15]
+        
+        # save
+        regulons.to_csv(output[0], **SAVE_PARAMS)
+        
+        print("Done!")
+        
+        
+rule regulon_inference_diff_mutation:
+    input:
+        regulators = os.path.join(PREP_DIR,"genexpr_tpm","{dataset}.tsv.gz"),
+        regulators_oi = os.path.join(SUPPORT_DIR,"splicing_factors","splicing_factors-ensembl.txt"),
+        targets = os.path.join(PREP_DIR,"{omic}","{dataset}-EX.tsv.gz"),
+        mutations = os.path.join(RAW_DIR,"DepMap","achilles_ccle","CCLE_mutations.csv"),
+        annot = os.path.join(RAW_DIR,"HGNC","gene_annotations.tsv.gz")
+    output:
+        os.path.join(RESULTS_DIR,"files","regulons","diff_mutation","{omic}","{dataset}","delta_psi-EX.tsv.gz")
+    params:
+        dpsi_type = "delta_psi-EX"
+    threads: 12
+    run:
+        import pandas as pd
+        import numpy as np
+        from joblib import Parallel, delayed
+        from tqdm import tqdm
+        import gc
+        
+        # load
+        regulators = pd.read_table(input.regulators, index_col=0)
+        regulators_oi = pd.read_table(input.regulators_oi, header=None)[0].tolist()
+        targets = pd.read_table(input.targets, index_col=0)
+        mutations = pd.read_csv(input.mutations, low_memory=False)
+        annot = pd.read_table(input.annot)
+        dpsi_type = params.dpsi_type
+        n_jobs = threads
+        
+        gc.collect()
+
+        # prep mutations
+        mutations = pd.merge(
+            mutations, annot[["Approved symbol","Ensembl gene ID"]], 
+            left_on="Hugo_Symbol", right_on="Approved symbol", how="left"
+        )
+        
+        # subset
+        ## samples
+        common_samples = set(regulators.columns).intersection(targets.columns)
+        regulators = regulators[common_samples].copy()
+        targets = targets[common_samples].copy()
+        mutations = mutations.loc[mutations["DepMap_ID"].isin(common_samples)].copy()
+        
+        ## regulators
+        regulators = regulators.loc[~regulators.isnull().all(axis=1)].copy()
+        common_regulators = set(
+            regulators_oi
+        ).intersection(regulators.index).intersection(mutations["Ensembl gene ID"])
+        regulators = regulators.loc[regulators.index.isin(common_regulators)].copy()
+        mutations = mutations.loc[mutations["Ensembl gene ID"].isin(common_regulators)].copy()
+
+        ## consider only regulators with some aberrant mutations
+        mutations_oi = ["Frame_Shift_Del","Frame_Shift_Ins","De_novo_Start_OutOfFrame"]
+        regulators_mutated = mutations.loc[
+            mutations["Variant_Classification"].isin(mutations_oi),"Ensembl gene ID"
+        ].unique()
+        regulators = regulators.loc[regulators_mutated].copy()
+        mutations = mutations.loc[mutations["Ensembl gene ID"].isin(regulators_mutated)].copy()
+        
+        # make regulons
+        def make_regulon(regulator_genexpr, targets, mutations, mutations_oi):
+            # get mutated samples
+            idx_regulator_mutated = (mutations["Ensembl gene ID"]==regulator_genexpr.name)
+            samples_mutated = mutations.loc[
+                 idx_regulator_mutated & mutations["Variant_Classification"].isin(mutations_oi), 
+                "DepMap_ID"
+            ].unique()
+            
+            # get wildtype samples (those without any mutation on the regulator)
+            samples_wildtype = set(regulator_genexpr.index) - set(mutations.loc[idx_regulator_mutated, "DepMap_ID"])
+            
+            # compute delta PSI (simulate increase activity)
+            delta_psi = targets[samples_wildtype].median(axis=1) - targets[samples_mutated].median(axis=1)
+            
+            # prep regulon
+            regulon = pd.DataFrame({
+                "ENSEMBL": regulator_genexpr.name,
+                "EVENT": delta_psi.index,
+                dpsi_type: delta_psi.values,
+                "n_obs_mutated": len(samples_mutated),
+                "n_obs_wildtype": len(samples_wildtype),
+                "n_missing_mutated": targets[samples_mutated].isnull().sum(axis=1),
+                "n_missing_wildtype": targets[samples_wildtype].isnull().sum(axis=1)
+            })
+            regulon["regulator"] = regulon["ENSEMBL"]
+            regulon["target"] = regulon["EVENT"]
+            regulon["likelihood"] = np.abs(regulon[dpsi_type])
+            regulon["tfmode"] = np.sign(regulon[dpsi_type])
+            
+            regulon = regulon.dropna().copy()
+            
+            return regulon
+        
+        regulons = Parallel(n_jobs=n_jobs)(
+            delayed(make_regulon)(
+                regulators.loc[regulator],
+                targets,
+                mutations, 
+                mutations_oi
+            )
+            for regulator in tqdm(regulators.index)
+        )
+        regulons = pd.concat(regulons)
+        
+        # prune
+        regulons = regulons.loc[regulons["likelihood"] >= 15]
+        
+        # save
+        regulons.to_csv(output[0], **SAVE_PARAMS)
+        
+        print("Done!")
+
+        
+rule regulon_inference_arache_java_prep_inputs:
+    input:
+        regulators = os.path.join(PREP_DIR,"genexpr_tpm","{dataset}.tsv.gz"),
+        regulators_oi = os.path.join(SUPPORT_DIR,"splicing_factors","splicing_factors-ensembl.txt"),
         targets = lambda wildcards: TARGETS_FILES[wildcards.omic] if wildcards.omic!="event_psi" else TARGETS_FILES[wildcards.omic+"_imputed"],
     output:
         regulators = os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}","upstream_regs.tsv"),
@@ -184,7 +384,7 @@ rule target_inference_arache_java_prep_inputs:
         print("Done!")
         
 
-rule target_inference_aracne_java_threshold:
+rule regulon_inference_aracne_java_threshold:
     input:
         regulators = os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}","upstream_regs.tsv"),
         regulators_oi = os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}","upstream_regulators.txt"),
@@ -202,6 +402,8 @@ rule target_inference_aracne_java_threshold:
         memory = 5,
     shell:
         """
+        set -eo pipefail
+        
         java -Xmx{resources.memory}G -jar {params.aracne_bin} \
                 --expfile_upstream {input.regulators} \
                 --tfs {input.regulators_oi} \
@@ -214,7 +416,7 @@ rule target_inference_aracne_java_threshold:
         """
         
         
-rule target_inference_aracne_java_bootstrap:
+rule regulon_inference_aracne_java_bootstrap:
     input:
         os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}",".done_threshold"),
         regulators = os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}","upstream_regs.tsv"),
@@ -232,6 +434,8 @@ rule target_inference_aracne_java_bootstrap:
         memory = 5,
     shell:
         """
+        set -eo pipefail
+
         java -Xmx{resources.memory}G -jar {params.aracne_bin} \
                 --expfile_upstream {input.regulators} \
                 --tfs {input.regulators_oi} \
@@ -243,7 +447,7 @@ rule target_inference_aracne_java_bootstrap:
         """
         
         
-rule target_inference_aracne_java_consolidation:
+rule regulon_inference_aracne_java_consolidation:
     input:
         os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}",".done_threshold"),
         [os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}",".done_bootstrap_{boot_i}").format(boot_i=boot_i, omic="{omic}", dataset="{dataset}") for boot_i in BOOTSTRAPS]
@@ -259,6 +463,8 @@ rule target_inference_aracne_java_consolidation:
         memory = 15,
     shell:
         """
+        set -eo pipefail
+        
         java -Xmx{resources.memory}G -jar {params.aracne_bin} \
                 --output {params.output_dir} \
                 --threads {threads} \
@@ -267,7 +473,7 @@ rule target_inference_aracne_java_consolidation:
         """
         
         
-rule target_inference_aracne_spearman_correlation:
+rule regulon_inference_aracne_spearman_correlation:
     input:
         regulators = os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}","upstream_regs.tsv"),
         regulators_oi = os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}","upstream_regulators.txt"),
@@ -382,7 +588,7 @@ rule target_inference_aracne_spearman_correlation:
         print("Done!")
         
     
-rule target_inference_aracne_java_prep_output:
+rule regulon_inference_aracne_java_prep_output:
     input:
         regulons = os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}","network.txt"),
         spearman = os.path.join(RESULTS_DIR,"files","regulons","correlation_spearman","{omic}","{dataset}.tsv.gz")
@@ -397,7 +603,6 @@ rule target_inference_aracne_java_prep_output:
         # load
         regulons = pd.read_table(input.regulons)
         spearman = pd.read_table(input.spearman)
-        
         
         # prepare regulon
         ## "regulator" and "target" columns
@@ -463,7 +668,7 @@ rule subset_regulons_morethan:
         print("Done!")
 
         
-rule compute_protein_activity_splicing:
+rule compute_protein_activity_splicing_pert_rnaseq:
     input:
         signature = os.path.join(PREP_DIR,"ground_truth_pert","{dataset_signature}","{cell_line}","delta_psi-EX.tsv.gz"),
         regulons = os.path.join(RESULTS_DIR,"files","subsetted_regulons","regulons","{dataset_regulon}","dpsi_{thresh_type}_{thresh}.tsv.gz")
@@ -483,7 +688,7 @@ rule compute_protein_activity_splicing:
         """
         
         
-rule combine_inferred_protein_activities_splicing:
+rule combine_inferred_protein_activities_splicing_pert_rnaseq:
     input:
         protein_activities = [
             os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","{dataset_regulon}","{dataset_signature}-{cell_line}-dpsi_{thresh_type}_{thresh}.tsv.gz").format(dataset_regulon=dataset_regulon, dataset_signature=dataset_signature, cell_line=cell_line, thresh_type="lessthan", thresh=thresh) for
@@ -514,6 +719,65 @@ rule combine_inferred_protein_activities_splicing:
             df["cell_line"] = cell_line
             df["thresh_type"] = thresh_type
             df["thresh"] = float(thresh)
+            
+            dfs.append(df)
+            
+        dfs = pd.concat(dfs)
+        
+        dfs.to_csv(output[0], **SAVE_PARAMS)
+        
+        print("Done!")
+        
+        
+rule compute_protein_activity_splicing_delta_psi:
+    input:
+        signature = os.path.join(PREP_DIR,"ground_truth_pert","{dataset_signature}","{cell_line}","delta_psi-EX.tsv.gz"),
+        regulons = os.path.join(RESULTS_DIR,"files","regulons","{diff_type}","event_psi","{dataset_regulon}","delta_psi-EX.tsv.gz")
+    output:
+        os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","{dataset_regulon}","{dataset_signature}-{cell_line}-dpsi_{diff_type}.tsv.gz")
+    params:
+        assoc_method = "ground_truth",
+        actinf_method = "viper"
+    shell:
+        """
+        Rscript scripts/infer_protein_activity.R \
+                    --signature_file={input.signature} \
+                    --regulons_file={input.regulons} \
+                    --output_file={output} \
+                    --assoc_method={params.assoc_method} \
+                    --actinf_method={params.actinf_method}
+        """
+        
+        
+rule combine_inferred_protein_activities_delta_psi:
+    input:
+        protein_activities = [
+            os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","{dataset_regulon}","{dataset_signature}-{cell_line}-dpsi_{diff_type}.tsv.gz").format(dataset_regulon=dataset_regulon, dataset_signature=dataset_signature, cell_line=cell_line, diff_type="{diff_type}") for
+            dataset_regulon in ARACNE_DATASETS for dataset_signature in ENCORE_DATASETS for cell_line in CELL_LINES
+        ]
+    output:
+        os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","merged-dpsi_{diff_type}.tsv.gz")
+    run:
+        import os
+        import pandas as pd
+        import numpy as np
+        
+        dfs = []
+        for file in input.protein_activities:
+            dataset_regulon = os.path.basename(os.path.dirname(file))
+            dataset_signature = os.path.basename(file).split("-")[0]
+            cell_line = os.path.basename(file).split("-")[1]
+            thresh_type = "morethan"
+            thresh = 15
+            
+            df = pd.read_table(file)
+            df = df.melt(id_vars="regulator", var_name="PERT_GENE", value_name="protein_activity")
+            
+            df["dataset_regulon"] = dataset_regulon
+            df["dataset_signature"] = dataset_signature
+            df["cell_line"] = cell_line
+            df["thresh_type"] = thresh_type
+            df["thresh"] = thresh
             
             dfs.append(df)
             
