@@ -21,6 +21,7 @@ RAW_DIR = os.path.join(ROOT,"data","raw")
 SRC_DIR = os.path.join(ROOT,"src")
 PREP_DIR = os.path.join(ROOT,"data","prep")
 SUPPORT_DIR = os.path.join(ROOT,"support")
+RESULTS_DIR = os.path.join(ROOT,"results","preprocess_data")
 
 SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
 
@@ -63,6 +64,7 @@ CANCER_TYPES = [
     'UVM'
 ]
 
+CANCER_TYPES = ["LAML","LIHC"]
 tcga_metadata = pd.read_table(os.path.join(RAW_DIR,"TCGA","metadata","PANCAN.tsv.gz"))
 TCGA_N_SAMPLES = tcga_metadata["cancer_type"].value_counts().to_dict()
 
@@ -89,6 +91,7 @@ rule all:
         os.path.join(PREP_DIR,"event_psi","CCLE-ALTD.tsv.gz"),
         os.path.join(PREP_DIR,"event_psi","CCLE-INT.tsv.gz"),
         os.path.join(PREP_DIR,"genexpr_tpm","CCLE.tsv.gz"),
+        os.path.join(PREP_DIR,"mutations","CCLE.tsv.gz"),
 
         # preprocess ENCORE
         os.path.join(PREP_DIR,"metadata","ENCOREKD.tsv.gz"),
@@ -113,6 +116,7 @@ rule all:
         expand(os.path.join(PREP_DIR,"event_psi","{cancer}-ALTD.tsv.gz"), cancer=CANCER_TYPES),
         expand(os.path.join(PREP_DIR,"event_psi","{cancer}-INT.tsv.gz"), cancer=CANCER_TYPES),
         expand(os.path.join(PREP_DIR,'genexpr_tpm','{cancer}.tsv.gz'), cancer=CANCER_TYPES),
+        expand(os.path.join(PREP_DIR,"mutations","{cancer}.tsv.gz"), cancer=CANCER_TYPES),
         
         # ENCORE RBP PERTURBATION SCREENS
         ## compute log FC TPM
@@ -156,7 +160,10 @@ rule all:
         expand(os.path.join(PREP_DIR,"genexpr_tpm","{dataset}.tsv.gz"), dataset=N_SAMPLES_ENA.keys()),
         
         # preprocess MetMap
-        os.path.join(PREP_DIR,"metmap","CCLE.tsv.gz")        
+        os.path.join(PREP_DIR,"metmap","CCLE.tsv.gz"),    
+        
+        # EDA data figures
+        os.path.join(RESULTS_DIR,'figures','eda')
 
         
 rule make_list_splicing_factors:
@@ -441,6 +448,37 @@ rule preprocess_ccle:
         genexpr.reset_index().drop(columns='NAME').to_csv(output.genexpr, **SAVE_PARAMS)
         
         print("Done!")        
+
+        
+rule preprocess_CCLE_mutations:
+    input:
+        mutations = os.path.join(RAW_DIR,"DepMap","achilles_ccle","CCLE_mutations.csv"),
+        annot = os.path.join(RAW_DIR,"HGNC","gene_annotations.tsv.gz")
+    output:
+        mutations = os.path.join(PREP_DIR,"mutations","CCLE.tsv.gz")
+    run:
+        import pandas as pd
+        
+        mutations = pd.read_csv(input.mutations, low_memory=False)
+        annot = pd.read_table(input.annot)
+        
+        annot = annot.rename(columns={"Approved symbol":"GENE","Ensembl gene ID":"ENSEMBL"})[["GENE","ENSEMBL"]]
+        mutations = pd.merge(mutations, annot, left_on="Hugo_Symbol", right_on="GENE", how="left")
+        
+        mutations["sampleID"] = mutations["DepMap_ID"]
+        mutations["mutation_effect"] = mutations["Variant_Classification"]
+        
+        # indicate aberrant mutations
+        mutations_oi = [
+            # CCLE
+            "Frame_Shift_Del","Frame_Shift_Ins",
+            "De_novo_Start_OutOfFrame", "Nonsense_Mutation"
+        ]
+        mutations["is_aberrant"] = mutations["mutation_effect"].isin(mutations_oi)
+        
+        mutations.to_csv(output.mutations, **SAVE_PARAMS)
+        
+        print("Done!")
         
 
 rule preprocess_TCGA:
@@ -545,7 +583,46 @@ rule preprocess_TCGA:
         
         print("Done!")
 
+        
+rule preprocess_TCGA_mutations:
+    input:
+        mutations = os.path.join(RAW_DIR,"UCSCXena","GDC","snv","GDC-PANCAN.mutect2_snv.tsv.gz"),
+        metadata = os.path.join(PREP_DIR,"metadata","{cancer}.tsv.gz"),
+        annot = os.path.join(RAW_DIR,"HGNC","gene_annotations.tsv.gz")
+    output:
+        mutations = os.path.join(PREP_DIR,"mutations","{cancer}.tsv.gz")
+    run:
+        import pandas as pd
+        
+        mutations = pd.read_table(input.mutations, low_memory=False)
+        metadata = pd.read_table(input.metadata)
+        annot = pd.read_table(input.annot)
+        
+        # prep
+        mutations["sampleID"] = mutations["Sample_ID"].str[:15]
+        
+        # subset
+        mutations = mutations.loc[mutations["sampleID"].isin(metadata["sampleID"])].copy()
+        
+        # add ENSEMBL
+        annot = annot.rename(columns={"Approved symbol":"GENE","Ensembl gene ID":"ENSEMBL"})[["GENE","ENSEMBL"]]
+        mutations = pd.merge(mutations, annot, left_on="gene", right_on="GENE", how="left")
+        
+        mutations["mutation_effect"] = mutations["effect"]
+        
+        # indicate aberrant mutations
+        mutations["is_aberrant"] = (
+            mutations["mutation_effect"].str.contains("frameshift") |
+            mutations["mutation_effect"].str.contains("stop_gained") |
+            mutations["mutation_effect"].str.contains("start_lost")
+        )        
+        
+        # save
+        mutations.to_csv(output.mutations, **SAVE_PARAMS)
+        
+        print("Done!")
 
+        
 rule preprocess_encorekd:
     input:
         metadata = os.path.join(RAW_DIR,'ENCODE','ENCORE','metadata','ENCORE.tsv'),
@@ -1377,3 +1454,23 @@ rule preprocess_ena_datasets:
         genexpr.reset_index().drop(columns='NAME').to_csv(output.genexpr, **SAVE_PARAMS)
         
         print("Done!")
+        
+        
+rule figures_eda:
+    input:
+        splicing_factors = os.path.join(SUPPORT_DIR,"splicing_factors","splicing_factors.tsv"),
+        metadata_encore_kd = os.path.join(PREP_DIR,"metadata","ENCOREKD.tsv.gz"),
+        metadata_encore_ko = os.path.join(PREP_DIR,"metadata","ENCOREKO.tsv.gz"),
+        kd_screen = os.path.join(SUPPORT_DIR,"kd_screen-symbol.txt")
+    output:
+        directory(os.path.join(RESULTS_DIR,'figures','eda'))
+    shell:
+        """
+        Rscript scripts/figures_eda.R \
+                    --splicing_factors_file={input.splicing_factors} \
+                    --metadata_encore_kd_file={input.metadata_encore_kd} \
+                    --metadata_encore_ko_file={input.metadata_encore_ko} \
+                    --kd_screen_file={input.kd_screen} \
+                    --figs_dir={output}
+        """
+        

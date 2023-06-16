@@ -38,6 +38,7 @@ PAL_SINGLE_DARK = "darkgreen"
 # splicing_factors_file = file.path(SUPPORT_DIR,"splicing_factors","splicing_factors.tsv")
 # metadata_encore_kd_file = file.path(PREP_DIR,"metadata","ENCOREKD.tsv.gz")
 # metadata_encore_ko_file = file.path(PREP_DIR,"metadata","ENCOREKO.tsv.gz")
+# kd_screen_file = file.path(SUPPORT_DIR,"kd_screen-symbol.txt")
 
 # figs_dir = file.path(RESULTS_DIR,'figures','eda')
 
@@ -57,13 +58,13 @@ plot_splicing_factors = function(splicing_factors){
         "Papasaikas2015" = X %>% filter(in_papasaikas) %>% pull(ENSEMBL)
     )
 
-    #     plts[["splicing_factors-only_sf_lists-venn"]] = sfs_oi %>%
-    #         ggvenn(
-    #             fill_color = get_palette("Dark2",3),
-    #             stroke_color = NA,
-    #             set_name_size = FONT_SIZE+0.5,
-    #             text_size = FONT_SIZE
-    #         )
+    plts[["splicing_factors-only_sf_lists-venn"]] = sfs_oi %>%
+        ggvenn(
+            fill_color = get_palette("Dark2",5),
+            stroke_color = NA,
+            set_name_size = FONT_SIZE+0.5,
+            text_size = FONT_SIZE
+        )
 
     m = sfs_oi %>% 
         list_to_matrix() %>% 
@@ -81,12 +82,13 @@ plot_splicing_factors = function(splicing_factors){
     sfs_oi = list(
         "AllSFs" = X %>% pull(ENSEMBL),
         "ENCORE KD or KO" = X %>% filter(in_encore_ko | in_encore_kd) %>% pull(ENSEMBL),
-        "NetSF" = X %>% filter(in_rogalska) %>% pull(ENSEMBL)
+        "KDscreen" = X %>% filter(in_kd_screen) %>% pull(ENSEMBL),
+        "KDsENA" = X %>% filter(in_ena_sfs) %>% pull(ENSEMBL)
     )
     
     plts[["splicing_factors-all_datasets-venn"]] = sfs_oi %>%
         ggvenn(
-            fill_color = get_palette("rickandmorty",3),
+            fill_color = get_palette("rickandmorty",4),
             stroke_color = NA,
             set_name_size = FONT_SIZE+0.5,
             text_size = FONT_SIZE
@@ -171,6 +173,7 @@ parseargs = function(){
         make_option("--splicing_factors_file", type="character"),
         make_option("--metadata_encore_kd_file", type="character"),
         make_option("--metadata_encore_ko_file", type="character"),
+        make_option("--kd_screen_file", type="character"),
         make_option("--figs_dir", type="character")
     )
 
@@ -185,6 +188,7 @@ main = function(){
     splicing_factors_file = args[["splicing_factors_file"]]
     metadata_encore_kd_file = args[["metadata_encore_kd_file"]]
     metadata_encore_ko_file = args[["metadata_encore_ko_file"]]
+    kd_screen_file = args[["kd_screen_file"]]
     figs_dir = args[["figs_dir"]]
     
     dir.create(figs_dir, recursive = TRUE)
@@ -193,12 +197,16 @@ main = function(){
     splicing_factors = read_tsv(splicing_factors_file)
     metadata_encore_kd = read_tsv(metadata_encore_kd_file)
     metadata_encore_ko = read_tsv(metadata_encore_ko_file)
+    kd_screen = readLines(kd_screen_file)
+    ena_sfs = readLines("tmp.txt")
     
     # prep
     splicing_factors = splicing_factors %>%
         mutate(
             in_encore_kd = GENE %in% metadata_encore_kd[["PERT_GENE"]],
-            in_encore_ko = GENE %in% metadata_encore_ko[["PERT_GENE"]]
+            in_encore_ko = GENE %in% metadata_encore_ko[["PERT_GENE"]],
+            in_kd_screen = GENE %in% kd_screen,
+            in_ena_sfs = GENE %in% ena_sfs
         )
     
     # plot
