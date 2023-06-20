@@ -65,6 +65,7 @@ CANCER_TYPES = [
 ]
 
 CANCER_TYPES = ["LAML","LIHC"]
+
 tcga_metadata = pd.read_table(os.path.join(RAW_DIR,"TCGA","metadata","PANCAN.tsv.gz"))
 TCGA_N_SAMPLES = tcga_metadata["cancer_type"].value_counts().to_dict()
 
@@ -162,8 +163,13 @@ rule all:
         # preprocess MetMap
         os.path.join(PREP_DIR,"metmap","CCLE.tsv.gz"),    
         
+        # discretize data
+        expand(os.path.join(PREP_DIR,"event_psi_imputed_discretized_{method}","{dataset}-EX.tsv.gz"), dataset=DATASETS, method=["qep"]), # "gaussian",
+        expand(os.path.join(PREP_DIR,"genexpr_tpm_discretized_qep","{dataset}.tsv.gz"), dataset=DATASETS, method=["qep"]),
+        
         # EDA data figures
         os.path.join(RESULTS_DIR,'figures','eda')
+        
 
         
 rule make_list_splicing_factors:
@@ -1454,7 +1460,80 @@ rule preprocess_ena_datasets:
         genexpr.reset_index().drop(columns='NAME').to_csv(output.genexpr, **SAVE_PARAMS)
         
         print("Done!")
+
         
+# rule discretize_matrix_gaussian:
+#     input:
+#         matrix = os.path.join(PREP_DIR,"{data_type}","{dataset}-EX.tsv.gz")
+#     output:
+#         matrix = os.path.join(PREP_DIR,"{data_type}_discretized_gaussian","{dataset}-EX.tsv.gz")
+#     run:
+#         import pandas as pd
+#         import numpy as np
+#         from sklearn.mixture import GaussianMixture
+        
+#         # load
+#         X = pd.read_table(input.matrix, index_col=0)
+        
+#         # discretize
+#         def discretize(x):
+#             try:
+#                 # fit gaussian mixture
+#                 gmm = GaussianMixture(n_components=2)
+#                 gmm.fit(x.values.reshape(-1, 1))
+#                 probs = gmm.predict_proba(x.values.reshape(-1, 1))
+#             except:
+#                 probs = np.zeros((len(x),2))
+            
+#             # split into groups
+#             groupA = probs[:,0] > probs[:,1]
+#             groupB = probs[:,0] <= probs[:,1]
+            
+#             # determine which group is high (1) or low (0)
+#             discretized = x.copy()
+#             discretized.values[:] = 0
+#             if x[groupA].median() > x[groupB].median():
+#                 discretized.values[groupA] = 1
+#             elif x[groupA].median() < x[groupB].median():
+#                 discretized.values[groupB] = 1
+            
+#             # if they are not different we keep all zeros
+            
+#             return discretized
+            
+#         result = X.apply(discretize, axis=1)
+        
+#         # save
+#         result.to_csv(output.matrix, **SAVE_PARAMS)
+        
+#         print("Done!")
+        
+        
+rule discretize_matrix_qep_splicing:        
+    input:
+        matrix = os.path.join(PREP_DIR,"event_psi_imputed","{dataset}-EX.tsv.gz")
+    output:
+        matrix = os.path.join(PREP_DIR,"event_psi_imputed_discretized_qep","{dataset}-EX.tsv.gz")
+    shell:
+        """
+        Rscript scripts/discretize_matrix_qep.R \
+                    --matrix_file={input.matrix} \
+                    --output_file={output.matrix}
+        """
+        
+        
+rule discretize_matrix_qep_genexpr:        
+    input:
+        matrix = os.path.join(PREP_DIR,"genexpr_tpm","{dataset}.tsv.gz")
+    output:
+        matrix = os.path.join(PREP_DIR,"genexpr_tpm_discretized_qep","{dataset}.tsv.gz")
+    shell:
+        """
+        Rscript scripts/discretize_matrix_qep.R \
+                    --matrix_file={input.matrix} \
+                    --output_file={output.matrix}
+        """
+
         
 rule figures_eda:
     input:
