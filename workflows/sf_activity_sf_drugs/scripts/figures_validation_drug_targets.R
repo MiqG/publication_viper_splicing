@@ -80,8 +80,7 @@ plot_sf3b_complex = function(genexpr, protein_activity, metadata, annot){
     X = genes_oi %>%
         left_join(
             genexpr %>%
-            pivot_longer(-ID, names_to="sampleID", values_to="tpm") %>%
-            mutate(log2_tpm = log2(tpm+1)),
+            pivot_longer(-ID, names_to="sampleID", values_to="log2_tpm"),
             by=c("ENSEMBL"="ID")
         ) %>%
         left_join(
@@ -260,7 +259,7 @@ plot_moa_discovery = function(protein_activity, metadata, annot){
             theme_pubr() +
             facet_wrap(~condition+study_accession+cell_line_name) +
             theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
-            labs(x="Ranking", y="median(Protein Activity)", color="SF3B Complex Gene")
+            labs(x="Ranking", y="median(Protein Activity)")
     }
     
     return(plts)

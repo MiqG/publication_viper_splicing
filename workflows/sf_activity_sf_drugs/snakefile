@@ -29,7 +29,7 @@ rule all:
         os.path.join(RESULTS_DIR,"files","protein_activity","sf_drugs.tsv.gz"),
         
         # figures
-        #os.path.join(RESULTS_DIR,"figures","validation_drug_targets")
+        os.path.join(RESULTS_DIR,"figures","validation_drug_targets")
         
         
 rule compute_signature:
@@ -120,7 +120,8 @@ rule validation_drug_targets:
     input:
         genexpr = os.path.join(PREP_DIR,"genexpr_tpm","sf_drugs.tsv.gz"),
         protein_activity = os.path.join(RESULTS_DIR,"files","protein_activity","sf_drugs.tsv.gz"),
-        metadata = os.path.join(PREP_DIR,"metadata","sf_drugs.tsv.gz")
+        metadata = os.path.join(PREP_DIR,"metadata","sf_drugs.tsv.gz"),
+        annotation = os.path.join(RAW_DIR,"HGNC","gene_annotations.tsv.gz")
     output:
         directory(os.path.join(RESULTS_DIR,"figures","validation_drug_targets"))
     shell:
@@ -129,5 +130,6 @@ rule validation_drug_targets:
                     --genexpr_file={input.genexpr} \
                     --protein_activity_file={input.protein_activity} \
                     --metadata_file={input.metadata} \
+                    --annotation_file={input.annotation} \
                     --figs_dir={output}
         """
