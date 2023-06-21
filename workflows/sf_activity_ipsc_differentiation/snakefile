@@ -29,7 +29,7 @@ rule all:
         os.path.join(RESULTS_DIR,"files","protein_activity","ipsc_differentiation.tsv.gz"),
         
         # figures
-        #os.path.join(RESULTS_DIR,"figures","validation_drug_targets")
+        os.path.join(RESULTS_DIR,"figures","validation_ipsc_differentiation")
         
         
 rule compute_signature:
@@ -51,7 +51,7 @@ rule compute_signature:
             metadata_oi = metadata.loc[metadata["study_accession"]==study]
             samples_oi = metadata_oi.loc[:,"sampleID"]
 
-            # DMSO by default
+            # iPSC by default
             samples_ctl = metadata_oi.loc[
                 (metadata_oi["condition"] == "iPSC"),
                 "sampleID"
@@ -89,18 +89,20 @@ rule compute_protein_activity:
         """
 
 
-rule validation_drug_targets:
+rule figures_ipsc_differentiation:
     input:
         genexpr = os.path.join(PREP_DIR,"genexpr_tpm","ipsc_differentiation.tsv.gz"),
         protein_activity = os.path.join(RESULTS_DIR,"files","protein_activity","ipsc_differentiation.tsv.gz"),
-        metadata = os.path.join(PREP_DIR,"metadata","ipsc_differentiation.tsv.gz")
+        metadata = os.path.join(PREP_DIR,"metadata","ipsc_differentiation.tsv.gz"),
+        annotation = os.path.join(RAW_DIR,"HGNC","gene_annotations.tsv.gz")
     output:
-        directory(os.path.join(RESULTS_DIR,"figures","validation_drug_targets"))
+        directory(os.path.join(RESULTS_DIR,"figures","validation_ipsc_differentiation"))
     shell:
         """
-        Rscript scripts/figures_validation_drug_targets.R \
+        Rscript scripts/figures_ipsc_differentiation.R \
                     --genexpr_file={input.genexpr} \
                     --protein_activity_file={input.protein_activity} \
                     --metadata_file={input.metadata} \
+                    --annotation_file={input.annotation} \
                     --figs_dir={output}
         """

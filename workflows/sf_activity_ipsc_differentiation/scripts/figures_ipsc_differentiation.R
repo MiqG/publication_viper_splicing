@@ -4,6 +4,45 @@
 #
 # Script purpose
 # --------------
+# - Interesting SFs
+#    - https://www.nature.com/articles/s41588-021-00851-w :
+#        - QKI (opposite brain vs heart)
+#    - https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6839889/ :
+#        - Brain:
+#            - PTBP1
+#            - PTBP2
+#            - SRRM4
+#            - RBFOX1
+#            - RBFOX3
+#            - NOVA2
+#            - KHDRBS3
+#            - CTCF (brain epigenetics)
+#            - TDP43 (neurological disorders)
+#        - Muscle:
+#            - CELF1
+#            - RBFOX1
+#            - RBFOX2
+#            - RBM24
+#            - MBNL1
+#            - RBM20
+#            - SF3B1
+#            - PTBP1
+#            - QKI
+#        - Pancreas:
+#            - NOVA1
+#            - RBM4
+#            - SRSF3
+#            - SRSF10
+#            - SLU7
+#            - ESRP2
+#        - Differentiation
+#            - PTBP1 (smooth muscle cells)
+#            - HNRNPA
+#            - HNRNPB
+#            - SNRP70
+#            - HNRPLL
+#            - MBNL2
+
 
 require(optparse)
 require(tidyverse)
@@ -23,16 +62,36 @@ FONT_SIZE = 2 # for additional labels
 FONT_FAMILY = "Arial"
 
 GENES_OI = c(
-    "PTBP1"="ENSG00000011304", # YES, neural stem cells
-    "MBNL1"="ENSG00000152601", # YES, muscle development
-    "RBFOX1"="ENSG00000078328",
-    "RBM20"="ENSG00000203867"
-)
-GENES_OI = c(
-    "PTBP1", 
-    "MBNL1",
+    "PTBP1",
+    "PTBP2",
+    "SRRM4",
     "RBFOX1",
-    "RBM20"
+    "RBFOX3",
+    "NOVA2",
+    "KHDRBS3",
+    "CTCF",
+    "TDP43",
+    "CELF1",
+    "RBFOX1",
+    "RBFOX2",
+    "RBM24",
+    "MBNL1",
+    "RBM20",
+    "SF3B1",
+    "PTBP1",
+    "QKI",
+    "NOVA1",
+    "RBM4",
+    "SRSF3",
+    "SRSF10",
+    "SLU7",
+    "ESRP2",
+    "PTBP1",
+    "HNRNPA",
+    "HNRNPB",
+    "SNRP70",
+    "HNRPLL",
+    "MBNL2"
 )
 
 
@@ -45,7 +104,7 @@ DEV_STAGES = list(
         "iPSC","ALVEOLAR_EPITHELIAL_PROGENITOR","ALVEOLAR_EPITHELIAL_TYPE_II","PRIMARY_ALVEOLAR_EPITHELIAL_TYPE_II"
     ),
     "PRJNA596331"=c(
-        "SELF_RENEWAL","ACC_DORSAL",
+        "iPSC","ACC_DORSAL",
         "NPC","ROSETTE","NEURONS_ALONE","NEURONS_PLUS_ASTROS"
     ),
     "PRJNA665705"=c(
@@ -233,6 +292,7 @@ parseargs = function(){
         make_option("--genexpr_file", type="character"),
         make_option("--protein_activity_file", type="character"),
         make_option("--metadata_file", type="character"),
+        make_option("--annotation_file", type="character"),
         make_option("--figs_dir", type="character")
     )
 
@@ -244,11 +304,10 @@ parseargs = function(){
 main = function(){
     args = parseargs()
     
-    print(args)
-    
     genexpr_file = args[["genexpr_file"]]
     protein_activity_file = args[["protein_activity_file"]]
     metadata_file = args[["metadata_file"]]
+    annotation_file = args[["annotation_file"]]
     figs_dir = args[["figs_dir"]]
     
     dir.create(figs_dir, recursive = TRUE)
