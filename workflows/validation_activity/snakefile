@@ -30,7 +30,7 @@ REGULONS = {
 }
 
 # regulon inference from delta PSI based on splicing factor features
-DPSI_REGINFS = ["diff_genexpr","diff_mutation","aracne"]
+#DPSI_REGINFS = ["diff_genexpr","diff_mutation","aracne"]
 
 # ARACNe
 TARGETS_FILES = {
@@ -46,7 +46,7 @@ N_BOOTSTRAPS = 100
 BOOTSTRAPS = list(range(N_BOOTSTRAPS))
 
 # evaluation
-OMIC_TYPES = ["fc_tpm","dpsi","dpsi_diff_genexpr","dpsi_diff_mutation","dpsi_aracne"]
+OMIC_TYPES = ["fc_tpm","dpsi","dpsi_diff_genexpr-event_psi","dpsi_diff_mutation-event_psi","dpsi_aracne-event_psi","dpsi_aracne-discretized_qep","dpsi_multivariate_regression-event_psi"]
 
 ##### RULES #####
 rule all:
@@ -60,6 +60,9 @@ rule all:
         expand(os.path.join(RESULTS_DIR,"files","regulons","diff_genexpr","{omic}","{dataset}","regulons.tsv.gz"), omic=["event_psi"], dataset=ARACNE_DATASETS),
         ### between samples with mutated SFs
         expand(os.path.join(RESULTS_DIR,"files","regulons","diff_mutation","{omic}","{dataset}","regulons.tsv.gz"), omic=["event_psi"], dataset=ARACNE_DATASETS),
+        
+        ## regulon inference MLR
+        expand(os.path.join(RESULTS_DIR,"files","regulons","multivariate_regression","{omic}","{dataset}","regulons.tsv.gz"), omic=["event_psi"], dataset=ARACNE_DATASETS),
 
         ## from ARACNe genexpr vs genexpr and genexpr vs PSI
         ### prep inputs aracne
@@ -76,7 +79,7 @@ rule all:
         expand(os.path.join(RESULTS_DIR,"files","regulons","correlation_spearman","{omic}","{dataset}.tsv.gz"), omic=ARACNE_OMICS, dataset=ARACNE_DATASETS),
         ### prep outputs for viper
         expand(os.path.join(RESULTS_DIR,"files","regulons","aracne","{omic}","{dataset}","regulons.tsv.gz"), omic=ARACNE_OMICS, dataset=ARACNE_DATASETS),
-
+        
         # evaluate ground truth
         ## subset regulons with different dPSI thresholds
         expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","regulons","{dataset}","dpsi_lessthan_{thresh}.tsv.gz"), dataset=REGULONS.keys(), thresh=THRESHS_DPSI["lessthan"]),
@@ -90,14 +93,15 @@ rule all:
         expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","regulons_selected","{dataset}-dpsi_morethan_15.tsv.gz"), dataset=REGULONS.keys()),
 
         # compute protein activities delta PSI networks
-        expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","{dataset_regulon}","{dataset_signature}-{cell_line}-dpsi_{diff_type}.tsv.gz"), dataset_regulon=ARACNE_DATASETS, dataset_signature=ENCORE_DATASETS, cell_line=CELL_LINES, diff_type=DPSI_REGINFS),
+        expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","{dataset_regulon}","{dataset_signature}-{cell_line}-dpsi_{diff_type}-{omic}.tsv.gz"), dataset_regulon=ARACNE_DATASETS, dataset_signature=ENCORE_DATASETS, cell_line=CELL_LINES, diff_type=["diff_genexpr","diff_mutation","multivariate_regression"], omic="event_psi"),
+        expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","{dataset_regulon}","{dataset_signature}-{cell_line}-dpsi_{diff_type}-{omic}.tsv.gz"), dataset_regulon=ARACNE_DATASETS, dataset_signature=ENCORE_DATASETS, cell_line=CELL_LINES, diff_type=["aracne"], omic=["event_psi","discretized_qep"]),
 
         # compute protein activities aracne genexpr networks
         expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","{dataset_regulon}","{dataset_signature}-{cell_line}-fc_tpm.tsv.gz"), dataset_regulon=ARACNE_DATASETS, dataset_signature=ENCORE_DATASETS, cell_line=CELL_LINES),
 
         # combine protein activities
-        expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","merged-{omic_type}.tsv.gz"), omic_type=OMIC_TYPES),
-        expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","merged-dpsi_{diff_type}.tsv.gz"), diff_type=DPSI_REGINFS),
+        #expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","merged-{omic_type}.tsv.gz"), omic_type=OMIC_TYPES),
+        expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","merged-dpsi_{diff_type_omic}.tsv.gz"), diff_type_omic=["aracne-event_psi","aracne-discretized_qep","multivariate_regression-event_psi"]),
 
         # evaluate inferred protein activities        
         expand(os.path.join(RESULTS_DIR,"files","subsetted_regulons","evaluation_rankings-{omic_type}.tsv.gz"), omic_type=OMIC_TYPES),
@@ -341,135 +345,22 @@ rule regulon_inference_multivariate_regression:
     input:
         regulators = os.path.join(PREP_DIR,"genexpr_tpm","{dataset}.tsv.gz"),
         regulators_oi = os.path.join(SUPPORT_DIR,"splicing_factors","splicing_factors-ensembl.txt"),
-        targets = lambda wildcards: TARGETS_FILES[wildcards.omic] if wildcards.omic!="event_psi" else TARGETS_FILES[wildcards.omic+"_imputed"],
+        targets = os.path.join(PREP_DIR,"{omic}","{dataset}-EX.tsv.gz"),
     output:
         os.path.join(RESULTS_DIR,"files","regulons","multivariate_regression","{omic}","{dataset}","regulons.tsv.gz")
-    run:
-        import pandas as pd
-        import numpy as np
-        from joblib import Parallel, delayed
-        from tqdm import tqdm
-        import gc
-        
-        # load
-        regulators = pd.read_table(input.regulators, index_col=0)
-        regulators_oi = pd.read_table(input.regulators_oi, header=None)[0].tolist()
-        targets = pd.read_table(input.targets, index_col=0)
-        dpsi_type = params.dpsi_type
-        n_jobs = threads
-        
-        gc.collect()
-        
-        # load perturbation data
-        regulators = pd.read_table(os.path.join(PREP_DIR,'genexpr_tpm','ipsc_differentiation.tsv.gz'), index_col=0)
-        targets = pd.read_table(os.path.join(PREP_DIR,'event_psi','ipsc_differentiation-EX.tsv.gz'), index_col=0)
-        
-        # subset
-        regulators = regulators.loc[regulators.index.isin(regulators_oi)].copy()
-        
-        common_samples = set(regulators.columns).intersection(targets.columns)
-        regulators = regulators[common_samples].copy()
-        targets = targets[common_samples].copy()
-        targets.values[targets==100] = np.nan # this improves sign and worsens identification
-        targets.values[targets==0] = np.nan
-        targets = targets.loc[targets.notna().sum(axis=1)>20].copy() # improves true positives
-        
-        # load ground truth
-        kd = pd.read_table(os.path.join(PREP_DIR,"ground_truth_pert","ENCOREKD","HepG2","log2_fold_change_tpm.tsv.gz"), index_col=0)
-        regulons = pd.read_table(os.path.join(RESULTS_DIR,"files","subsetted_regulons","regulons_selected","ENCOREKD_HepG2-dpsi_morethan_15.tsv.gz"))
-        
-        # how do targets look like for our gene of interest?
-        gene_oi_symbol = "U2AF2"
-        gene_oi_ensembl = "ENSG00000063244"
-        #targets = regulons.loc[regulons["GENE"]==gene_oi_symbol]
-        
-        corrs = targets.iloc[:20000].corrwith(regulators.loc[gene_oi_ensembl], method="spearman", axis=1)
-        corrs.hist(bins=25)
-        
-        import seaborn as sns
-        X = corrs.reset_index().rename(columns={0:"correlation"})
-        X["is_target"] = X["EVENT"].isin(regulons["target"])
-        X["abs_correlation"] = np.abs(X["correlation"])
-        X = pd.merge(X, regulons[["EVENT","delta_psi-EX"]], on="EVENT", how="left")
-        X["pos_corr"] = X["correlation"]>0
-        X["pos_dpsi"] = -X["delta_psi-EX"]>0
-        sns.violinplot(data=X, x="is_target", y="abs_correlation", cut=0)
-        sns.scatterplot(data=X, x="correlation", y="delta_psi-EX", alpha=0.5)
-        
-        x = X.dropna().groupby(["pos_corr","pos_dpsi"]).size().reset_index()
-        sns.barplot(data=x, x="pos_dpsi", y=0, hue="pos_corr")
-        
-        # are regulators perturbed similarly across cancer samples compared with a KD?
-        regulators.loc[gene_oi_ensembl].hist(bins=25)
-        kd.loc[gene_oi_ensembl,gene_oi_ensembl]
-        
-        # how much does the expression of other regulators change with changes in gene of interest?
-        corrs_regulators = regulators.dropna().T.corr(method="pearson")
-        ## get top n_samples of regulator genexpr
-        n_samples=25
-        x = regulators.loc[gene_oi_ensembl].sort_values()
-        samples_low = x.head(n_samples).index
-        samples_high = x.tail(n_samples).index
-        ## compute log FC (simulate over expression)
-        median_genexpr_high = regulators[samples_high].median(axis=1)
-        median_genexpr_low = regulators[samples_low].median(axis=1)
-        kd_simulated = median_genexpr_low - median_genexpr_high
-
-        X = corrs_regulators[gene_oi_ensembl].reset_index().rename(columns={gene_oi_ensembl:"correlation"})
-        X = pd.merge(
-            X, 
-            kd.loc[kd.index.isin(regulators_oi),gene_oi_ensembl].reset_index().rename(columns={gene_oi_ensembl:"kd_fc"}), 
-            on="ID", how="inner"
-        )
-        X = pd.merge(
-            X, 
-            kd_simulated.loc[kd_simulated.index.isin(regulators_oi)].reset_index().rename(columns={0:"kd_sim_fc"}), 
-            on="ID", how="inner"
-        )
-
-        sns.jointplot(data=X, x="kd_fc", y="correlation", kind="reg")
-        X["kd_fc"].corr(X["correlation"], method="spearman")
-        X["kd_fc"].corr(X["correlation"], method="pearson")
-
-        g = sns.jointplot(data=X, x="kd_fc", y="kd_sim_fc", kind="reg")
-        g.plot_joint(sns.kdeplot, color="r", zorder=0, levels=6)
-        X["kd_fc"].corr(X["kd_sim_fc"], method="spearman")
-        X["kd_fc"].corr(X["kd_sim_fc"], method="pearson")
-        
-        # SFs change coordinately but not in the same way as when we knockdown a splicing factor
-        
-        # is the correlation coefficient equivalent to a multivariate regression?
-        import matplotlib.pyplot as plt
-        import statsmodels.api as sm        
-
-        regulons = regulons.loc[regulons["EVENT"].isin(targets.index)]
-        
-        for event_oi in regulons.loc[(regulons["GENE"]==gene_oi_symbol),"EVENT"].values[20:30]:
-            X = regulators.dropna().T
-            y = targets.loc[event_oi]
-
-            is_missing = X.isnull().any(axis=1) | y.isnull()
-            X = X.loc[~is_missing]
-            y = y[~is_missing]
-
-            X = X - X.median(axis=0).values.reshape(1,-1)
-
-            X["intercept"] = 1
-
-            # Fit the linear regression model
-            model_full = sm.OLS(y, X).fit()
-            idx = X.columns==gene_oi_ensembl
-            model_null = sm.OLS(y, X.loc[:,~idx]).fit()
-            lr_stat, lr_pvalue, lr_df_diff = model_full.compare_lr_test(model_null)
-            print(lr_pvalue)
-
-            sns.scatterplot(x=X[gene_oi_ensembl], y=y)
-            plt.show()
-            print("LM:", model_full.params[gene_oi_ensembl])
-            print("Spearman:", X[gene_oi_ensembl].corr(y, method="spearman"))
-            print(regulons.loc[(regulons["GENE"]==gene_oi_symbol) & (regulons["EVENT"]==event_oi)].T)
-        
-        print("Done!")
+    params:
+        thresh_fdr = 0.1
+    threads: 24
+    shell:
+        """
+        nice python scripts/regulon_inference_multivariate_regression.py \
+                    --regulators_file={input.regulators} \
+                    --regulators_oi_file={input.regulators_oi} \
+                    --targets_file={input.targets} \
+                    --thresh_fdr={params.thresh_fdr} \
+                    --n_jobs={threads} \
+                    --output_file={output}
+        """
 
         
 rule regulon_inference_arache_java_prep_inputs:
@@ -673,10 +564,14 @@ rule regulon_inference_aracne_spearman_correlation:
             correl["tfmode"] = correl["statistic"]
             ## keep only significant correlations
             correl["padj"] = np.nan
-            _, fdr, _, _ = multitest.multipletests(
-                correl.loc[np.isfinite(correl["pvalue"]), "pvalue"], method="fdr_bh"
-            )
-            correl.loc[np.isfinite(correl["pvalue"]), "padj"] = fdr
+            try:
+                _, fdr, _, _ = multitest.multipletests(
+                    correl.loc[np.isfinite(correl["pvalue"]), "pvalue"], method="fdr_bh"
+                )
+                correl.loc[np.isfinite(correl["pvalue"]), "padj"] = fdr
+            except:
+                print("Could not compute FDR...")
+                
             ## filter out irrelevant associations
             #correl = correl.loc[correl["padj"] < THRESH_FDR].copy()
 
@@ -868,9 +763,9 @@ rule combine_inferred_protein_activities_splicing_pert_rnaseq:
 rule compute_protein_activity_splicing_delta_psi:
     input:
         signature = os.path.join(PREP_DIR,"ground_truth_pert","{dataset_signature}","{cell_line}","delta_psi-EX.tsv.gz"),
-        regulons = os.path.join(RESULTS_DIR,"files","regulons","{diff_type}","event_psi","{dataset_regulon}","regulons.tsv.gz")
+        regulons = os.path.join(RESULTS_DIR,"files","regulons","{diff_type}","{omic}","{dataset_regulon}","regulons.tsv.gz")
     output:
-        os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","{dataset_regulon}","{dataset_signature}-{cell_line}-dpsi_{diff_type}.tsv.gz")
+        os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","{dataset_regulon}","{dataset_signature}-{cell_line}-dpsi_{diff_type}-{omic}.tsv.gz")
     params:
         assoc_method = "ground_truth",
         actinf_method = "viper"
@@ -888,11 +783,11 @@ rule compute_protein_activity_splicing_delta_psi:
 rule combine_inferred_protein_activities_delta_psi:
     input:
         protein_activities = [
-            os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","{dataset_regulon}","{dataset_signature}-{cell_line}-dpsi_{diff_type}.tsv.gz").format(dataset_regulon=dataset_regulon, dataset_signature=dataset_signature, cell_line=cell_line, diff_type="{diff_type}") for
+            os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","{dataset_regulon}","{dataset_signature}-{cell_line}-dpsi_{diff_type_omic}.tsv.gz").format(dataset_regulon=dataset_regulon, dataset_signature=dataset_signature, cell_line=cell_line, diff_type_omic="{diff_type_omic}") for
             dataset_regulon in ARACNE_DATASETS for dataset_signature in ENCORE_DATASETS for cell_line in CELL_LINES
         ]
     output:
-        os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","merged-dpsi_{diff_type}.tsv.gz")
+        os.path.join(RESULTS_DIR,"files","subsetted_regulons","protein_activity","merged-dpsi_{diff_type_omic}.tsv.gz")
     run:
         import os
         import pandas as pd

@@ -209,9 +209,11 @@ make_plots = function(evaluation_rankings, evaluation_corrs, omic_type){
         omic_type,
         "dpsi" = plot_evaluation_thresholds,
         "fc_tpm" = plot_evaluation_inferred_regulons,
-        "dpsi_diff_genexpr" = plot_evaluation_inferred_regulons,
-        "dpsi_diff_mutation" = plot_evaluation_inferred_regulons,
-        "dpsi_aracne" = plot_evaluation_inferred_regulons
+        "dpsi_diff_genexpr-event_psi" = plot_evaluation_inferred_regulons,
+        "dpsi_diff_mutation-event_psi" = plot_evaluation_inferred_regulons,
+        "dpsi_aracne-event_psi" = plot_evaluation_inferred_regulons,
+        "dpsi_aracne-discretized_qep" = plot_evaluation_inferred_regulons,
+        "dpsi_multivariate_regression-event_psi" = plot_evaluation_inferred_regulons
     )
     
     plts = list(
@@ -262,7 +264,10 @@ save_plots = function(plts, figs_dir, omic_type){
         save_plt(plts, "evaluation-corrs-lessthan-bar", '.pdf', figs_dir, width=15, height=30)
         save_plt(plts, "evaluation-corrs-morethan-bar", '.pdf', figs_dir, width=15, height=30)
         
-    } else if (omic_type %in% c("fc_tpm","dpsi_diff_mutation","dpsi_diff_genexpr","dpsi_aracne")){
+    } else if (omic_type %in% c(
+        "fc_tpm","dpsi_diff_mutation-event_psi","dpsi_diff_genexpr-event_psi","dpsi_aracne-event_psi",
+        "dpsi_aracne-discretized_qep","dpsi_multivariate_regression-event_psi"
+    )){
         save_plt(plts, "evaluation-ranking_between-box", '.pdf', figs_dir, width=12, height=12)
         save_plt(plts, "evaluation-rankperc_between-box", '.pdf', figs_dir, width=12, height=12)
         save_plt(plts, "evaluation-ranking_within-box", '.pdf', figs_dir, width=12, height=12)
