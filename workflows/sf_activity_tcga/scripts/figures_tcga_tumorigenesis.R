@@ -41,7 +41,7 @@ PAL_CANCER_DRIVER = setNames(
 # gene_annotation_file = file.path(RAW_DIR,"HGNC","gene_annotations.tsv.gz")
 # figs_dir = file.path(RESULTS_DIR,"figures","tcga_tumorigenesis")
 # assocs_gene_dependency_file = file.path(RESULTS_DIR,"..","sf_activity_ccle","files","protein_activity_vs_demeter2","CCLE.tsv.gz")
-
+# survival_analysis_file = file.path(RESULTS_DIR,'files','PANCAN',"survival_analysis.tsv.gz")
 
 ##### FUNCTIONS #####
 plot_diff_protein_activity = function(diff_protein_activity){
@@ -216,17 +216,51 @@ plot_prolif_driver = function(diff_protein_activity, assocs_gene_dependency){
 }
 
 
-make_plots = function(diff_protein_activity, assocs_gene_dependency){
+plot_survival_analysis = function(diff_protein_activity, survival_analysis){
+    plts = list()
+    
+    X = diff_protein_activity %>%
+        filter(is_significant) %>%
+        mutate(driver_type = ifelse(sign(`condition_a-median`)>0, "Oncogenic", "Tumor suppressor")) %>%
+        count(GENE, regulator, driver_type) %>%
+        group_by(GENE, regulator) %>%
+        mutate(
+            n_sign = ifelse(driver_type=="Tumor suppressor", -n, n),
+            n_sum = sum(n_sign)
+        ) %>%
+        filter(abs(n_sum)>5) %>%
+        group_by(GENE, regulator) %>%
+        slice_max(n, n=1) %>%
+        ungroup() %>%
+        left_join(
+            survival_analysis,
+            by="regulator"
+        ) %>%
+        filter(pvalue < 0.05) %>%
+        count(GENE, driver_type) %>%
+        arrange(n)
+    
+    plts[["survival_analysis"]] = X %>%
+        mutate(med = median(`condition_a-median`)) %>%
+        ggscatter(x="pvalue_surv", y="condition_a-median") +
+        stat_cor(method="spearman")
+    
+    return(plts)
+}
+
+
+make_plots = function(diff_protein_activity, assocs_gene_dependency, survival_analysis){
     plts = list(
         plot_diff_protein_activity(diff_protein_activity),
-        plot_prolif_driver(diff_protein_activity, assocs_gene_dependency)
+        plot_prolif_driver(diff_protein_activity, assocs_gene_dependency),
+        plot_survival_analysis(diff_protein_activity, survival_analysis)
     )
     plts = do.call(c,plts)
     return(plts)
 }
 
 
-make_figdata = function(diff_protein_activity, assocs_gene_dependency){
+make_figdata = function(diff_protein_activity, assocs_gene_dependency, survival_analysis){
     figdata = list(
         "tcga_tumorigenesis" = list(
             "diff_protein_activity" = diff_protein_activity,
@@ -283,6 +317,8 @@ parseargs = function(){
     option_list = list( 
         make_option("--diff_protein_activity_file", type="character"),
         make_option("--gene_annotation_file", type="character"),
+        make_option("--assocs_gene_dependency_file", type="character"),
+        make_option("--survival_analysis_file", type="character"),
         make_option("--figs_dir", type="character")
     )
 
@@ -299,6 +335,7 @@ main = function(){
     diff_protein_activity_file = args[["diff_protein_activity_file"]]
     gene_annotation_file = args[["gene_annotation_file"]]
     assocs_gene_dependency_file = args[["assocs_gene_dependency_file"]]
+    survival_analysis_file = args[["survival_analysis_file"]]
     figs_dir = args[["figs_dir"]]
     
     dir.create(figs_dir, recursive = TRUE)
@@ -311,6 +348,7 @@ main = function(){
             ENSEMBL = `Ensembl gene ID`
         )
     assocs_gene_dependency = read_tsv(assocs_gene_dependency_file)
+    survival_analysis = read_tsv(survival_analysis_file)
     
     # prep
     diff_protein_activity = diff_protein_activity %>%
@@ -323,10 +361,10 @@ main = function(){
         )
     
     # plot
-    plts = make_plots(diff_protein_activity, assocs_gene_dependency)
+    plts = make_plots(diff_protein_activity, assocs_gene_dependency, survival_analysis)
     
     # make figdata
-    figdata = make_figdata(diff_protein_activity, assocs_gene_dependency)
+    figdata = make_figdata(diff_protein_activity, assocs_gene_dependency, survival_analysis)
 
     # save
     save_plots(plts, figs_dir)

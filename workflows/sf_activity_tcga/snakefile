@@ -50,7 +50,9 @@ CANCER_TYPES_PTSTN = [
     'UCEC'
 ]
 CANCER_TYPES_METPT = ["BRCA","SKCM","THCA"]
-CANCER_TYPES_PT = metadata.loc[metadata["sample_type_clean"]=="PrimaryTumor","cancer_type"].values
+CANCER_TYPES_PT = metadata.loc[
+    metadata["sample_type_clean"].isin(["PrimaryTumor","PrimaryBloodDerivedCancerPeripheralBlood"]),"cancer_type"
+].values
 
 DIFF_CONDITIONS = {
     "PrimaryTumor_vs_SolidTissueNormal":{
@@ -72,6 +74,11 @@ CANCER_TYPES_BY_SAMPLETYPE = {
     s: metadata.loc[metadata["sample_type_clean"]==s,"cancer_type"].values for s in metadata["sample_type_clean"].unique()
 }
 
+CANCER_TYPES_SURV = metadata.loc[
+    metadata["sample_type_clean"].isin(["PrimaryTumor","PrimaryBloodDerivedCancerPeripheralBlood"]),
+    ["cancer_type","sample_type_clean"]
+]
+
 ##### RULES #####
 rule all:
     input:
@@ -91,13 +98,17 @@ rule all:
         ## within
         expand(os.path.join(RESULTS_DIR,"files","protein_activity","{cancer}-{sample}-EX.tsv.gz"), zip, cancer=CANCER_TYPES, sample=SAMPLE_TYPES),
         expand(os.path.join(RESULTS_DIR,"files","protein_activity","PANCAN-{sample}-EX.tsv.gz"), sample=CANCER_TYPES_BY_SAMPLETYPE),
-        
+
         # differential SF activities
         ## compute
         expand(os.path.join(RESULTS_DIR,'files',"diff_protein_activity",'{cancer}-{comparison}.tsv.gz'), comparison=["PrimaryTumor_vs_SolidTissueNormal"], cancer=CANCER_TYPES_PTSTN),
         expand(os.path.join(RESULTS_DIR,'files',"diff_protein_activity",'{cancer}-{comparison}.tsv.gz'), comparison=["Metastatic_vs_PrimaryTumor"], cancer=CANCER_TYPES_METPT),
         ## merge
         expand(os.path.join(RESULTS_DIR,'files','PANCAN','mannwhitneyu-{comparison}.tsv.gz'), comparison=DIFF_CANCER_TYPES.keys()),
+
+        # survival
+        expand(os.path.join(RESULTS_DIR,'files',"survival_analysis",'{cancer}-{sample_type}.tsv.gz'), zip, cancer=CANCER_TYPES_SURV["cancer_type"].values, sample_type=CANCER_TYPES_SURV["sample_type_clean"].values),
+        os.path.join(RESULTS_DIR,'files','PANCAN',"survival_analysis.tsv.gz"),
         
         # figures
         os.path.join(RESULTS_DIR,"figures","tcga_tumorigenesis")
@@ -127,10 +138,12 @@ rule split_by_cancer_and_sample_type:
         print(psi.shape)
         
         if psi.shape[1]>0:
+            print("Saving...")
             psi.reset_index().to_csv(output.psi, **SAVE_PARAMS)
         
         print("Done!")
 
+        
 rule compute_signature_pt_vs_stn:
     input:
         splicing_pt = os.path.join(PREP_DIR,"event_psi","{cancer}-PrimaryTumor-EX.tsv.gz"),
@@ -152,6 +165,7 @@ rule compute_signature_pt_vs_stn:
         
         print("Done!")
         
+        
 rule compute_signature_met_vs_pt:
     input:
         splicing_pt = os.path.join(PREP_DIR,"event_psi","{cancer}-PrimaryTumor-EX.tsv.gz"),
@@ -172,6 +186,7 @@ rule compute_signature_met_vs_pt:
         signature.reset_index().to_csv(output.signature, **SAVE_PARAMS)
         
         print("Done!")
+        
 
 ruleorder: compute_signature_pt_vs_stn > compute_signature_within
 ruleorder: compute_signature_met_vs_pt > compute_signature_within
@@ -211,6 +226,7 @@ rule compute_protein_activity:
                     --output_file={output}
         """
 
+        
 rule combine_protein_activity:
     input:
         protein_activity = lambda wildcards: [os.path.join(RESULTS_DIR,"files","protein_activity","{cancer}-{sample}-EX.tsv.gz").format(cancer=cancer, sample=wildcards.sample) for cancer in CANCER_TYPES_BY_SAMPLETYPE[wildcards.sample]]
@@ -287,18 +303,66 @@ rule combine_differential_protein_activity_results:
         print("Done!")
         
         
+rule survival_analysis:
+    input:
+        protein_activity = os.path.join(RESULTS_DIR,"files","protein_activity","{cancer}-{sample_type}-EX.tsv.gz"),
+        metadata = os.path.join(RAW_DIR,'UCSCXena','TCGA','phenotype','Survival_SupplementalTable_S1_20171025_xena_sp.gz')
+    output:
+        os.path.join(RESULTS_DIR,'files',"survival_analysis",'{cancer}-{sample_type}.tsv.gz')
+    params:
+        sample_col = "sample",
+        surv_event_col = "OS",
+        surv_time_col = "OS.time"
+    shell:
+        """
+        Rscript scripts/survival_analysis.R \
+                    --protein_activity_file={input.protein_activity} \
+                    --metadata_file={input.metadata} \
+                    --sample_col={params.sample_col} \
+                    --surv_event_col={params.surv_event_col} \
+                    --surv_time_col={params.surv_time_col} \
+                    --output_file={output}
+        """
+    
+rule merge_survival_analysis:
+    input:
+        surv_files = [os.path.join(RESULTS_DIR,'files',"survival_analysis",'{cancer}-{sample_type}.tsv.gz').format(cancer=cancer, sample_type=sample_type) for cancer, sample_type in CANCER_TYPES_SURV.values]
+    output:
+        os.path.join(RESULTS_DIR,'files','PANCAN',"survival_analysis.tsv.gz")
+    run:
+        import os
+        import pandas as pd
+        
+        dfs = []
+        for f in input.surv_files:
+            cancer_type = os.path.basename(f).split("-")[0]
+            sample_type = os.path.basename(f).split("-")[1].replace(".tsv.gz","")
+            df = pd.read_table(f)
+            df["cancer_type"] = cancer_type
+            df["sample_type"] = sample_type
+            dfs.append(df)
+        
+        dfs = pd.concat(dfs)
+        
+        dfs.to_csv(output[0], **SAVE_PARAMS)
+        
+        print("Done!")
+        
+
 rule figures_tcga_tumorigenesis:
     input:
         diff_protein_activity = os.path.join(RESULTS_DIR,'files','PANCAN','mannwhitneyu-PrimaryTumor_vs_SolidTissueNormal.tsv.gz'),
         assocs_gene_dependency = os.path.join(PACT_CCLE_DIR,"files","protein_activity_vs_demeter2","CCLE.tsv.gz"),
+        survival_analysis = os.path.join(RESULTS_DIR,'files','PANCAN',"survival_analysis.tsv.gz"),
         gene_annotation = os.path.join(RAW_DIR,"HGNC","gene_annotations.tsv.gz")
     output:
         directory(os.path.join(RESULTS_DIR,"figures","tcga_tumorigenesis"))
     shell:
         """
-        scripts/figures_tcgs_tumorigenesis.R \
+        Rscript scripts/figures_tcga_tumorigenesis.R \
                     --diff_protein_activity_file={input.diff_protein_activity} \
                     --gene_annotation_file={input.gene_annotation} \
                     --assocs_gene_dependency_file={input.assocs_gene_dependency} \
+                    --survival_analysis_file={input.survival_analysis}
                     --figs_dir={output}
         """
