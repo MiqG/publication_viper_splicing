@@ -25,6 +25,11 @@ LINE_SIZE = 0.25
 FONT_SIZE = 2 # for additional labels
 FONT_FAMILY = "Arial"
 
+PAL_CANCER_DRIVER = setNames(
+    c("#6C98B3","#F6AE2D"),
+    c("Tumor suppressor","Oncogenic")
+)
+
 # Development
 # -----------
 # ROOT = here::here()
@@ -35,6 +40,7 @@ FONT_FAMILY = "Arial"
 # diff_protein_activity_file = file.path(RESULTS_DIR,'files','PANCAN','mannwhitneyu-PrimaryTumor_vs_SolidTissueNormal.tsv.gz')
 # gene_annotation_file = file.path(RAW_DIR,"HGNC","gene_annotations.tsv.gz")
 # figs_dir = file.path(RESULTS_DIR,"figures","tcga_tumorigenesis")
+# assocs_gene_dependency_file = file.path(RESULTS_DIR,"..","sf_activity_ccle","files","protein_activity_vs_demeter2","CCLE.tsv.gz")
 
 
 ##### FUNCTIONS #####
@@ -67,7 +73,37 @@ plot_diff_protein_activity = function(diff_protein_activity){
                   label=TRUE, lab.size=FONT_SIZE, lab.family=FONT_FAMILY) +
         guides(fill="none") +
         theme_pubr(x.text.angle=70) +
-        labs(x="Cancer Type", y="Count")
+        labs(x="Cancer Type", y="Count")    
+   
+   plts[["diff_protein_activity-n_signif_vs_driver_type-bar"]] = X %>%
+        filter(is_significant) %>%
+        mutate(driver_type = ifelse(sign(`condition_a-median`)>0, "Oncogenic", "Tumor suppressor")) %>%
+        count(GENE, driver_type) %>%
+        group_by(GENE) %>%
+        mutate(
+            n_sign = ifelse(driver_type=="Tumor suppressor", -n, n),
+            n_sum = sum(n_sign)
+        ) %>%
+        ungroup() %>%
+        arrange(-n_sum) %>%
+        ggbarplot(x="GENE", y="n_sign", fill="driver_type", color=NA) +
+        geom_text(
+            aes(label=GENE),
+            . %>% slice_max(n_sum, n=5) %>% filter(driver_type=="Oncogenic"),
+            size=FONT_SIZE, family=FONT_FAMILY, 
+            #segment.size=0.1, max.overlaps=50,
+            angle=45, hjust=0, vjust=0, nudge_y=0.25
+        ) +
+        geom_text(
+            aes(label=GENE),
+            . %>% slice_min(n_sum, n=5) %>% filter(driver_type=="Tumor suppressor"),
+            size=FONT_SIZE, family=FONT_FAMILY, 
+            #segment.size=0.1, max.overlaps=50,
+            angle=45, hjust=1, vjust=0, nudge_y=-0.25
+        ) +
+        fill_palette(PAL_CANCER_DRIVER) +
+        theme_pubr(x.text.angle=70) +
+        labs(x="Splicing Factor", y="Count", fill="Driver Type")
     
     top_doubleagent = X %>%
         filter(is_significant) %>%
@@ -133,19 +169,68 @@ plot_diff_protein_activity = function(diff_protein_activity){
 }
 
 
-make_plots = function(diff_protein_activity){
+plot_prolif_driver = function(diff_protein_activity, assocs_gene_dependency){
+    plts = list()
+    
+    X = diff_protein_activity %>%
+        filter(is_significant) %>%
+        mutate(driver_type = ifelse(sign(`condition_a-median`)>0, "Oncogenic", "Tumor suppressor")) %>%
+        count(GENE, driver_type) %>%
+        group_by(GENE) %>%
+        mutate(
+            n_sign = ifelse(driver_type=="Tumor suppressor", -n, n),
+            n_sum = sum(n_sign)
+        ) %>%
+        ungroup()
+    
+    # Do inferred tumor suppressor and oncogenic activities match gene dependencies?
+    x = X %>%
+        filter(abs(n_sum)>5) %>%
+        group_by(GENE) %>%
+        slice_max(n, n=1) %>%
+        ungroup() %>% 
+        left_join(
+            assocs_gene_dependency,
+            by="GENE"
+        )
+    
+    plts[["prolif_driver-driver_type_vs_demeter2-violin"]] = x %>%
+        ggviolin(x="driver_type", y="pearson_coef", color=NA, fill="driver_type", palette=PAL_CANCER_DRIVER, trim=TRUE) +
+        geom_boxplot(width=0.1, outlier.size=0.1, fill=NA) +
+        stat_compare_means(method="wilcox.test", size=FONT_SIZE, family=FONT_FAMILY) +
+        geom_text_repel(
+            aes(label=GENE),
+            x %>% slice_max(pearson_coef, n=5) %>% bind_rows(x %>% slice_min(pearson_coef, n=5)),
+            size=FONT_SIZE, family=FONT_FAMILY, segment.size=0.1
+        ) +
+        geom_text(
+            aes(y=-0.3, label=label),
+            . %>% count(driver_type) %>% mutate(label=paste0("n=",n)),
+            size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        guides(fill="none") +
+        theme(aspect.ratio=1) +
+        labs(x="Driver Type", y="Demeter2 Pearson Correlation")
+    
+    return(plts)
+}
+
+
+make_plots = function(diff_protein_activity, assocs_gene_dependency){
     plts = list(
-        plot_diff_protein_activity(diff_protein_activity)
+        plot_diff_protein_activity(diff_protein_activity),
+        plot_prolif_driver(diff_protein_activity, assocs_gene_dependency)
     )
     plts = do.call(c,plts)
     return(plts)
 }
 
 
-make_figdata = function(diff_protein_activity){
+make_figdata = function(diff_protein_activity, assocs_gene_dependency){
     figdata = list(
         "tcga_tumorigenesis" = list(
-            "diff_protein_activity" = diff_protein_activity
+            "diff_protein_activity" = diff_protein_activity,
+            "assocs_gene_dependency" = assocs_gene_dependency
         )
     )
     return(figdata)
@@ -170,9 +255,13 @@ save_plt = function(plts, plt_name, extension='.pdf',
 save_plots = function(plts, figs_dir){
     save_plt(plts, "diff_protein_activity-volcano-scatter", '.pdf', figs_dir, width=5, height=8)
     save_plt(plts, "diff_protein_activity-n_signif-bar", '.pdf', figs_dir, width=6, height=5)
+    save_plt(plts, "diff_protein_activity-n_signif_vs_driver_type-bar", '.pdf', figs_dir, width=12, height=9)
     save_plt(plts, "diff_protein_activity-top_doubleagent-box", '.pdf', figs_dir, width=5, height=8)
     save_plt(plts, "diff_protein_activity-top_oncogenes-box", '.pdf', figs_dir, width=5, height=8)
     save_plt(plts, "diff_protein_activity-top_tsgenes-box", '.pdf', figs_dir, width=5, height=8)
+    save_plt(plts, "diff_protein_activity-top_tsgenes-box", '.pdf', figs_dir, width=5, height=8)
+    
+    save_plt(plts, "prolif_driver-driver_type_vs_demeter2-violin", '.pdf', figs_dir, width=5, height=5)
 }
 
 save_figdata = function(figdata, dir){
@@ -209,6 +298,7 @@ main = function(){
     
     diff_protein_activity_file = args[["diff_protein_activity_file"]]
     gene_annotation_file = args[["gene_annotation_file"]]
+    assocs_gene_dependency_file = args[["assocs_gene_dependency_file"]]
     figs_dir = args[["figs_dir"]]
     
     dir.create(figs_dir, recursive = TRUE)
@@ -220,6 +310,7 @@ main = function(){
             GENE = `Approved symbol`,
             ENSEMBL = `Ensembl gene ID`
         )
+    assocs_gene_dependency = read_tsv(assocs_gene_dependency_file)
     
     # prep
     diff_protein_activity = diff_protein_activity %>%
@@ -232,10 +323,10 @@ main = function(){
         )
     
     # plot
-    plts = make_plots(diff_protein_activity)
+    plts = make_plots(diff_protein_activity, assocs_gene_dependency)
     
     # make figdata
-    figdata = make_figdata(diff_protein_activity)
+    figdata = make_figdata(diff_protein_activity, assocs_gene_dependency)
 
     # save
     save_plots(plts, figs_dir)

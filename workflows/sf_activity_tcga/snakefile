@@ -20,6 +20,7 @@ SUPPORT_DIR = os.path.join(ROOT,"support")
 BIN_DIR = os.path.join(ROOT,"bin")
 RESULTS_DIR = os.path.join(ROOT,"results","sf_activity_tcga")
 ACTVAL_DIR = os.path.join(ROOT,"results","validation_activity")
+PACT_CCLE_DIR = os.path.join(ROOT,"results","sf_activity_ccle")
 SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
 PADJ_METHOD = 'fdr_bh'
 
@@ -96,7 +97,10 @@ rule all:
         expand(os.path.join(RESULTS_DIR,'files',"diff_protein_activity",'{cancer}-{comparison}.tsv.gz'), comparison=["PrimaryTumor_vs_SolidTissueNormal"], cancer=CANCER_TYPES_PTSTN),
         expand(os.path.join(RESULTS_DIR,'files',"diff_protein_activity",'{cancer}-{comparison}.tsv.gz'), comparison=["Metastatic_vs_PrimaryTumor"], cancer=CANCER_TYPES_METPT),
         ## merge
-        expand(os.path.join(RESULTS_DIR,'files','PANCAN','mannwhitneyu-{comparison}.tsv.gz'), comparison=DIFF_CANCER_TYPES.keys())
+        expand(os.path.join(RESULTS_DIR,'files','PANCAN','mannwhitneyu-{comparison}.tsv.gz'), comparison=DIFF_CANCER_TYPES.keys()),
+        
+        # figures
+        os.path.join(RESULTS_DIR,"figures","tcga_tumorigenesis")
         
 
 rule split_by_cancer_and_sample_type:
@@ -281,3 +285,20 @@ rule combine_differential_protein_activity_results:
         dfs.to_csv(output[0], sep='\t', index=False, compression='gzip')
         
         print("Done!")
+        
+        
+rule figures_tcga_tumorigenesis:
+    input:
+        diff_protein_activity = os.path.join(RESULTS_DIR,'files','PANCAN','mannwhitneyu-PrimaryTumor_vs_SolidTissueNormal.tsv.gz'),
+        assocs_gene_dependency = os.path.join(PACT_CCLE_DIR,"files","protein_activity_vs_demeter2","CCLE.tsv.gz"),
+        gene_annotation = os.path.join(RAW_DIR,"HGNC","gene_annotations.tsv.gz")
+    output:
+        directory(os.path.join(RESULTS_DIR,"figures","tcga_tumorigenesis"))
+    shell:
+        """
+        scripts/figures_tcgs_tumorigenesis.R \
+                    --diff_protein_activity_file={input.diff_protein_activity} \
+                    --gene_annotation_file={input.gene_annotation} \
+                    --assocs_gene_dependency_file={input.assocs_gene_dependency} \
+                    --figs_dir={output}
+        """
