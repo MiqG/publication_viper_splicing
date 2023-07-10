@@ -107,11 +107,12 @@ rule all:
         expand(os.path.join(RESULTS_DIR,'files','PANCAN','mannwhitneyu-{comparison}.tsv.gz'), comparison=DIFF_CANCER_TYPES.keys()),
 
         # survival
-        expand(os.path.join(RESULTS_DIR,'files',"survival_analysis",'{cancer}-{sample_type}.tsv.gz'), zip, cancer=CANCER_TYPES_SURV["cancer_type"].values, sample_type=CANCER_TYPES_SURV["sample_type_clean"].values),
-        os.path.join(RESULTS_DIR,'files','PANCAN',"survival_analysis.tsv.gz"),
+        expand(os.path.join(RESULTS_DIR,'files',"survival_analysis",'{cancer}-{sample_type}-surv.tsv.gz'), zip, cancer=CANCER_TYPES_SURV["cancer_type"].values, sample_type=CANCER_TYPES_SURV["sample_type_clean"].values),
+        expand(os.path.join(RESULTS_DIR,'files',"survival_analysis",'{cancer}-{sample_type}-cat.tsv.gz'), zip, cancer=CANCER_TYPES_SURV["cancer_type"].values, sample_type=CANCER_TYPES_SURV["sample_type_clean"].values),
+        expand(os.path.join(RESULTS_DIR,'files','PANCAN',"survival_analysis-{surv_type}.tsv.gz"), surv_type=["surv","cat"]),
         
         # figures
-        os.path.join(RESULTS_DIR,"figures","tcga_tumorigenesis")
+        #os.path.join(RESULTS_DIR,"figures","tcga_tumorigenesis")
         
 
 rule split_by_cancer_and_sample_type:
@@ -308,7 +309,8 @@ rule survival_analysis:
         protein_activity = os.path.join(RESULTS_DIR,"files","protein_activity","{cancer}-{sample_type}-EX.tsv.gz"),
         metadata = os.path.join(RAW_DIR,'UCSCXena','TCGA','phenotype','Survival_SupplementalTable_S1_20171025_xena_sp.gz')
     output:
-        os.path.join(RESULTS_DIR,'files',"survival_analysis",'{cancer}-{sample_type}.tsv.gz')
+        surv = os.path.join(RESULTS_DIR,'files',"survival_analysis",'{cancer}-{sample_type}-surv.tsv.gz'),
+        cat = os.path.join(RESULTS_DIR,'files',"survival_analysis",'{cancer}-{sample_type}-cat.tsv.gz')
     params:
         sample_col = "sample",
         surv_event_col = "OS",
@@ -321,29 +323,31 @@ rule survival_analysis:
                     --sample_col={params.sample_col} \
                     --surv_event_col={params.surv_event_col} \
                     --surv_time_col={params.surv_time_col} \
-                    --output_file={output}
+                    --output_surv_file={output.surv} \
+                    --output_cat_file={output.cat}
         """
+    
     
 rule merge_survival_analysis:
     input:
-        surv_files = [os.path.join(RESULTS_DIR,'files',"survival_analysis",'{cancer}-{sample_type}.tsv.gz').format(cancer=cancer, sample_type=sample_type) for cancer, sample_type in CANCER_TYPES_SURV.values]
+        surv_files = [os.path.join(RESULTS_DIR,'files',"survival_analysis",'{cancer}-{sample_type}-{surv_type}.tsv.gz').format(cancer=cancer, sample_type=sample_type, surv_type="{surv_type}") for cancer, sample_type in CANCER_TYPES_SURV.values]
     output:
-        os.path.join(RESULTS_DIR,'files','PANCAN',"survival_analysis.tsv.gz")
+        os.path.join(RESULTS_DIR,'files','PANCAN',"survival_analysis-{surv_type}.tsv.gz")
     run:
         import os
         import pandas as pd
         
+        # surv
         dfs = []
         for f in input.surv_files:
             cancer_type = os.path.basename(f).split("-")[0]
-            sample_type = os.path.basename(f).split("-")[1].replace(".tsv.gz","")
+            sample_type = os.path.basename(f).split("-")[1]
             df = pd.read_table(f)
             df["cancer_type"] = cancer_type
             df["sample_type"] = sample_type
             dfs.append(df)
         
         dfs = pd.concat(dfs)
-        
         dfs.to_csv(output[0], **SAVE_PARAMS)
         
         print("Done!")

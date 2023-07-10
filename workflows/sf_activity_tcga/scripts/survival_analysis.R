@@ -26,6 +26,7 @@ require(survminer)
 # surv_time_col = "OS.time"
 # sample_col = "sample"
 
+
 ##### FUNCTIONS #####
 run_cutpoint = function(df, surv_time_col, surv_event_col){
     result_cut = surv_cutpoint(df, time=surv_time_col, event=surv_event_col, variables="activity")
@@ -39,13 +40,20 @@ run_cutpoint = function(df, surv_time_col, surv_event_col){
         as.formula(sprintf("Surv(%s, %s) ~ activity", surv_time_col, surv_event_col)), 
         data=df
     )
-    result = data.frame(
+    result_surv = data.frame(
         regulator = df[["regulator"]] %>% unique(),
         activity_cutoff = result_cut[["activity"]][["estimate"]],
         survdiff_pvalue = pvalue_survdiff,
         survdiff_method = "Log-rank",
         coxph_coef = fit_coxph[["coefficients"]],
         coxph_pvalue = summary(fit_coxph)[["waldtest"]][["pvalue"]]
+    )
+    result_cat[["regulator"]] = df[["regulator"]] %>% unique()
+    result_cat[["sampleID"]] = df[["sampleID"]]
+    
+    result = list(
+        "surv" = result_surv,
+        "cat" = result_cat
     )
     return(result)
 }
@@ -59,13 +67,15 @@ parseargs = function(){
         make_option("--sample_col", type="character"),
         make_option("--surv_event_col", type="character"),
         make_option("--surv_time_col", type="character"),
-        make_option("--output_file", type="character")
+        make_option("--output_surv_file", type="character"),
+        make_option("--output_cat_file", type="character")
     )
 
     args = parse_args(OptionParser(option_list=option_list))
     
     return(args)
 }
+
 
 main = function(){
     args = parseargs()
@@ -75,7 +85,8 @@ main = function(){
     sample_col = args[["sample_col"]]
     surv_event_col = args[["surv_event_col"]]
     surv_time_col = args[["surv_time_col"]]
-    output_file = args[["output_file"]]
+    output_surv_file = args[["output_surv_file"]]
+    output_cat_file = args[["output_cat_file"]]
     
     # load
     protein_activity = read_tsv(protein_activity_file)
@@ -94,11 +105,16 @@ main = function(){
             X %>% pull(regulator) %>% unique(), function(regulator_oi){
             df = X %>% filter(regulator==regulator_oi)
             res = run_cutpoint(df, surv_time_col, surv_event_col)
-        }) %>%
-        do.call(rbind, .)
+        })
+    
+    result_surv = lapply(result, function(x){x[["surv"]]}) %>% do.call(rbind,.)
+    result_surv[["survdiff_fdr"]] = p.adjust(result_surv[["survdiff_pvalue"]], method="fdr")
+    result_surv[["coxph_fdr"]] = p.adjust(result_surv[["coxph_pvalue"]], method="fdr")
+    result_cat = lapply(result, function(x){x[["cat"]]}) %>% do.call(rbind,.)
     
     # save
-    write_tsv(result, output_file)
+    write_tsv(result_surv, output_surv_file)
+    write_tsv(result_cat, output_cat_file)
 }
 
 
