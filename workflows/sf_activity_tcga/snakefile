@@ -111,6 +111,10 @@ rule all:
         expand(os.path.join(RESULTS_DIR,'files',"survival_analysis",'{cancer}-{sample_type}-cat.tsv.gz'), zip, cancer=CANCER_TYPES_SURV["cancer_type"].values, sample_type=CANCER_TYPES_SURV["sample_type_clean"].values),
         expand(os.path.join(RESULTS_DIR,'files','PANCAN',"survival_analysis-{surv_type}.tsv.gz"), surv_type=["surv","cat"]),
         
+        # SF cross regulation
+        expand(os.path.join(RESULTS_DIR,'files',"sf_cross_regulation",'{cancer}-{sample_type}.tsv.gz'), zip, cancer=CANCER_TYPES_SURV["cancer_type"].values, sample_type=CANCER_TYPES_SURV["sample_type_clean"].values),
+        os.path.join(RESULTS_DIR,'files','PANCAN',"sf_cross_regulation.tsv.gz"),
+        
         # figures
         #os.path.join(RESULTS_DIR,"figures","tcga_tumorigenesis")
         
@@ -352,6 +356,58 @@ rule merge_survival_analysis:
         
         print("Done!")
         
+
+rule sf_cross_regulation:
+    input:
+        protein_activity = os.path.join(RESULTS_DIR,"files","protein_activity","{cancer}-{sample_type}-EX.tsv.gz")
+    output:
+        os.path.join(RESULTS_DIR,'files',"sf_cross_regulation",'{cancer}-{sample_type}.tsv.gz')
+    run:
+        import pandas as pd
+        import numpy as np
+        
+        # load
+        protein_activity = pd.read_table(input.protein_activity, index_col=0)
+        
+        # compute correlations
+        correlations = protein_activity.T.corr(method="pearson")
+        correlations = correlations.where(np.triu(np.ones(correlations.shape), k=1).astype(bool))
+        correlations = correlations.stack()
+        correlations.name = "correlation"
+        correlations.index.names = ["regulator_a","regulator_b"]
+        correlations = correlations.reset_index()
+        correlations["method"] = "pearson"
+        
+        # save
+        correlations.to_csv(output[0], **SAVE_PARAMS)
+        
+        print("Done!")
+    
+    
+rule merge_sf_cross_regulation:
+    input:
+        corr_files = [os.path.join(RESULTS_DIR,'files',"sf_cross_regulation",'{cancer}-{sample_type}.tsv.gz').format(cancer=cancer, sample_type=sample_type) for cancer, sample_type in CANCER_TYPES_SURV.values]
+    output:
+        os.path.join(RESULTS_DIR,'files','PANCAN',"sf_cross_regulation.tsv.gz")
+    run:
+        import os
+        import pandas as pd
+        
+        # surv
+        dfs = []
+        for f in input.corr_files:
+            cancer_type = os.path.basename(f).split("-")[0]
+            sample_type = os.path.basename(f).split("-")[1].replace(".tsv.gz","")
+            df = pd.read_table(f)
+            df["cancer_type"] = cancer_type
+            df["sample_type"] = sample_type
+            dfs.append(df)
+        
+        dfs = pd.concat(dfs)
+        dfs.to_csv(output[0], **SAVE_PARAMS)
+        
+        print("Done!")
+    
 
 rule figures_tcga_tumorigenesis:
     input:

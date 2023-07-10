@@ -50,6 +50,7 @@ PAL_CANCER_TYPES = setNames(
 # assocs_gene_dependency_file = file.path(RESULTS_DIR,"..","sf_activity_ccle","files","protein_activity_vs_demeter2","CCLE.tsv.gz")
 # survival_analysis_surv_file = file.path(RESULTS_DIR,'files','PANCAN',"survival_analysis-surv.tsv.gz")
 # survival_analysis_cat_file = file.path(RESULTS_DIR,'files','PANCAN',"survival_analysis-cat.tsv.gz")
+# sf_cross_regulation_file = file.path(RESULTS_DIR,'files','PANCAN',"sf_cross_regulation.tsv.gz")
 
 ##### FUNCTIONS #####
 plot_diff_protein_activity = function(diff_protein_activity){
@@ -93,7 +94,7 @@ plot_diff_protein_activity = function(diff_protein_activity){
             n_sum = sum(n_sign)
         ) %>%
         ungroup() %>%
-        arrange(-n_sum) %>%
+        arrange(n_sum) %>%
         ggbarplot(x="GENE", y="n_sign", fill="driver_type", color=NA) +
         geom_text(
             aes(label=GENE),
@@ -220,6 +221,7 @@ plot_prolif_driver = function(diff_protein_activity, assocs_gene_dependency){
         theme(aspect.ratio=1) +
         labs(x="Driver Type", y="Demeter2 Pearson Correlation")
     
+    
     return(plts)
 }
 
@@ -270,24 +272,80 @@ plot_survival_analysis = function(diff_protein_activity, survival_analysis_surv,
 }
 
 
-make_plots = function(diff_protein_activity, assocs_gene_dependency, survival_analysis_surv, survival_analysis_cat){
+plot_sf_cross_regulation = function(diff_protein_activity, sf_cross_regulation){
+    plts = list()
+    
+    driver_classif = diff_protein_activity %>%
+        filter(is_significant) %>%
+        mutate(driver_type = ifelse(sign(`condition_a-median`)>0, "Oncogenic", "Tumor suppressor")) %>%
+        count(GENE, regulator, driver_type) %>%
+        group_by(GENE, regulator) %>%
+        mutate(
+            n_sign = ifelse(driver_type=="Tumor suppressor", -n, n),
+            n_sum = sum(n_sign)
+        ) %>%
+        filter(abs(n_sum)>5) %>%
+        group_by(GENE, regulator) %>%
+        slice_max(n, n=1) %>%
+        ungroup()
+    
+    oncogenic = driver_classif %>% filter(driver_type=="Oncogenic") %>% pull(regulator)
+    suppressor = driver_classif %>% filter(driver_type=="Tumor suppressor") %>% pull(regulator)
+    
+    X = sf_cross_regulation %>%
+        mutate(
+            driver_type_a = case_when(
+                regulator_a %in% oncogenic ~ "Oncogenic",
+                regulator_a %in% suppressor ~ "Tumor suppressor"
+            ),
+            driver_type_b = case_when(
+                regulator_b %in% oncogenic ~ "Oncogenic",
+                regulator_b %in% suppressor ~ "Tumor suppressor"
+            ),
+            same_driver_type = driver_type_a==driver_type_b
+        ) %>%
+        drop_na(driver_type_a, driver_type_b) %>%
+        rowwise() %>%
+        mutate(lab_pair = paste(sort(c(driver_type_a,driver_type_b)), collapse="\n&\n")) %>%
+        ungroup()
+    
+    # are oncogenic vs suppressor corregulated?
+    plts[["sf_cross_regulation-correlations-violin"]] = X %>%
+        ggviolin(x="lab_pair", y="correlation", fill="lab_pair", color=NA, trim=TRUE,
+                 palette=c(PAL_CANCER_DRIVER[[1]],"lightgray",PAL_CANCER_DRIVER[[2]])) +
+        geom_boxplot(width=0.1, outlier.size=0.1, fill=NA, position=position_dodge(0.9)) +
+        stat_compare_means(
+            method="wilcox.test", label="p.signif", ref.group="Oncogenic\n&\nTumor suppressor",
+            size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        guides(fill="none") +
+        theme(aspect.ratio=1) +
+        labs(x="", y="SF-SF Protein Activity Correlation")
+    
+    return(plts)
+}
+
+
+make_plots = function(diff_protein_activity, assocs_gene_dependency, survival_analysis_surv, survival_analysis_cat, sf_cross_regulation){
     plts = list(
         plot_diff_protein_activity(diff_protein_activity),
         plot_prolif_driver(diff_protein_activity, assocs_gene_dependency),
-        plot_survival_analysis(diff_protein_activity, survival_analysis_surv, survival_analysis_cat)
+        plot_survival_analysis(diff_protein_activity, survival_analysis_surv, survival_analysis_cat),
+        plot_sf_cross_regulation(diff_protein_activity, sf_cross_regulation)
     )
     plts = do.call(c,plts)
     return(plts)
 }
 
 
-make_figdata = function(diff_protein_activity, assocs_gene_dependency, survival_analysis_surv, survival_analysis_cat){
+make_figdata = function(diff_protein_activity, assocs_gene_dependency, survival_analysis_surv, survival_analysis_cat, sf_cross_regulation){
     figdata = list(
         "tcga_tumorigenesis" = list(
             "diff_protein_activity" = diff_protein_activity,
             "assocs_gene_dependency" = assocs_gene_dependency,
             "survival_analysis_surv" = survival_analysis_surv,
-            "survival_analysis_cat" = survival_analysis_cat
+            "survival_analysis_cat" = survival_analysis_cat, 
+            "sf_cross_regulation" = sf_cross_regulation
         )
     )
     return(figdata)
@@ -319,7 +377,9 @@ save_plots = function(plts, figs_dir){
     save_plt(plts, "diff_protein_activity-top_tsgenes-box", '.pdf', figs_dir, width=5, height=8)
     save_plt(plts, "prolif_driver-driver_type_vs_demeter2-violin", '.pdf', figs_dir, width=5, height=5)
     save_plt(plts, "survival_analysis-surv_type_vs_driver_type-violin", '.pdf', figs_dir, width=5, height=7)
+    save_plt(plts, "sf_cross_regulation-correlations-violin", '.pdf', figs_dir, width=6, height=6)
 }
+
 
 save_figdata = function(figdata, dir){
     lapply(names(figdata), function(x){
@@ -335,13 +395,16 @@ save_figdata = function(figdata, dir){
     })
 }
 
+
 parseargs = function(){
     
     option_list = list( 
         make_option("--diff_protein_activity_file", type="character"),
         make_option("--gene_annotation_file", type="character"),
         make_option("--assocs_gene_dependency_file", type="character"),
-        make_option("--survival_analysis_file", type="character"),
+        make_option("--survival_analysis_surv_file", type="character"),
+        make_option("--survival_analysis_cat_file", type="character"),
+        make_option("--sf_cross_regulation_file", type="character"),
         make_option("--figs_dir", type="character")
     )
 
@@ -358,7 +421,9 @@ main = function(){
     diff_protein_activity_file = args[["diff_protein_activity_file"]]
     gene_annotation_file = args[["gene_annotation_file"]]
     assocs_gene_dependency_file = args[["assocs_gene_dependency_file"]]
-    survival_analysis_file = args[["survival_analysis_file"]]
+    survival_analysis_surv_file = args[["survival_analysis_surv_file"]]
+    survival_analysis_cat_file = args[["survival_analysis_cat_file"]]
+    sf_cross_regulation_file = args[["sf_cross_regulation_file"]]
     figs_dir = args[["figs_dir"]]
     
     dir.create(figs_dir, recursive = TRUE)
@@ -373,6 +438,7 @@ main = function(){
     assocs_gene_dependency = read_tsv(assocs_gene_dependency_file)
     survival_analysis_surv = read_tsv(survival_analysis_surv_file)
     survival_analysis_cat = read_tsv(survival_analysis_cat_file)
+    sf_cross_regulation = read_tsv(sf_cross_regulation_file)
     
     # prep
     diff_protein_activity = diff_protein_activity %>%
@@ -385,10 +451,10 @@ main = function(){
         )
     
     # plot
-    plts = make_plots(diff_protein_activity, assocs_gene_dependency, survival_analysis_surv, survival_analysis_cat)
+    plts = make_plots(diff_protein_activity, assocs_gene_dependency, survival_analysis_surv, survival_analysis_cat, sf_cross_regulation)
     
     # make figdata
-    figdata = make_figdata(diff_protein_activity, assocs_gene_dependency, survival_analysis_surv, survival_analysis_cat)
+    figdata = make_figdata(diff_protein_activity, assocs_gene_dependency, survival_analysis_surv, survival_analysis_cat, sf_cross_regulation)
 
     # save
     save_plots(plts, figs_dir)
