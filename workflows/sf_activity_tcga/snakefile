@@ -78,12 +78,13 @@ CANCER_TYPES_SURV = metadata.loc[
     metadata["sample_type_clean"].isin(["PrimaryTumor","PrimaryBloodDerivedCancerPeripheralBlood"]),
     ["cancer_type","sample_type_clean"]
 ]
-
+OMICS = ["protein_activity","genexpr_tpm"]
 ##### RULES #####
 rule all:
     input:
         # split by cancer type and sample type
         expand(os.path.join(PREP_DIR,"event_psi","{cancer}-{sample}-EX.tsv.gz"), zip, cancer=CANCER_TYPES, sample=SAMPLE_TYPES),
+        expand(os.path.join(PREP_DIR,"genexpr_tpm","{cancer}-{sample}.tsv.gz"), zip, cancer=CANCER_TYPES, sample=SAMPLE_TYPES),
         
         # calculate signatures
         expand(os.path.join(RESULTS_DIR,"files","signatures","{cancer}-PrimaryTumor_vs_SolidTissueNormal-EX.tsv.gz"), cancer=CANCER_TYPES_PTSTN),
@@ -99,32 +100,40 @@ rule all:
         expand(os.path.join(RESULTS_DIR,"files","protein_activity","{cancer}-{sample}-EX.tsv.gz"), zip, cancer=CANCER_TYPES, sample=SAMPLE_TYPES),
         expand(os.path.join(RESULTS_DIR,"files","protein_activity","PANCAN-{sample}-EX.tsv.gz"), sample=CANCER_TYPES_BY_SAMPLETYPE),
 
-        # differential SF activities
-        ## compute
+        # differential analyses
+        ## SF activities
         expand(os.path.join(RESULTS_DIR,'files',"diff_protein_activity",'{cancer}-{comparison}.tsv.gz'), comparison=["PrimaryTumor_vs_SolidTissueNormal"], cancer=CANCER_TYPES_PTSTN),
         expand(os.path.join(RESULTS_DIR,'files',"diff_protein_activity",'{cancer}-{comparison}.tsv.gz'), comparison=["Metastatic_vs_PrimaryTumor"], cancer=CANCER_TYPES_METPT),
+        ## gene expression
+        expand(os.path.join(RESULTS_DIR,'files',"diff_genexpr_tpm",'{cancer}-{comparison}.tsv.gz'), comparison=["PrimaryTumor_vs_SolidTissueNormal"], cancer=CANCER_TYPES_PTSTN),
+        expand(os.path.join(RESULTS_DIR,'files',"diff_genexpr_tpm",'{cancer}-{comparison}.tsv.gz'), comparison=["Metastatic_vs_PrimaryTumor"], cancer=CANCER_TYPES_METPT),
         ## merge
-        expand(os.path.join(RESULTS_DIR,'files','PANCAN','mannwhitneyu-{comparison}.tsv.gz'), comparison=DIFF_CANCER_TYPES.keys()),
-
-        # survival
-        expand(os.path.join(RESULTS_DIR,'files',"survival_analysis",'{cancer}-{sample_type}-surv.tsv.gz'), zip, cancer=CANCER_TYPES_SURV["cancer_type"].values, sample_type=CANCER_TYPES_SURV["sample_type_clean"].values),
-        expand(os.path.join(RESULTS_DIR,'files',"survival_analysis",'{cancer}-{sample_type}-cat.tsv.gz'), zip, cancer=CANCER_TYPES_SURV["cancer_type"].values, sample_type=CANCER_TYPES_SURV["sample_type_clean"].values),
-        expand(os.path.join(RESULTS_DIR,'files','PANCAN',"survival_analysis-{surv_type}.tsv.gz"), surv_type=["surv","cat"]),
+        expand(os.path.join(RESULTS_DIR,'files','PANCAN','{omic}-mannwhitneyu-{comparison}.tsv.gz'), comparison=DIFF_CANCER_TYPES.keys(), omic=OMICS),
         
-        # SF cross regulation
-        expand(os.path.join(RESULTS_DIR,'files',"sf_cross_regulation",'{cancer}-{sample_type}.tsv.gz'), zip, cancer=CANCER_TYPES_SURV["cancer_type"].values, sample_type=CANCER_TYPES_SURV["sample_type_clean"].values),
-        os.path.join(RESULTS_DIR,'files','PANCAN',"sf_cross_regulation.tsv.gz"),
+        # survival
+        ## SF activity
+        expand(os.path.join(RESULTS_DIR,'files',"survival_analysis",'{omic}-{cancer}-{sample_type}-surv.tsv.gz'), zip, cancer=CANCER_TYPES_SURV["cancer_type"].values, sample_type=CANCER_TYPES_SURV["sample_type_clean"].values, omic=["protein_activity"]),
+        expand(os.path.join(RESULTS_DIR,'files',"survival_analysis",'{omic}-{cancer}-{sample_type}-cat.tsv.gz'), zip, cancer=CANCER_TYPES_SURV["cancer_type"].values, sample_type=CANCER_TYPES_SURV["sample_type_clean"].values, omic=["protein_activity"]),
+        ## gene expression
+        expand(os.path.join(RESULTS_DIR,'files',"survival_analysis",'{omic}-{cancer}-{sample_type}-surv.tsv.gz'), zip, cancer=CANCER_TYPES_SURV["cancer_type"].values, sample_type=CANCER_TYPES_SURV["sample_type_clean"].values, omic=["genexpr_tpm"]),
+        expand(os.path.join(RESULTS_DIR,'files',"survival_analysis",'{omic}-{cancer}-{sample_type}-cat.tsv.gz'), zip, cancer=CANCER_TYPES_SURV["cancer_type"].values, sample_type=CANCER_TYPES_SURV["sample_type_clean"].values, omic=["genexpr_tpm"]),
+        ## merge
+        expand(os.path.join(RESULTS_DIR,'files','PANCAN',"{omic}-survival_analysis-{surv_type}.tsv.gz"), surv_type=["surv","cat"], omic=OMICS),
+
+        # cross regulation
+        expand(os.path.join(RESULTS_DIR,'files',"sf_cross_regulation",'{omic}-{cancer}-{sample_type}.tsv.gz'), zip, cancer=CANCER_TYPES_SURV["cancer_type"].values, sample_type=CANCER_TYPES_SURV["sample_type_clean"].values, omic=OMICS),
+        expand(os.path.join(RESULTS_DIR,'files','PANCAN',"{omic}-sf_cross_regulation.tsv.gz"), omic=OMICS),
         
         # figures
         #os.path.join(RESULTS_DIR,"figures","tcga_tumorigenesis")
         
 
-rule split_by_cancer_and_sample_type:
+rule split_event_psi_by_cancer_and_sample_type:
     input:
         metadata = os.path.join(PREP_DIR,"metadata","{cancer}.tsv.gz"),
         psi = os.path.join(PREP_DIR,"event_psi","{cancer}-EX.tsv.gz")
     output:
-        psi = os.path.join(PREP_DIR,"event_psi","{cancer}-{sample}-EX.tsv.gz")
+        psi = os.path.join(PREP_DIR,"event_psi","{cancer}-{sample}.tsv.gz")
     params:
         cancer_type = "{cancer}",
         sample_type = "{sample}"
@@ -145,6 +154,36 @@ rule split_by_cancer_and_sample_type:
         if psi.shape[1]>0:
             print("Saving...")
             psi.reset_index().to_csv(output.psi, **SAVE_PARAMS)
+        
+        print("Done!")
+        
+        
+rule split_genexpr_tpm_by_cancer_and_sample_type:
+    input:
+        metadata = os.path.join(PREP_DIR,"metadata","{cancer}.tsv.gz"),
+        genexpr = os.path.join(PREP_DIR,"genexpr_tpm","{cancer}.tsv.gz")
+    output:
+        genexpr = os.path.join(PREP_DIR,"genexpr_tpm","{cancer}-{sample}.tsv.gz")
+    params:
+        cancer_type = "{cancer}",
+        sample_type = "{sample}"
+    run:
+        import pandas as pd
+        
+        metadata = pd.read_table(input.metadata)
+        genexpr = pd.read_table(input.genexpr, index_col=0)
+        cancer_type = params.cancer_type
+        sample_type = params.sample_type
+        
+        idx = (metadata["cancer_type"]==cancer_type) & (metadata["sample_type_clean"]==sample_type)
+        samples_oi = metadata.loc[idx,"sampleID"].values
+        
+        genexpr = genexpr[samples_oi]
+        print(genexpr.shape)
+        
+        if genexpr.shape[1]>0:
+            print("Saving...")
+            genexpr.reset_index().to_csv(output.genexpr, **SAVE_PARAMS)
         
         print("Done!")
 
@@ -274,16 +313,43 @@ rule compute_differential_protein_activity:
                     --condition_b={params.condition_b} \
                     --output_file={output} \
                     --padj_method={params.padj_method} 
+        """ 
+        
+        
+rule compute_differential_genexpr:
+    input:
+        genexpr = os.path.join(PREP_DIR,"genexpr_tpm","{cancer}.tsv.gz"),
+        metadata = os.path.join(PREP_DIR,'metadata','{cancer}.tsv.gz')
+    output:
+        os.path.join(RESULTS_DIR,'files',"diff_genexpr_tpm",'{cancer}-{comparison}.tsv.gz')
+    params:
+        script_dir = BIN_DIR,
+        padj_method = PADJ_METHOD,
+        condition_a = lambda wildcards: DIFF_CONDITIONS[wildcards.comparison]["a"],
+        condition_b = lambda wildcards: DIFF_CONDITIONS[wildcards.comparison]["b"],
+        comparison_col = "sample_type_clean",
+        sample_col = "sampleID"
+    shell:
+        """
+        python {params.script_dir}/MannWhitneyU.py \
+                    --data_file={input.genexpr} \
+                    --metadata_file={input.metadata} \
+                    --sample_col={params.sample_col} \
+                    --comparison_col={params.comparison_col} \
+                    --condition_a={params.condition_a} \
+                    --condition_b={params.condition_b} \
+                    --output_file={output} \
+                    --padj_method={params.padj_method} 
         """    
         
         
-rule combine_differential_protein_activity_results:
+rule combine_differential_results:
     input:
-        diff_files = lambda wildcards: [os.path.join(RESULTS_DIR,'files',"diff_protein_activity",'{cancer}-{comparison}.tsv.gz').format(cancer=cancer, comparison=wildcards.comparison) for cancer in DIFF_CANCER_TYPES[wildcards.comparison]],
+        diff_files = lambda wildcards: [os.path.join(RESULTS_DIR,'files',"diff_{omic}",'{cancer}-{comparison}.tsv.gz').format(cancer=cancer, comparison=wildcards.comparison, omic="{omic}") for cancer in DIFF_CANCER_TYPES[wildcards.comparison]],
     params:
         comparison = '{comparison}'
     output:
-        os.path.join(RESULTS_DIR,'files','PANCAN','mannwhitneyu-{comparison}.tsv.gz')
+        os.path.join(RESULTS_DIR,'files','PANCAN','{omic}-mannwhitneyu-{comparison}.tsv.gz')
     run:
         import os
         import pandas as pd
@@ -308,13 +374,13 @@ rule combine_differential_protein_activity_results:
         print("Done!")
         
         
-rule survival_analysis:
+rule survival_analysis_protein_activity:
     input:
         protein_activity = os.path.join(RESULTS_DIR,"files","protein_activity","{cancer}-{sample_type}-EX.tsv.gz"),
         metadata = os.path.join(RAW_DIR,'UCSCXena','TCGA','phenotype','Survival_SupplementalTable_S1_20171025_xena_sp.gz')
     output:
-        surv = os.path.join(RESULTS_DIR,'files',"survival_analysis",'{cancer}-{sample_type}-surv.tsv.gz'),
-        cat = os.path.join(RESULTS_DIR,'files',"survival_analysis",'{cancer}-{sample_type}-cat.tsv.gz')
+        surv = os.path.join(RESULTS_DIR,'files',"survival_analysis",'protein_activity-{cancer}-{sample_type}-surv.tsv.gz'),
+        cat = os.path.join(RESULTS_DIR,'files',"survival_analysis",'protein_activity-{cancer}-{sample_type}-cat.tsv.gz')
     params:
         sample_col = "sample",
         surv_event_col = "OS",
@@ -322,7 +388,7 @@ rule survival_analysis:
     shell:
         """
         Rscript scripts/survival_analysis.R \
-                    --protein_activity_file={input.protein_activity} \
+                    --data_matrix_file={input.protein_activity} \
                     --metadata_file={input.metadata} \
                     --sample_col={params.sample_col} \
                     --surv_event_col={params.surv_event_col} \
@@ -330,13 +396,39 @@ rule survival_analysis:
                     --output_surv_file={output.surv} \
                     --output_cat_file={output.cat}
         """
+        
+        
+rule survival_analysis_genexpr_tpm:
+    input:
+        genexpr = os.path.join(PREP_DIR,"genexpr_tpm","{cancer}-{sample_type}.tsv.gz"),
+        metadata = os.path.join(RAW_DIR,'UCSCXena','TCGA','phenotype','Survival_SupplementalTable_S1_20171025_xena_sp.gz'),
+        sfs = os.path.join(SUPPORT_DIR,"splicing_factors","splicing_factors-ensembl.txt")
+    output:
+        surv = os.path.join(RESULTS_DIR,'files',"survival_analysis",'genexpr_tpm-{cancer}-{sample_type}-surv.tsv.gz'),
+        cat = os.path.join(RESULTS_DIR,'files',"survival_analysis",'genexpr_tpm-{cancer}-{sample_type}-cat.tsv.gz')
+    params:
+        sample_col = "sample",
+        surv_event_col = "OS",
+        surv_time_col = "OS.time"
+    shell:
+        """
+        Rscript scripts/survival_analysis.R \
+                    --data_matrix_file={input.genexpr} \
+                    --metadata_file={input.metadata} \
+                    --sample_col={params.sample_col} \
+                    --surv_event_col={params.surv_event_col} \
+                    --surv_time_col={params.surv_time_col} \
+                    --features_oi_file={input.sfs} \
+                    --output_surv_file={output.surv} \
+                    --output_cat_file={output.cat}
+        """
     
     
 rule merge_survival_analysis:
     input:
-        surv_files = [os.path.join(RESULTS_DIR,'files',"survival_analysis",'{cancer}-{sample_type}-{surv_type}.tsv.gz').format(cancer=cancer, sample_type=sample_type, surv_type="{surv_type}") for cancer, sample_type in CANCER_TYPES_SURV.values]
+        surv_files = [os.path.join(RESULTS_DIR,'files',"survival_analysis",'{omic}-{cancer}-{sample_type}-{surv_type}.tsv.gz').format(cancer=cancer, sample_type=sample_type, surv_type="{surv_type}", omic="{omic}") for cancer, sample_type in CANCER_TYPES_SURV.values]
     output:
-        os.path.join(RESULTS_DIR,'files','PANCAN',"survival_analysis-{surv_type}.tsv.gz")
+        os.path.join(RESULTS_DIR,'files','PANCAN',"{omic}-survival_analysis-{surv_type}.tsv.gz")
     run:
         import os
         import pandas as pd
@@ -357,11 +449,11 @@ rule merge_survival_analysis:
         print("Done!")
         
 
-rule sf_cross_regulation:
+rule sf_cross_regulation_protein_activity:
     input:
         protein_activity = os.path.join(RESULTS_DIR,"files","protein_activity","{cancer}-{sample_type}-EX.tsv.gz")
     output:
-        os.path.join(RESULTS_DIR,'files',"sf_cross_regulation",'{cancer}-{sample_type}.tsv.gz')
+        os.path.join(RESULTS_DIR,'files',"sf_cross_regulation",'protein_activity-{cancer}-{sample_type}.tsv.gz')
     run:
         import pandas as pd
         import numpy as np
@@ -382,13 +474,45 @@ rule sf_cross_regulation:
         correlations.to_csv(output[0], **SAVE_PARAMS)
         
         print("Done!")
+        
+        
+rule sf_cross_regulation_genexpr_tpm:
+    input:
+        genexpr = os.path.join(PREP_DIR,"genexpr_tpm","{cancer}.tsv.gz"),
+        sfs = os.path.join(SUPPORT_DIR,"splicing_factors","splicing_factors-ensembl.txt")
+    output:
+        os.path.join(RESULTS_DIR,'files',"sf_cross_regulation",'genexpr_tpm-{cancer}-{sample_type}.tsv.gz')
+    run:
+        import pandas as pd
+        import numpy as np
+        
+        # load
+        genexpr = pd.read_table(input.genexpr, index_col=0)
+        sfs = pd.read_table(input.sfs, header=None)[0].tolist()
+        
+        # prep
+        genexpr = genexpr.loc[genexpr.index.isin(sfs)].copy()
+        
+        # compute correlations
+        correlations = genexpr.T.corr(method="pearson")
+        correlations = correlations.where(np.triu(np.ones(correlations.shape), k=1).astype(bool))
+        correlations = correlations.stack()
+        correlations.name = "correlation"
+        correlations.index.names = ["regulator_a","regulator_b"]
+        correlations = correlations.reset_index()
+        correlations["method"] = "pearson"
+        
+        # save
+        correlations.to_csv(output[0], **SAVE_PARAMS)
+        
+        print("Done!")
     
     
 rule merge_sf_cross_regulation:
     input:
-        corr_files = [os.path.join(RESULTS_DIR,'files',"sf_cross_regulation",'{cancer}-{sample_type}.tsv.gz').format(cancer=cancer, sample_type=sample_type) for cancer, sample_type in CANCER_TYPES_SURV.values]
+        corr_files = [os.path.join(RESULTS_DIR,'files',"sf_cross_regulation",'{omic}-{cancer}-{sample_type}.tsv.gz').format(cancer=cancer, sample_type=sample_type, omic="{omic}") for cancer, sample_type in CANCER_TYPES_SURV.values]
     output:
-        os.path.join(RESULTS_DIR,'files','PANCAN',"sf_cross_regulation.tsv.gz")
+        os.path.join(RESULTS_DIR,'files','PANCAN',"{omic}-sf_cross_regulation.tsv.gz")
     run:
         import os
         import pandas as pd
