@@ -124,6 +124,10 @@ rule all:
         expand(os.path.join(RESULTS_DIR,'files',"sf_cross_regulation",'{omic}-{cancer}-{sample_type}.tsv.gz'), zip, cancer=CANCER_TYPES_SURV["cancer_type"].values, sample_type=CANCER_TYPES_SURV["sample_type_clean"].values, omic=OMICS),
         expand(os.path.join(RESULTS_DIR,'files','PANCAN',"{omic}-sf_cross_regulation.tsv.gz"), omic=OMICS),
         
+        # correl genexpr vs activity
+        expand(os.path.join(RESULTS_DIR,'files',"sf_activity_regulation",'genexpr_tpm_vs_activity-{cancer}-{sample_type}.tsv.gz'), zip, cancer=CANCER_TYPES_SURV["cancer_type"].values, sample_type=CANCER_TYPES_SURV["sample_type_clean"].values),
+        os.path.join(RESULTS_DIR,'files','PANCAN',"genexpr_tpm_vs_activity.tsv.gz"),
+        
         # figures
         os.path.join(RESULTS_DIR,"figures","cancer_program")
         
@@ -533,6 +537,66 @@ rule merge_sf_cross_regulation:
         print("Done!")
     
 
+rule sf_activity_regulation_genexpr:
+    input:
+        protein_activity = os.path.join(RESULTS_DIR,"files","protein_activity","{cancer}-{sample_type}-EX.tsv.gz"),
+        genexpr = os.path.join(PREP_DIR,"genexpr_tpm","{cancer}.tsv.gz")
+    output:
+        os.path.join(RESULTS_DIR,'files',"sf_activity_regulation",'genexpr_tpm_vs_activity-{cancer}-{sample_type}.tsv.gz')
+    run:
+        import pandas as pd
+        from scipy import stats
+        
+        # load
+        protein_activity = pd.read_table(input.protein_activity, index_col=0)
+        genexpr = pd.read_table(input.genexpr, index_col=0)
+        
+        # prep
+        common_sfs = set(protein_activity.index).intersection(genexpr.index)
+        common_samples = set(protein_activity.columns).intersection(genexpr.columns)
+        protein_activity = protein_activity.loc[common_sfs,common_samples].copy()
+        genexpr = genexpr.loc[common_sfs,common_samples].copy()
+        
+        # compute correlations
+        correlations = genexpr.apply(
+            lambda row: protein_activity.corrwith(row, axis=1, method="spearman"), 
+            axis=1
+        )
+        correlations = correlations.melt(ignore_index=False).reset_index()
+        correlations.columns = ["sf_genexpr","sf_activity","correlation"]
+        correlations["method"] = "spearman"
+        
+        # save
+        correlations.to_csv(output[0], **SAVE_PARAMS)
+        
+        print("Done!")
+        
+        
+rule merge_sf_activity_regulation_genexpr:
+    input:
+        corr_files = [os.path.join(RESULTS_DIR,'files',"sf_activity_regulation",'genexpr_tpm_vs_activity-{cancer}-{sample_type}.tsv.gz').format(cancer=cancer, sample_type=sample_type) for cancer, sample_type in CANCER_TYPES_SURV.values]
+    output:
+        os.path.join(RESULTS_DIR,'files','PANCAN',"genexpr_tpm_vs_activity.tsv.gz")
+    run:
+        import os
+        import pandas as pd
+        
+        # surv
+        dfs = []
+        for f in input.corr_files:
+            cancer_type = os.path.basename(f).split("-")[1]
+            sample_type = os.path.basename(f).split("-")[2].replace(".tsv.gz","")
+            df = pd.read_table(f)
+            df["cancer_type"] = cancer_type
+            df["sample_type"] = sample_type
+            dfs.append(df)
+        
+        dfs = pd.concat(dfs)
+        dfs.to_csv(output[0], **SAVE_PARAMS)
+        
+        print("Done!")
+
+        
 rule figures_cancer_program:
     input:
         diff_activity = os.path.join(RESULTS_DIR,'files','PANCAN','protein_activity-mannwhitneyu-PrimaryTumor_vs_SolidTissueNormal.tsv.gz'),

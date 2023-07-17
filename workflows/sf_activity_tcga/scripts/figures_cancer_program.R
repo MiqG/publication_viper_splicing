@@ -52,16 +52,17 @@ PAL_CANCER_TYPES = setNames(
 # diff_activity_file = file.path(RESULTS_DIR,'files','PANCAN','protein_activity-mannwhitneyu-PrimaryTumor_vs_SolidTissueNormal.tsv.gz')
 # diff_genexpr_file = file.path(RESULTS_DIR,'files','PANCAN','genexpr_tpm-mannwhitneyu-PrimaryTumor_vs_SolidTissueNormal.tsv.gz')
 # gene_annotation_file = file.path(RAW_DIR,"HGNC","gene_annotations.tsv.gz")
-# figs_dir = file.path(RESULTS_DIR,"figures","tcga_tumorigenesis")
+# figs_dir = file.path(RESULTS_DIR,"figures","cancer_program")
 # assocs_gene_dependency_file = file.path(RESULTS_DIR,"..","sf_activity_ccle","files","protein_activity_vs_demeter2","CCLE.tsv.gz")
 # survival_activity_file = file.path(RESULTS_DIR,'files','PANCAN',"protein_activity-survival_analysis-surv.tsv.gz")
 # survival_genexpr_file = file.path(RESULTS_DIR,'files','PANCAN',"genexpr_tpm-survival_analysis-surv.tsv.gz")
 # sf_crossreg_activity_file = file.path(RESULTS_DIR,'files','PANCAN',"protein_activity-sf_cross_regulation.tsv.gz")
 # sf_crossreg_genexpr_file = file.path(RESULTS_DIR,'files','PANCAN',"genexpr_tpm-sf_cross_regulation.tsv.gz")
 # ontology_chea_file = file.path(RAW_DIR,"Harmonizome","CHEA-TranscriptionFactorTargets.gmt.gz")
+# sf_activity_vs_genexpr_file = file.path(RESULTS_DIR,'files','PANCAN',"genexpr_tpm_vs_activity.tsv.gz")
 
 ##### FUNCTIONS #####
-plot_comparison = function(diff_activity, diff_genexpr, survival_activity, survival_genexpr){
+plot_comparison = function(diff_activity, diff_genexpr, survival_activity, survival_genexpr, sf_activity_vs_genexpr){
     plts = list()    
     
     X = diff_activity %>%
@@ -96,6 +97,38 @@ plot_comparison = function(diff_activity, diff_genexpr, survival_activity, survi
         ggscatter(x="coxph_coef_activity", y="coxph_coef_genexpr", alpha=0.5, size=1) +
         stat_cor(method="spearman", size=FONT_SIZE, family=FONT_FAMILY) +
         labs(x="CoxPH Protein Activity", y="CoxPH Gene Expression")
+    
+    # are there splicing factors whose activity is highly correlated with their expression?
+    X = sf_activity_vs_genexpr
+    plts[["comparison-correlation_by_cancer-violin"]] = X %>%
+        ggplot(aes(x=cancer_type, y=correlation)) +
+        geom_violin(aes(fill=cancer_type), color=NA, trim=TRUE) +
+        geom_boxplot(fill=NA, width=0.1, outlier.size=0.1) +
+        fill_palette(get_palette("Paired", 33)) + 
+        theme_pubr(x.text.angle=75) +
+        guides(fill="none") +
+        labs(x="Cancer Type", y="Spearman Correlation")
+    
+    plts[["comparison-correlation_median_pancan-violin"]] = X %>%
+        group_by(GENE) %>%
+        summarize(
+            correlation = median(correlation),
+            comparison = "Protein Activity vs Gene Expression"
+        ) %>%
+        ungroup() %>%
+        ggplot(aes(x=comparison, y=correlation)) +
+        geom_violin(aes(fill=comparison), color=NA, trim=TRUE) +
+        geom_boxplot(fill=NA, width=0.1, outlier.size=0.1) +
+        fill_palette("lightgreen") + 
+        geom_text_repel(
+            aes(label=GENE),
+            . %>% slice_max(correlation, n=5),
+            size=FONT_SIZE, family=FONT_FAMILY,
+            segment.size=0.1, max.overlaps=50
+        ) +
+        theme_pubr(x.text.angle=0) +
+        guides(fill="none") +
+        labs(x="Comparison", y="Median Spearman Correlation")
     
     return(plts)
 }
@@ -525,7 +558,7 @@ make_plots = function(diff_activity, diff_genexpr,
                       survival_activity, survival_genexpr,
                       driver_activity, driver_genexpr, 
                       sf_crossreg_activity, sf_crossreg_genexpr, 
-                      tf_enrichments){
+                      tf_enrichments, sf_activity_vs_genexpr){
     plts = list(
         plot_drivers(driver_activity, driver_genexpr),
         plot_prolif_driver(diff_activity, assocs_gene_dependency),
@@ -534,7 +567,7 @@ make_plots = function(diff_activity, diff_genexpr,
         plot_sf_crossreg(driver_activity, sf_crossreg_activity, "-activity"),
         plot_sf_crossreg(driver_genexpr, sf_crossreg_genexpr, "-genexpr"),
         plot_tf_enrichments(tf_enrichments),
-        plot_comparison(diff_activity, diff_genexpr, survival_activity, survival_genexpr)
+        plot_comparison(diff_activity, diff_genexpr, survival_activity, survival_genexpr, sf_activity_vs_genexpr)
     )
     plts = do.call(c,plts)
     return(plts)
@@ -547,7 +580,7 @@ make_figdata = function(diff_activity, diff_genexpr,
                         survival_activity, survival_genexpr,
                         driver_activity, driver_genexpr, 
                         sf_crossreg_activity, sf_crossreg_genexpr, 
-                        tf_enrichments){
+                        tf_enrichments, sf_activity_vs_genexpr){
     figdata = list(
         "tcga_tumorigenesis" = list(
             "diff_protein_activity" = diff_activity,
@@ -598,6 +631,8 @@ save_plots = function(plts, figs_dir){
     
     save_plt(plts, "comparison-diff_analysis-scatter", '.pdf', figs_dir, width=4, height=4)
     save_plt(plts, "comparison-survival-scatter", '.pdf', figs_dir, width=4, height=4)
+    save_plt(plts, "comparison-correlation_by_cancer-violin", '.pdf', figs_dir, width=12, height=5)
+    save_plt(plts, "comparison-correlation_median_pancan-violin", '.pdf', figs_dir, width=4, height=4)
 }
 
 
@@ -627,6 +662,7 @@ parseargs = function(){
         make_option("--sf_crossreg_genexpr_file", type="character"),
         make_option("--assocs_gene_dependency_file", type="character"),
         make_option("--ontology_chea_file", type="character"),
+        make_option("--sf_activity_vs_genexpr_file", type="character"),
         make_option("--gene_annotation_file", type="character"),
         make_option("--figs_dir", type="character")
     )
@@ -648,6 +684,7 @@ main = function(){
     sf_crossreg_genexpr_file = args[["sf_crossreg_genexpr_file"]]
     assocs_gene_dependency_file = args[["assocs_gene_dependency_file"]]
     ontology_chea_file = args[["ontology_chea_file"]]
+    sf_activity_vs_genexpr_file = args[["sf_activity_vs_genexpr_file"]]
     gene_annotation_file = args[["gene_annotation_file"]]
     figs_dir = args[["figs_dir"]]
     
@@ -662,6 +699,7 @@ main = function(){
     sf_crossreg_genexpr = read_tsv(sf_crossreg_genexpr_file)
     assocs_gene_dependency = read_tsv(assocs_gene_dependency_file)
     ontology_chea = read.gmt(ontology_chea_file)
+    sf_activity_vs_genexpr = read_tsv(sf_activity_vs_genexpr_file)
     gene_annotation = read_tsv(gene_annotation_file) %>%
         dplyr::rename(
             GENE = `Approved symbol`,
@@ -713,6 +751,13 @@ main = function(){
             by = c("feature"="ENSEMBL")
         )
     
+    sf_activity_vs_genexpr = sf_activity_vs_genexpr %>%
+        filter(sf_genexpr==sf_activity) %>%
+        left_join(
+            gene_annotation[,c("ENSEMBL","GENE")],
+            by = c("sf_activity"="ENSEMBL")
+        )
+    
     # enrichment
     tf_enrichments = make_enrichments(driver_activity, ontology_chea)
     
@@ -749,7 +794,7 @@ main = function(){
         survival_activity, survival_genexpr,
         driver_activity, driver_genexpr, 
         sf_crossreg_activity, sf_crossreg_genexpr, 
-        tf_enrichments
+        tf_enrichments, sf_activity_vs_genexpr
     )
     
     # make figdata
@@ -760,7 +805,7 @@ main = function(){
         survival_activity, survival_genexpr,
         driver_activity, driver_genexpr, 
         sf_crossreg_activity, sf_crossreg_genexpr, 
-        tf_enrichments
+        tf_enrichments, sf_activity_vs_genexpr
     )
 
     # save
