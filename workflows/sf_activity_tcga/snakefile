@@ -125,7 +125,7 @@ rule all:
         expand(os.path.join(RESULTS_DIR,'files','PANCAN',"{omic}-sf_cross_regulation.tsv.gz"), omic=OMICS),
         
         # figures
-        #os.path.join(RESULTS_DIR,"figures","tcga_tumorigenesis")
+        os.path.join(RESULTS_DIR,"figures","cancer_program")
         
 
 rule split_event_psi_by_cancer_and_sample_type:
@@ -436,8 +436,8 @@ rule merge_survival_analysis:
         # surv
         dfs = []
         for f in input.surv_files:
-            cancer_type = os.path.basename(f).split("-")[0]
-            sample_type = os.path.basename(f).split("-")[1]
+            cancer_type = os.path.basename(f).split("-")[1]
+            sample_type = os.path.basename(f).split("-")[2]
             df = pd.read_table(f)
             df["cancer_type"] = cancer_type
             df["sample_type"] = sample_type
@@ -520,8 +520,8 @@ rule merge_sf_cross_regulation:
         # surv
         dfs = []
         for f in input.corr_files:
-            cancer_type = os.path.basename(f).split("-")[0]
-            sample_type = os.path.basename(f).split("-")[1].replace(".tsv.gz","")
+            cancer_type = os.path.basename(f).split("-")[1]
+            sample_type = os.path.basename(f).split("-")[2].replace(".tsv.gz","")
             df = pd.read_table(f)
             df["cancer_type"] = cancer_type
             df["sample_type"] = sample_type
@@ -533,20 +533,30 @@ rule merge_sf_cross_regulation:
         print("Done!")
     
 
-rule figures_tcga_tumorigenesis:
+rule figures_cancer_program:
     input:
-        diff_protein_activity = os.path.join(RESULTS_DIR,'files','PANCAN','mannwhitneyu-PrimaryTumor_vs_SolidTissueNormal.tsv.gz'),
+        diff_activity = os.path.join(RESULTS_DIR,'files','PANCAN','protein_activity-mannwhitneyu-PrimaryTumor_vs_SolidTissueNormal.tsv.gz'),
+        diff_genexpr = os.path.join(RESULTS_DIR,'files','PANCAN','genexpr_tpm-mannwhitneyu-PrimaryTumor_vs_SolidTissueNormal.tsv.gz'),
         assocs_gene_dependency = os.path.join(PACT_CCLE_DIR,"files","protein_activity_vs_demeter2","CCLE.tsv.gz"),
-        survival_analysis = os.path.join(RESULTS_DIR,'files','PANCAN',"survival_analysis.tsv.gz"),
+        survival_activity = os.path.join(RESULTS_DIR,'files','PANCAN',"protein_activity-survival_analysis-surv.tsv.gz"),
+        survival_genexpr = os.path.join(RESULTS_DIR,'files','PANCAN',"genexpr_tpm-survival_analysis-surv.tsv.gz"),
+        sf_crossreg_activity = os.path.join(RESULTS_DIR,'files','PANCAN',"protein_activity-sf_cross_regulation.tsv.gz"),
+        sf_crossreg_genexpr = os.path.join(RESULTS_DIR,'files','PANCAN',"genexpr_tpm-sf_cross_regulation.tsv.gz"),
+        ontology_chea = os.path.join(RAW_DIR,"Harmonizome","CHEA-TranscriptionFactorTargets.gmt.gz"),
         gene_annotation = os.path.join(RAW_DIR,"HGNC","gene_annotations.tsv.gz")
     output:
-        directory(os.path.join(RESULTS_DIR,"figures","tcga_tumorigenesis"))
+        directory(os.path.join(RESULTS_DIR,"figures","cancer_program"))
     shell:
         """
-        Rscript scripts/figures_tcga_tumorigenesis.R \
-                    --diff_protein_activity_file={input.diff_protein_activity} \
-                    --gene_annotation_file={input.gene_annotation} \
+        Rscript scripts/figures_cancer_program.R \
+                    --diff_activity_file={input.diff_activity} \
+                    --diff_genexpr_file={input.diff_genexpr} \
                     --assocs_gene_dependency_file={input.assocs_gene_dependency} \
-                    --survival_analysis_file={input.survival_analysis}
+                    --survival_activity_file={input.survival_activity} \
+                    --survival_genexpr_file={input.survival_genexpr} \
+                    --sf_crossreg_activity_file={input.sf_crossreg_activity} \
+                    --sf_crossreg_genexpr_file={input.sf_crossreg_genexpr} \
+                    --ontology_chea_file={input.ontology_chea} \
+                    --gene_annotation_file={input.gene_annotation} \
                     --figs_dir={output}
         """
