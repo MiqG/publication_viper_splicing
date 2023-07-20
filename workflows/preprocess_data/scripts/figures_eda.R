@@ -39,7 +39,7 @@ PAL_SINGLE_DARK = "darkgreen"
 # metadata_encore_kd_file = file.path(PREP_DIR,"metadata","ENCOREKD.tsv.gz")
 # metadata_encore_ko_file = file.path(PREP_DIR,"metadata","ENCOREKO.tsv.gz")
 # kd_screen_file = file.path(SUPPORT_DIR,"kd_screen-symbol.txt")
-
+# ena_sfs_file = file.path(SUPPORT_DIR,"ENA_filereport-selected_sf_experiments_handcurated.tsv")
 # figs_dir = file.path(RESULTS_DIR,'figures','eda')
 
 ##### FUNCTIONS #####
@@ -57,15 +57,14 @@ plot_splicing_factors = function(splicing_factors){
         "Seiler2018" = X %>% filter(in_seiler) %>% pull(ENSEMBL),
         "Papasaikas2015" = X %>% filter(in_papasaikas) %>% pull(ENSEMBL)
     )
-
     plts[["splicing_factors-only_sf_lists-venn"]] = sfs_oi %>%
         ggvenn(
-            fill_color = get_palette("Dark2",5),
+            fill_color = get_palette("Dark2",length(sfs_oi)),
             stroke_color = NA,
             set_name_size = FONT_SIZE+0.5,
             text_size = FONT_SIZE
         )
-
+    
     m = sfs_oi %>% 
         list_to_matrix() %>% 
         make_comb_mat()
@@ -81,14 +80,15 @@ plot_splicing_factors = function(splicing_factors){
     ## covered
     sfs_oi = list(
         "AllSFs" = X %>% pull(ENSEMBL),
-        "ENCORE KD or KO" = X %>% filter(in_encore_ko | in_encore_kd) %>% pull(ENSEMBL),
-        "KDscreen" = X %>% filter(in_kd_screen) %>% pull(ENSEMBL),
-        "KDsENA" = X %>% filter(in_ena_sfs) %>% pull(ENSEMBL)
+        #"KDscreen" = X %>% filter(in_kd_screen) %>% pull(ENSEMBL),
+        #"KDsENA" = X %>% filter(in_ena_sfs) %>% pull(ENSEMBL),
+        "ENCORE KD" = X %>% filter(in_encore_ko) %>% pull(ENSEMBL),
+        "ENCORE KO" = X %>% filter(in_encore_kd) %>% pull(ENSEMBL)
     )
     
     plts[["splicing_factors-all_datasets-venn"]] = sfs_oi %>%
         ggvenn(
-            fill_color = get_palette("rickandmorty",4),
+            fill_color = get_palette("rickandmorty",length(sfs_oi)),
             stroke_color = NA,
             set_name_size = FONT_SIZE+0.5,
             text_size = FONT_SIZE
@@ -147,7 +147,7 @@ save_plt = function(plts, plt_name, extension='.pdf',
 
 save_plots = function(plts, figs_dir){
     save_plt(plts, "splicing_factors-only_sf_lists-venn", '.pdf', figs_dir, width=5, height=5)
-    save_plt(plts, "splicing_factors-only_sf_lists-upset", '.pdf', figs_dir, width=10, height=7)
+    save_plt(plts, "splicing_factors-only_sf_lists-upset", '.pdf', figs_dir, width=11.5, height=7)
     save_plt(plts, "splicing_factors-all_datasets-venn", '.pdf', figs_dir, width=5, height=5)
     save_plt(plts, "splicing_factors-all_datasets-upset", '.pdf', figs_dir, width=10, height=7)
 }
@@ -174,6 +174,7 @@ parseargs = function(){
         make_option("--metadata_encore_kd_file", type="character"),
         make_option("--metadata_encore_ko_file", type="character"),
         make_option("--kd_screen_file", type="character"),
+        make_option("--ena_sfs_file", type="character"),
         make_option("--figs_dir", type="character")
     )
 
@@ -189,6 +190,7 @@ main = function(){
     metadata_encore_kd_file = args[["metadata_encore_kd_file"]]
     metadata_encore_ko_file = args[["metadata_encore_ko_file"]]
     kd_screen_file = args[["kd_screen_file"]]
+    ena_sfs_file = args[["ena_sfs_file"]]
     figs_dir = args[["figs_dir"]]
     
     dir.create(figs_dir, recursive = TRUE)
@@ -198,15 +200,17 @@ main = function(){
     metadata_encore_kd = read_tsv(metadata_encore_kd_file)
     metadata_encore_ko = read_tsv(metadata_encore_ko_file)
     kd_screen = readLines(kd_screen_file)
-    ena_sfs = readLines("tmp.txt")
+    ena_sfs = read_tsv(ena_sfs_file)
     
     # prep
+    ena_sfs = ena_sfs %>% filter(IS_USEFUL & PERT_TYPE%in%c("KNOCKDOWN","KNOCKOUT","OVEREXPRESSION"))
+    
     splicing_factors = splicing_factors %>%
         mutate(
             in_encore_kd = GENE %in% metadata_encore_kd[["PERT_GENE"]],
             in_encore_ko = GENE %in% metadata_encore_ko[["PERT_GENE"]],
             in_kd_screen = GENE %in% kd_screen,
-            in_ena_sfs = GENE %in% ena_sfs
+            in_ena_sfs = GENE %in% ena_sfs[["PERT_GENE"]]
         )
     
     # plot

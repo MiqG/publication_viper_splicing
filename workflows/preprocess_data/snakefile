@@ -64,12 +64,12 @@ CANCER_TYPES = [
     'UVM'
 ]
 
-CANCER_TYPES = ["LAML","LIHC"]
+CANCER_TYPES_OI = ["LAML","LIHC"]
 
 tcga_metadata = pd.read_table(os.path.join(RAW_DIR,"TCGA","metadata","PANCAN.tsv.gz"))
 TCGA_N_SAMPLES = tcga_metadata["cancer_type"].value_counts().to_dict()
 
-DATASETS = ["CCLE"] + CANCER_TYPES
+DATASETS = ["CCLE"] + CANCER_TYPES_OI
 
 ENCORE_DATASETS = ["ENCOREKD","ENCOREKO"]
 
@@ -119,17 +119,32 @@ rule all:
         expand(os.path.join(PREP_DIR,'genexpr_tpm','{cancer}.tsv.gz'), cancer=CANCER_TYPES),
         expand(os.path.join(PREP_DIR,"mutations","{cancer}.tsv.gz"), cancer=CANCER_TYPES),
         
-        # ENCORE RBP PERTURBATION SCREENS
-        ## compute log FC TPM
+        # preprocess ENASFS
+        os.path.join(PREP_DIR,"metadata","ENASFS.tsv.gz"),
+        os.path.join(PREP_DIR,"event_psi","ENASFS-EX.tsv.gz"),
+        os.path.join(PREP_DIR,"event_psi","ENASFS-ALTA.tsv.gz"),
+        os.path.join(PREP_DIR,"event_psi","ENASFS-ALTD.tsv.gz"),
+        os.path.join(PREP_DIR,"event_psi","ENASFS-INT.tsv.gz"),
+        os.path.join(PREP_DIR,"genexpr_tpm","ENASFS.tsv.gz"),    
+        
+        # PERTURBATION SCREENS
+        ### ENCORE
+        ### compute log FC TPM
         expand(os.path.join(PREP_DIR,'pert_transcriptomes','{dataset}',"{cell_line}",'log2_fold_change_tpm.tsv.gz'), cell_line=CELL_LINES, dataset=ENCORE_DATASETS),
-        ## compute delta PSI
+        ### compute delta PSI
         expand(os.path.join(PREP_DIR,'pert_transcriptomes','{dataset}',"{cell_line}",'delta_psi-{event_type}.tsv.gz'), event_type=EVENT_TYPES, cell_line=CELL_LINES, dataset=ENCORE_DATASETS),
         expand(os.path.join(PREP_DIR,'pert_transcriptomes','{dataset}',"{cell_line}",'delta_psi_rel-{event_type}.tsv.gz'), event_type=EVENT_TYPES, cell_line=CELL_LINES, dataset=ENCORE_DATASETS),
-        ## mask delta PSI
+        ### mask delta PSI
         expand(os.path.join(PREP_DIR,'ground_truth_pert','{dataset}',"{cell_line}",'{dpsi_type}-{event_type}-masked.tsv.gz'), event_type=EVENT_TYPES, cell_line=CELL_LINES, dpsi_type=DPSI_TYPES, dataset=ENCORE_DATASETS),
-        ## simplify delta PSI and log FC TPM
+        ### simplify delta PSI and log FC TPM
         expand(os.path.join(PREP_DIR,'ground_truth_pert','{dataset}',"{cell_line}",'{dpsi_type}-{event_type}.tsv.gz'), event_type=EVENT_TYPES, dpsi_type=DPSI_TYPES, cell_line=CELL_LINES, dataset=ENCORE_DATASETS),
         expand(os.path.join(PREP_DIR,'ground_truth_pert','{dataset}',"{cell_line}",'log2_fold_change_tpm.tsv.gz'), cell_line=CELL_LINES, dataset=ENCORE_DATASETS),
+        
+        ## ENASFS
+        ### delta PSI
+        expand(os.path.join(PREP_DIR,'pert_transcriptomes','ENASFS','delta_psi-{event_type}.tsv.gz'), event_type=EVENT_TYPES),
+        ### simplify delta PSI
+        expand(os.path.join(PREP_DIR,'ground_truth_pert','ENASFS','delta_psi-{event_type}.tsv.gz'), event_type=EVENT_TYPES),
         
         # impute event PSI
         #expand(os.path.join(PREP_DIR,'event_psi_imputed','{dataset}-{event_type}.tsv.gz'), dataset=DATASETS, event_type=EVENT_TYPES)
@@ -164,8 +179,8 @@ rule all:
         os.path.join(PREP_DIR,"metmap","CCLE.tsv.gz"),    
         
         # discretize data
-        expand(os.path.join(PREP_DIR,"event_psi_imputed_discretized_{method}","{dataset}-EX.tsv.gz"), dataset=DATASETS, method=["qep"]), # "gaussian",
-        expand(os.path.join(PREP_DIR,"genexpr_tpm_discretized_qep","{dataset}.tsv.gz"), dataset=DATASETS, method=["qep"]),
+        #expand(os.path.join(PREP_DIR,"event_psi_imputed_discretized_{method}","{dataset}-EX.tsv.gz"), dataset=DATASETS, method=["qep"]), # "gaussian",
+        #expand(os.path.join(PREP_DIR,"genexpr_tpm_discretized_qep","{dataset}.tsv.gz"), dataset=DATASETS, method=["qep"]),
         
         # EDA data figures
         os.path.join(RESULTS_DIR,'figures','eda')
@@ -1461,6 +1476,203 @@ rule preprocess_ena_datasets:
         
         print("Done!")
 
+
+rule preprocess_ena_splicing_factors:
+    input:
+        metadata = os.path.join(SUPPORT_DIR,'ENA_filereport-selected_sf_experiments_handcurated_w_control_samples.tsv'),
+        metadata_groups = os.path.join(SUPPORT_DIR,"ENA_filereport-selected_sf_experiments_handcurated-low_read_count_groups.tsv"),
+        psi = os.path.join(RAW_DIR,"ENA","splicing_factors",'vast_out','PSI-minN_1-minSD_0-noVLOW-min_ALT_use25-Tidy.tab.gz'),
+        genexpr = os.path.join(RAW_DIR,"ENA","splicing_factors",'vast_out','TPM-hg38-1597.tab.gz')
+    output:
+        metadata = os.path.join(PREP_DIR,"metadata","ENASFS.tsv.gz"),
+        psi_EX = os.path.join(PREP_DIR,'event_psi','ENASFS-EX.tsv.gz'),
+        psi_ALTA = os.path.join(PREP_DIR,'event_psi','ENASFS-ALTA.tsv.gz'),
+        psi_ALTD = os.path.join(PREP_DIR,'event_psi','ENASFS-ALTD.tsv.gz'),
+        psi_INT = os.path.join(PREP_DIR,'event_psi','ENASFS-INT.tsv.gz'),
+        genexpr = os.path.join(PREP_DIR,'genexpr_tpm','ENASFS.tsv.gz')      
+    run:
+        import gc
+        import pandas as pd
+        import numpy as np
+        
+        # load
+        print("Loading data...")
+        metadata = pd.read_table(input.metadata)
+        metadata_groups = pd.read_table(input.metadata_groups)
+        psi = pd.read_table(input.psi, index_col=0)
+        genexpr = pd.read_table(input.genexpr, index_col=[0,1])
+        
+        gc.collect()
+        
+        # metadata
+        ## not grouped metadata
+        metadata_not_merged = metadata.loc[~metadata["run_accession"].isin(metadata_groups["run_accession"])].copy()
+        metadata_not_merged["sampleID"] = metadata_not_merged["run_accession"]
+        metadata_not_merged["control_samples"] = metadata_not_merged["control_samples"].str.replace(",","||")
+        
+        ## grouped metadata
+        ### subset
+        metadata_merged = metadata.loc[metadata["run_accession"].isin(metadata_groups["run_accession"])].copy()
+        metadata_merged = pd.merge(metadata_merged, metadata_groups[["group_label","run_accession"]], how="left", on="run_accession")
+        ### control_samples at the group level
+        control_samples_group = []
+        for ctls in metadata_merged["control_samples"].dropna().unique():
+            # get run accessions
+            run_accessions = ctls.split(",")
+            
+            # get corresponding group labels
+            group_labs = metadata_merged.loc[metadata_merged["run_accession"].isin(run_accessions),"group_label"].unique()
+            
+            # join group labels
+            ctls_group = "||".join(group_labs)
+            
+            # save
+            control_samples_group.append({
+                "control_samples": ctls,
+                "control_samples_group": ctls_group
+            })
+        control_samples_group = pd.DataFrame(control_samples_group)
+        metadata_merged = pd.merge(metadata_merged, control_samples_group, on="control_samples", how="left")
+        metadata_merged["control_samples"] = metadata_merged["control_samples_group"]
+        
+        ### columns to keep
+        cols_oi = [
+            "study_accession","cell_line_name","condition","pert_time",
+            "pert_time_units","pert_concentration","pert_concentration_units",
+            'found_sfs_in_run_alias', 'found_sfs_in_sample_alias', 'found_sfs_in_sample_title', 
+            'found_sfs_in_experiment_title', 'found_sfs_in_study_title', 'is_match', 'group_label',
+            "DepMap_ID","CCLE_Name","PERT_GENE","PERT_ENSEMBL","IS_USEFUL","comments","PERT_TYPE",
+            "control_samples"
+        ]
+        metadata_merged = metadata_merged[cols_oi].drop_duplicates().copy()
+        metadata_merged["sampleID"] = metadata_merged["group_label"]
+        
+        ## combine metadatas
+        metadata = pd.concat([metadata_not_merged, metadata_merged])
+        
+        # PSI
+        print("Processing PSI matrix...")
+        ## drop empty rows
+        is_na = psi.isnull()
+        non_missing = is_na.shape[1] - is_na.sum(1)
+        to_keep = non_missing >= 1
+        psi = psi.loc[to_keep]
+        
+        ## remove vast-tools' suffix
+        psi.columns = [c.replace('_1','') for c in psi.columns]
+        
+        ## split by event type
+        event_types = ["EX","ALTA","ALTD","INT"]
+        psis = {e: psi.loc[psi.index.str.contains(e)] for e in event_types}
+        
+        # TPM
+        print("Processing TPM matrix...")
+        ## remove vast-tools' suffix
+        genexpr.columns = [c.replace('_1','') for c in genexpr.columns]
+        
+        ## log-transform
+        genexpr = np.log2(genexpr + 1)
+        
+        # subset
+        ## find common samples
+        common_samples = set(metadata["sampleID"]).intersection(
+            psis["EX"].columns
+        ).intersection(
+            genexpr.columns
+        )
+        psis = {e: psis[e][common_samples].copy() for e in event_types}
+        genexpr = genexpr[common_samples].copy()
+        metadata = metadata.loc[metadata["sampleID"].isin(common_samples)]
+        
+        # save
+        print("Saving...")
+        ## metadata
+        metadata.to_csv(output.metadata, **SAVE_PARAMS)
+
+        ## PSIs
+        psis["EX"].reset_index().to_csv(output.psi_EX, **SAVE_PARAMS)
+        psis["ALTD"].reset_index().to_csv(output.psi_ALTD, **SAVE_PARAMS)
+        psis["ALTA"].reset_index().to_csv(output.psi_ALTA, **SAVE_PARAMS)
+        psis["INT"].reset_index().to_csv(output.psi_INT, **SAVE_PARAMS)
+        
+        ## TPMs
+        genexpr.reset_index().drop(columns='NAME').to_csv(output.genexpr, **SAVE_PARAMS)
+        
+        print("Done!")
+        
+        
+rule delta_psi_ena_splicing_factors:
+    input:
+        metadata = os.path.join(PREP_DIR,'metadata','ENASFS.tsv.gz'),
+        psi = os.path.join(PREP_DIR,'event_psi','ENASFS-{event_type}.tsv.gz')
+    output:
+        delta_psi = os.path.join(PREP_DIR,'pert_transcriptomes','ENASFS','delta_psi-{event_type}.tsv.gz')
+    run:
+        import pandas as pd
+        
+        # load
+        metadata = pd.read_table(input.metadata)
+        psi = pd.read_table(input.psi)
+        
+        # delta PSI as the difference between conditions and the mean of the conditions
+        delta_psi = {}
+        for sample_oi in metadata["sampleID"]:
+            # get the controls of the sample
+            ctls = metadata.loc[metadata["sampleID"]==sample_oi, "control_samples"].values[0]
+            
+            # controls will be np.nan
+            if isinstance(ctls,str):
+                ctls = ctls.split("||")
+                psi_ctls = psi[ctls].mean(axis=1)
+                
+                # compute delta PSI
+                dpsi = psi[sample_oi] - psi_ctls
+                
+                delta_psi[sample_oi] = dpsi
+                
+                del dpsi, psi_ctls, ctls
+                
+        
+        delta_psi = pd.DataFrame(delta_psi)
+        
+        # save
+        delta_psi.reset_index().to_csv(output.delta_psi, sep="\t", index=False, compression="gzip")
+        
+        print("Done!")
+
+        
+rule prepare_ground_truth_pert_dpsi_ena_sfs:
+    input:
+        metadata = os.path.join(PREP_DIR,'metadata','ENASFS.tsv.gz'),
+        dpsi = os.path.join(PREP_DIR,'pert_transcriptomes','ENASFS','delta_psi-{event_type}.tsv.gz')
+    output:
+        dpsi = os.path.join(PREP_DIR,'ground_truth_pert','ENASFS','delta_psi-{event_type}.tsv.gz')
+    run:
+        import pandas as pd
+        
+        metadata = pd.read_table(input.metadata)
+        dpsi = pd.read_table(input.dpsi, index_col=0)
+        
+        # drop control samples
+        metadata = metadata.loc[~metadata["PERT_ENSEMBL"].isnull()].copy()
+        metadata["PERT_ID"] = metadata[
+            ["study_accession","cell_line_name","PERT_ENSEMBL"]
+        ].apply(lambda row: '___'.join(row.values.astype(str)), axis=1)
+        
+        dpsis = []
+        for pert_id in metadata["PERT_ID"].unique():
+            samples_oi = metadata.loc[metadata["PERT_ID"]==pert_id, "sampleID"]
+
+            dpsi_avg = dpsi[samples_oi].mean(axis=1)
+            dpsi_avg.name = pert_id
+            dpsis.append(dpsi_avg)
+
+        dpsis = pd.concat(dpsis, axis=1)
+
+        dpsis.reset_index().to_csv(output.dpsi, **SAVE_PARAMS)
+        
+        print("Done!")
+        
         
 # rule discretize_matrix_gaussian:
 #     input:
@@ -1540,7 +1752,8 @@ rule figures_eda:
         splicing_factors = os.path.join(SUPPORT_DIR,"splicing_factors","splicing_factors.tsv"),
         metadata_encore_kd = os.path.join(PREP_DIR,"metadata","ENCOREKD.tsv.gz"),
         metadata_encore_ko = os.path.join(PREP_DIR,"metadata","ENCOREKO.tsv.gz"),
-        kd_screen = os.path.join(SUPPORT_DIR,"kd_screen-symbol.txt")
+        kd_screen = os.path.join(SUPPORT_DIR,"kd_screen-symbol.txt"),
+        ena_sfs = os.path.join(SUPPORT_DIR,"ENA_filereport-selected_sf_experiments_handcurated.tsv")
     output:
         directory(os.path.join(RESULTS_DIR,'figures','eda'))
     shell:
@@ -1550,6 +1763,7 @@ rule figures_eda:
                     --metadata_encore_kd_file={input.metadata_encore_kd} \
                     --metadata_encore_ko_file={input.metadata_encore_ko} \
                     --kd_screen_file={input.kd_screen} \
+                    --ena_sfs_file={input.ena_sfs} \
                     --figs_dir={output}
         """
         
