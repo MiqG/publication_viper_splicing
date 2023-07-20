@@ -27,8 +27,6 @@ URLS_SINGLE = metadata_single['fastq_ftp'].str.split(';').str[0].apply(os.path.d
 URLS_SINGLE = {os.path.basename(url): url for url in URLS_SINGLE}
 SAMPLES_SINGLE = list(URLS_SINGLE.keys())
 
-N_SAMPLES = len(SAMPLES_PAIRED) + len(SAMPLES_SINGLE)
-
 ## fastq sizes
 SIZES_PAIRED = metadata_paired.set_index("run_accession")["fastq_bytes"].str.split(";").apply(lambda x: max(np.array(x, dtype=int))).to_dict()
 SIZES_SINGLE = metadata_single.set_index("run_accession")["fastq_bytes"].str.split(";").apply(lambda x: max(np.array(x, dtype=int))).to_dict()
@@ -40,6 +38,9 @@ SIZE_THRESH = 5e9
 idx = (metadata["comments"]=="low read count") & metadata["study_accession"].isin(["PRJNA855953","PRJNA777261"])
 SAMPLES_PAIRED_TOMERGE = metadata.loc[idx & (metadata["library_layout"]=="PAIRED"),"run_accession"].tolist()
 SAMPLES_SINGLE_TOMERGE = metadata.loc[idx & (metadata["library_layout"]=="SINGLE"),"run_accession"].tolist()
+
+SAMPLES_PAIRED_NOTMERGE = metadata.loc[~idx & (metadata["library_layout"]=="PAIRED"),"run_accession"].tolist()
+SAMPLES_SINGLE_NOTMERGE = metadata.loc[~idx & (metadata["library_layout"]=="SINGLE"),"run_accession"].tolist()
 
 ## subset
 metadata_to_merge = metadata.loc[metadata["comments"]=="low read count"].copy()
@@ -64,6 +65,9 @@ MERGE_GROUPS = {
     g: metadata_to_merge.loc[metadata_to_merge["group_label"]==g,"run_accession"].tolist() 
     for g in metadata_to_merge["group_label"].unique()
 }
+
+SAMPLES_TO_COMBINE = SAMPLES_PAIRED_NOTMERGE + SAMPLES_SINGLE_NOTMERGE + list(MERGE_GROUPS.keys())
+N_SAMPLES = len(SAMPLES_TO_COMBINE)
 
 ##### RULES #####
 rule all:
@@ -96,16 +100,16 @@ rule all:
         
         # merge low coverage
         ## make metadata
-        [os.path.join(DATASET_DIR,"vast_out","merge","metadata","{group}.tsv").format(group=g) for g in MERGE_GROUPS.keys()],
+        [os.path.join(DATASET_DIR,"vast_out","to_merge","metadata","{group}.tsv").format(group=g) for g in MERGE_GROUPS.keys()],
         ## merge
-        expand(os.path.join(DATASET_DIR,"vast_out","merge",".done","{group}"), group=MERGE_GROUPS.keys()),
+        expand(os.path.join(DATASET_DIR,"vast_out","to_merge",".done","{group}"), group=MERGE_GROUPS.keys()),
         
         # combine
-        #os.path.join(DATASET_DIR,'vast_out','.done/vasttools_combine-{n_samples}').format(n_samples=N_SAMPLES),
+        os.path.join(DATASET_DIR,'vast_out','.done/vasttools_combine-{n_samples}').format(n_samples=N_SAMPLES),
         
         # tidy PSI
-        #os.path.join(DATASET_DIR,'vast_out','PSI-minN_1-minSD_0-noVLOW-min_ALT_use25-Tidy.tab.gz'),
-        #'.done/ena_sfs.done'
+        os.path.join(DATASET_DIR,'vast_out','PSI-minN_1-minSD_0-noVLOW-min_ALT_use25-Tidy.tab.gz'),
+        '.done/ena_sfs.done'
         
         
         
@@ -809,9 +813,9 @@ rule groups_merge_low_coverage:
         done = [os.path.join(DATASET_DIR,'vast_out','.done','{sample}_paired').format(sample=sample) for sample in SAMPLES_PAIRED_TOMERGE] + [os.path.join(DATASET_DIR,'vast_out','.done','{sample}_single').format(sample=sample) for sample in SAMPLES_SINGLE_TOMERGE],
         metadata_to_merge = os.path.join(SUPPORT_DIR,"ENA_filereport-selected_sf_experiments_handcurated-low_read_count_groups.tsv")
     output:
-        [os.path.join(DATASET_DIR,"vast_out","merge","metadata","{group}.tsv").format(group=g) for g in MERGE_GROUPS]
+        [os.path.join(DATASET_DIR,"vast_out","to_merge","metadata","{group}.tsv").format(group=g) for g in MERGE_GROUPS.keys()]
     params:
-        output_dir = os.path.join(DATASET_DIR,"vast_out","merge","metadata")
+        output_dir = os.path.join(DATASET_DIR,"vast_out","to_merge","metadata")
     run:
         import pandas as pd
         
@@ -831,10 +835,10 @@ rule groups_merge_low_coverage:
     
 rule merge_low_coverage:
     input:
-        group = os.path.join(DATASET_DIR,"vast_out","merge","metadata","{group}.tsv"),
+        group = os.path.join(DATASET_DIR,"vast_out","to_merge","metadata","{group}.tsv"),
         dbDir = os.path.join(VASTDB_DIR,'assemblies')
     output:
-        merge_done = touch(os.path.join(DATASET_DIR,"vast_out","merge",".done","{group}"))
+        merge_done = touch(os.path.join(DATASET_DIR,"vast_out","to_merge",".done","{group}"))
     params:
         bin_dir="~/repositories/vast-tools/",
         folder = os.path.join(DATASET_DIR,'vast_out'),
@@ -849,15 +853,15 @@ rule merge_low_coverage:
         set -eo pipefail
         
         # create merge directory
-        #mkdir -p {params.folder}/to_merge/to_combine/
-        #mkdir -p {params.folder}/to_merge/expr_out/
+        mkdir -p {params.folder}/to_merge/to_combine/
+        mkdir -p {params.folder}/to_merge/expr_out/
         
         # link every sample to combine in the corresponding folders
-        #for SAMPLE in {params.samples}
-        #do
-        #    ln -nsf {params.folder}/$SAMPLE/to_combine/* {params.folder}/to_merge/to_combine/
-        #    ln -nsf {params.folder}/$SAMPLE/expr_out/* {params.folder}/to_merge/expr_out/
-        #done
+        for SAMPLE in {params.samples}
+        do
+            ln -nsf {params.folder}/$SAMPLE/to_combine/* {params.folder}/to_merge/to_combine/
+            ln -nsf {params.folder}/$SAMPLE/expr_out/* {params.folder}/to_merge/expr_out/
+        done
         
         # merge samples
         {params.bin_dir}/vast-tools merge \
@@ -880,7 +884,7 @@ rule merge_low_coverage:
     
 rule vasttools_combine:
     input:
-        done = [os.path.join(DATASET_DIR,'vast_out','.done','{sample}_paired').format(sample=sample) for sample in SAMPLES_PAIRED] + [os.path.join(DATASET_DIR,'vast_out','.done','{sample}_single').format(sample=sample) for sample in SAMPLES_SINGLE],
+        done = [os.path.join(DATASET_DIR,'vast_out','.done','{sample}_paired').format(sample=sample) for sample in SAMPLES_PAIRED_NOTMERGE] + [os.path.join(DATASET_DIR,'vast_out','.done','{sample}_single').format(sample=sample) for sample in SAMPLES_SINGLE_NOTMERGE] + [os.path.join(DATASET_DIR,"vast_out","to_merge",".done","{sample}").format(sample=sample) for sample in list(MERGE_GROUPS.keys())],
         dbDir = os.path.join(VASTDB_DIR,'assemblies')
     output:
         touch(os.path.join(DATASET_DIR,'vast_out','.done','vasttools_combine-{n_samples}').format(n_samples=N_SAMPLES)),
@@ -888,11 +892,13 @@ rule vasttools_combine:
         psi = os.path.join(DATASET_DIR,'vast_out','INCLUSION_LEVELS_FULL-hg38-{n_samples}.tab.gz').format(n_samples=N_SAMPLES)
     params:
         bin_dir="~/repositories/vast-tools/",
-        folder = os.path.join(DATASET_DIR,'vast_out')
+        folder = os.path.join(DATASET_DIR,'vast_out'),
+        samples_merged = list(MERGE_GROUPS.keys()),
+        samples_notmerged = SAMPLES_SINGLE_NOTMERGE + SAMPLES_PAIRED_NOTMERGE
     threads: 16
     resources:
         runtime = 3600*72, # 72h
-        memory = 20
+        memory = 150 # GB
     shell:
         """
         set -eo pipefail
@@ -900,9 +906,20 @@ rule vasttools_combine:
         # group results
         echo "Grouping results..."
         mkdir -p {params.folder}/to_combine
-        ln -s {params.folder}/*/to_combine/* {params.folder}/to_combine/
         mkdir -p {params.folder}/expr_out
-        ln -s {params.folder}/*/expr_out/* {params.folder}/expr_out/
+        
+        # link every sample to combine in the corresponding folders
+        for SAMPLE in {params.samples_merged}
+        do
+            ln -nsf {params.folder}/merged/to_combine/$SAMPLE* {params.folder}/to_combine/ 
+            ln -nsf {params.folder}/merged/expr_out/$SAMPLE* {params.folder}/expr_out/ 
+        done
+        
+        for SAMPLE in {params.samples_notmerged}
+        do
+            ln -nsf {params.folder}/$SAMPLE/to_combine/* {params.folder}/to_combine/
+            ln -nsf {params.folder}/$SAMPLE/expr_out/* {params.folder}/expr_out/
+        done
         
         # combine runs
         echo "Combining runs..."
