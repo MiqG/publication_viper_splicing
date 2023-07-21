@@ -9,10 +9,12 @@ require(viper)
 # Development
 # -----------
 # ROOT = here::here()
-# RESULTS_DIR = file.path(ROOT,"results","sf_activity_ccle")
+# RESULTS_DIR = file.path(ROOT,"results","sf_activity_tcga")
 # ACTVAL_DIR = file.path(ROOT,"results","validation_activity")
-# signature_file = file.path(RESULTS_DIR,"files","signatures","CCLE-EX.tsv.gz")
+# REGULONS_DIR = file.path(ROOT,"results","regulon_inference")
+# signature_file = file.path(RESULTS_DIR,"files","signatures","LIHC-RecurrentTumor-EX.tsv.gz")
 # regulons_dir = file.path(ACTVAL_DIR,"files","subsetted_regulons","regulons_selected")
+# regulons_dir = file.path(REGULONS_DIR,"files","experimentally_derived_regulons_pruned-EX")
 
 ##### FUNCTIONS #####
 as_regulon_network = function(regulons){

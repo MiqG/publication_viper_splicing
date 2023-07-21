@@ -20,6 +20,7 @@ SUPPORT_DIR = os.path.join(ROOT,"support")
 BIN_DIR = os.path.join(ROOT,"bin")
 RESULTS_DIR = os.path.join(ROOT,"results","sf_activity_tcga")
 ACTVAL_DIR = os.path.join(ROOT,"results","validation_activity")
+REGULONS_DIR = os.path.join(ROOT,"results","regulon_inference")
 PACT_CCLE_DIR = os.path.join(ROOT,"results","sf_activity_ccle")
 SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
 PADJ_METHOD = 'fdr_bh'
@@ -261,7 +262,7 @@ rule compute_signature_within:
 rule compute_protein_activity:
     input:
         signature = os.path.join(RESULTS_DIR,"files","signatures","{cancer}-{sample}-EX.tsv.gz"),
-        regulons_dir = os.path.join(ACTVAL_DIR,"files","subsetted_regulons","regulons_selected")
+        regulons_dir = os.path.join(REGULONS_DIR,"files","experimentally_derived_regulons_pruned-EX")
     output:
         os.path.join(RESULTS_DIR,"files","protein_activity","{cancer}-{sample}-EX.tsv.gz")
     params:
@@ -607,6 +608,7 @@ rule figures_cancer_program:
         sf_crossreg_activity = os.path.join(RESULTS_DIR,'files','PANCAN',"protein_activity-sf_cross_regulation.tsv.gz"),
         sf_crossreg_genexpr = os.path.join(RESULTS_DIR,'files','PANCAN',"genexpr_tpm-sf_cross_regulation.tsv.gz"),
         ontology_chea = os.path.join(RAW_DIR,"Harmonizome","CHEA-TranscriptionFactorTargets.gmt.gz"),
+        sf_activity_vs_genexpr = os.path.join(RESULTS_DIR,'files','PANCAN',"genexpr_tpm_vs_activity.tsv.gz"),
         gene_annotation = os.path.join(RAW_DIR,"HGNC","gene_annotations.tsv.gz")
     output:
         directory(os.path.join(RESULTS_DIR,"figures","cancer_program"))
@@ -615,12 +617,13 @@ rule figures_cancer_program:
         Rscript scripts/figures_cancer_program.R \
                     --diff_activity_file={input.diff_activity} \
                     --diff_genexpr_file={input.diff_genexpr} \
-                    --assocs_gene_dependency_file={input.assocs_gene_dependency} \
                     --survival_activity_file={input.survival_activity} \
                     --survival_genexpr_file={input.survival_genexpr} \
                     --sf_crossreg_activity_file={input.sf_crossreg_activity} \
                     --sf_crossreg_genexpr_file={input.sf_crossreg_genexpr} \
+                    --assocs_gene_dependency_file={input.assocs_gene_dependency} \
                     --ontology_chea_file={input.ontology_chea} \
+                    --sf_activity_vs_genexpr_file={input.sf_activity_vs_genexpr} \
                     --gene_annotation_file={input.gene_annotation} \
                     --figs_dir={output}
         """

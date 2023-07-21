@@ -396,6 +396,7 @@ plot_survival_analysis = function(survival_roc, survival_omic, driver_omic, patt
             by="GENE"
         ) %>%
         count(GENE, driver_type, surv_type) %>%
+        drop_na() %>%
         ggplot(aes(x=surv_type, y=n, group=interaction(surv_type,driver_type))) +
         geom_violin(aes(fill=driver_type), color=NA, position=position_dodge(0.9)) +
         geom_boxplot(fill=NA, width=0.1, outlier.size=0.1, position=position_dodge(0.9)) +
@@ -418,6 +419,7 @@ plot_survival_analysis = function(survival_roc, survival_omic, driver_omic, patt
             by="GENE"
         ) %>%
         count(GENE, driver_type, surv_type) %>%
+        drop_na() %>%
         ggplot(aes(x=surv_type, y=n, group=interaction(surv_type,driver_type))) +
         geom_violin(aes(fill=driver_type), color=NA, position=position_dodge(0.9)) +
         geom_boxplot(fill=NA, width=0.1, outlier.size=0.1, position=position_dodge(0.9)) +
@@ -677,7 +679,6 @@ main = function(){
     
     diff_activity_file = args[["diff_activity_file"]]
     diff_genexpr_file = args[["diff_genexpr_file"]]
-    gene_annotation_file = args[["gene_annotation_file"]]
     survival_activity_file = args[["survival_activity_file"]]
     survival_genexpr_file = args[["survival_genexpr_file"]]
     sf_crossreg_activity_file = args[["sf_crossreg_activity_file"]]

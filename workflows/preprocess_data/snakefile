@@ -1612,7 +1612,7 @@ rule delta_psi_ena_splicing_factors:
         
         # load
         metadata = pd.read_table(input.metadata)
-        psi = pd.read_table(input.psi)
+        psi = pd.read_table(input.psi, index_col=0)
         
         # delta PSI as the difference between conditions and the mean of the conditions
         delta_psi = {}
@@ -1636,7 +1636,7 @@ rule delta_psi_ena_splicing_factors:
         delta_psi = pd.DataFrame(delta_psi)
         
         # save
-        delta_psi.reset_index().to_csv(output.delta_psi, sep="\t", index=False, compression="gzip")
+        delta_psi.reset_index().to_csv(output.delta_psi, **SAVE_PARAMS)
         
         print("Done!")
 
