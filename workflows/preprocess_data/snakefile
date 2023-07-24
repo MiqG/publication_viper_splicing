@@ -147,7 +147,8 @@ rule all:
         expand(os.path.join(PREP_DIR,'ground_truth_pert','ENASFS','delta_psi-{event_type}.tsv.gz'), event_type=EVENT_TYPES),
         
         # impute event PSI
-        #expand(os.path.join(PREP_DIR,'event_psi_imputed','{dataset}-{event_type}.tsv.gz'), dataset=DATASETS, event_type=EVENT_TYPES)
+        #expand(os.path.join(PREP_DIR,'event_psi_imputed','{dataset}-{event_type}.tsv.gz'), dataset=DATASETS, event_type=EVENT_TYPES),
+        expand(os.path.join(PREP_DIR,'event_psi_imputed','{dataset}-{event_type}.tsv.gz'), dataset="CardosoMoreira2020", event_type=EVENT_TYPES),
         
         # preprocess POSTAR3
         os.path.join(PREP_DIR,"clip_peaks_mapped","POSTAR3.tsv.gz"),

@@ -25,6 +25,11 @@ METADATA_FILES = [
     os.path.join(PREP_DIR,"metadata","ENASFS.tsv.gz")
 ]
 
+REGULON_SETS = [
+    "aracne_regulons_development",
+    "experimentally_derived_regulons_pruned"
+]
+
 ##### RULES #####
 rule all:
     input:
@@ -33,12 +38,13 @@ rule all:
         
         # evaluate regulons
         ## run
-        expand(os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{dataset}-{event_type}.tsv.gz"), dataset=PERT_FILES.keys(), event_type=EVENT_TYPES),
+        expand(os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{regulon_set}-{dataset}-{event_type}.tsv.gz"), dataset=PERT_FILES.keys(), event_type=EVENT_TYPES, regulon_set=REGULON_SETS),
         ## merge
         expand(os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","merged-{event_type}.tsv.gz"), event_type=EVENT_TYPES),
         
         # make figures
         expand(os.path.join(RESULTS_DIR,"figures","regulon_evaluation-{event_type}"), event_type=EVENT_TYPES)
+        
         
 rule make_evaluation_labels:
     input:
@@ -84,10 +90,10 @@ rule make_evaluation_labels:
 rule evaluate_regulons:
     input:
         signature = lambda wildcards: PERT_FILES[wildcards.dataset],
-        regulons = os.path.join(RESULTS_DIR,"files","experimentally_derived_regulons_pruned-{event_type}"),
+        regulons = os.path.join(RESULTS_DIR,"files","{regulon_set}-{event_type}"),
         eval_labels = os.path.join(RESULTS_DIR,"files","regulon_evaluation_labels","{dataset}.tsv.gz")
     output:
-        os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{dataset}-{event_type}.tsv.gz")
+        os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{regulon_set}-{dataset}-{event_type}.tsv.gz")
     params:
         script_dir = BIN_DIR
     shell:
@@ -102,7 +108,7 @@ rule evaluate_regulons:
         
 rule combine_evaluations:
     input:
-        evaluations = [os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{dataset}-{event_type}.tsv.gz").format(dataset=d, event_type="{event_type}") for d in PERT_FILES.keys()]
+        evaluations = [os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{regulon_set}-{dataset}-{event_type}.tsv.gz").format(regulon_set=r, dataset=d, event_type="{event_type}") for r in REGULON_SETS for d in PERT_FILES.keys()]
     output:
         os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","merged-{event_type}.tsv.gz")
     run:
