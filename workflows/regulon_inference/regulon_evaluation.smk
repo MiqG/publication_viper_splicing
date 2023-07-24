@@ -32,7 +32,13 @@ rule all:
         os.path.join(RESULTS_DIR,"files","regulon_evaluation_labels"),
         
         # evaluate regulons
-        expand(os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{dataset}-{event_type}.tsv.gz"), dataset=PERT_FILES.keys(), event_type=EVENT_TYPES)
+        ## run
+        expand(os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{dataset}-{event_type}.tsv.gz"), dataset=PERT_FILES.keys(), event_type=EVENT_TYPES),
+        ## merge
+        expand(os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","merged-{event_type}.tsv.gz"), event_type=EVENT_TYPES),
+        
+        # make figures
+        expand(os.path.join(RESULTS_DIR,"figures","regulon_evaluation-{event_type}"), event_type=EVENT_TYPES)
         
 rule make_evaluation_labels:
     input:
@@ -91,4 +97,32 @@ rule evaluate_regulons:
                     --regulons_path={input.regulons} \
                     --eval_labels_file={input.eval_labels} \
                     --output_file={output}
+        """
+        
+        
+rule combine_evaluations:
+    input:
+        evaluations = [os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{dataset}-{event_type}.tsv.gz").format(dataset=d, event_type="{event_type}") for d in PERT_FILES.keys()]
+    output:
+        os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","merged-{event_type}.tsv.gz")
+    run:
+        import pandas as pd
+    
+        evaluation = pd.concat([pd.read_table(f) for f in input.evaluations])
+        
+        evaluation.to_csv(output[0], **SAVE_PARAMS)
+        
+        print("Done!")
+        
+    
+rule figures_regulon_evaluation:
+    input:
+        evaluation = os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","merged-{event_type}.tsv.gz")
+    output:
+        directory(os.path.join(RESULTS_DIR,"figures","regulon_evaluation-{event_type}"))
+    shell:
+        """
+        Rscript scripts/figures_regulon_evaluation.R \
+                    --evaluation_file={input.evaluation} \
+                    --figs_dir={output}
         """

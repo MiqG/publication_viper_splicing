@@ -216,8 +216,10 @@ main = function(){
     
     }else{
         print("Evaluation mode...")
+        
         # run viper and evaluate predicted protein activities
         result = run_viper_and_evaluate(signature, regulons, eval_labels)
+        result[["regulon_set_id"]] = basename(regulons_path)
         result[["signature_id"]] = basename(eval_labels_file) %>% gsub(".tsv.gz","",.)
     }
     
