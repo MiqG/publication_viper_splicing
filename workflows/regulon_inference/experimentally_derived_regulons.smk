@@ -113,7 +113,7 @@ rule make_regulons:
                 idx = perts["PERT_TYPE"]=="OVEREXPRESSION"
                 perts.loc[idx,"tfmode"] = -perts.loc[idx,"tfmode"]
                 
-                # create metacells with a perturbation in each splicing factor
+                # create metaexperiments with a perturbation in each splicing factor
                 # try to put perturbations from the same project together
                 cols_oi = ["ENSEMBL","cell_line_name","study_accession"]
                 gene_study = perts[cols_oi].drop_duplicates().groupby(
@@ -121,22 +121,22 @@ rule make_regulons:
                 ).size().reset_index().rename(columns={0:"n"}).sort_values(["n","cell_line_name"])
                 gene_study["index"] = np.arange(0,len(gene_study))
                 
-                metacells = {}
+                metaexperiments = {}
                 it = 0
                 while len(gene_study)>0:
                     to_keep = gene_study["index"].isin(gene_study.groupby('ENSEMBL')["index"].min())
-                    metacells["metacell%s" % it] = gene_study.loc[to_keep].sort_values("ENSEMBL")
+                    metaexperiments["metaexperiment%s" % it] = gene_study.loc[to_keep].sort_values("ENSEMBL")
                     gene_study = gene_study.loc[~to_keep].sort_values("ENSEMBL").copy()
                     it = it + 1
                 
                 # save
-                for metacell_oi in metacells.keys():
-                    metacell = metacells[metacell_oi][cols_oi]
-                    perts_oi = pd.merge(metacell, perts, on=cols_oi, how="left")
+                for metaexperiment_oi in metaexperiments.keys():
+                    metaexperiment = metaexperiments[metaexperiment_oi][cols_oi]
+                    perts_oi = pd.merge(metaexperiment, perts, on=cols_oi, how="left")
 
                     # save
-                    if len(metacell)>1:
-                        output_file = os.path.join(output.output_dir,"%s-%s-delta_psi.tsv.gz") % (dataset, metacell_oi)
+                    if len(metaexperiment)>1:
+                        output_file = os.path.join(output.output_dir,"%s-%s-delta_psi.tsv.gz") % (dataset, metaexperiment_oi)
                         print("Saving %s..." % output_file)
                         perts_oi.to_csv(output_file, **SAVE_PARAMS)
 
