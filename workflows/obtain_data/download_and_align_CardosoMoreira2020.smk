@@ -16,7 +16,7 @@ SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
 # load metadata
 metadata = pd.read_table(os.path.join(SUPPORT_DIR,'ENA_filereport-PRJEB26969-CardosoMoreira2020.tsv'))
 metadata = metadata.loc[metadata["library_source"]=="TRANSCRIPTOMIC"]
-metadata = metadata.iloc[:2]
+#metadata = metadata.iloc[:2]
 
 ## URLS to download
 URLS = metadata['fastq_ftp'].str.split(';').str[0].apply(os.path.dirname).to_list()
@@ -44,11 +44,11 @@ rule all:
         expand(os.path.join(ARTICLE_DIR,'vast_out','.done','{sample}'), sample=SAMPLES),
         
         # combine
-        #os.path.join(ARTICLE_DIR,'vast_out','.done/vasttools_combine-{n_samples}').format(n_samples=N_SAMPLES),
+        os.path.join(ARTICLE_DIR,'vast_out','.done/vasttools_combine-{n_samples}').format(n_samples=N_SAMPLES),
         
         # tidy PSI
-        #os.path.join(ARTICLE_DIR,'vast_out','PSI-minN_1-minSD_0-noVLOW-min_ALT_use25-Tidy.tab.gz'),
-        #'.done/CardosoMoreira2020.done'
+        os.path.join(ARTICLE_DIR,'vast_out','PSI-minN_1-minSD_0-noVLOW-min_ALT_use25-Tidy.tab.gz'),
+        '.done/CardosoMoreira2020.done'
 
 
 rule download_metadata:
@@ -115,7 +115,7 @@ rule align:
         download_done = [os.path.join(ARTICLE_DIR,'fastqs','.done','{sample}_{end}').format(end=end, sample='{sample}') for end in ENDS]
     output:
         align_done = touch(os.path.join(ARTICLE_DIR,'vast_out','.done','{sample}'))
-    threads: 12
+    threads: 16
     resources:
         runtime = lambda wildcards: 86400 if SIZES[wildcards.sample]>SIZE_THRESH else 21600, # most 6h is enough; some needed 24h (more reads).
         memory = 15
