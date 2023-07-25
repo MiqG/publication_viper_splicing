@@ -8,12 +8,12 @@ require(viper)
 
 # Development
 # -----------
-ROOT = here::here()
-PREP_DIR = file.path(ROOT,"data","prep")
-RESULTS_DIR = file.path(ROOT,"results","regulon_inference")
-signature_file = file.path(PREP_DIR,'ground_truth_pert','ENCOREKO',"HepG2",'delta_psi-EX.tsv.gz')
-regulons_path = file.path(RESULTS_DIR,"files","experimentally_derived_regulons_pruned-EX")
-eval_labels_file = file.path(RESULTS_DIR,"files","regulon_evaluation_labels","ENCOREKO_HepG2.tsv.gz")
+# ROOT = here::here()
+# PREP_DIR = file.path(ROOT,"data","prep")
+# RESULTS_DIR = file.path(ROOT,"results","regulon_inference")
+# signature_file = file.path(PREP_DIR,'ground_truth_pert','ENCOREKO',"HepG2",'delta_psi-EX.tsv.gz')
+# regulons_path = file.path(RESULTS_DIR,"files","experimentally_derived_regulons_pruned-EX")
+# eval_labels_file = file.path(RESULTS_DIR,"files","regulon_evaluation_labels","ENCOREKO_HepG2.tsv.gz")
 
 ##### FUNCTIONS #####
 as_regulon_network = function(regulons){
