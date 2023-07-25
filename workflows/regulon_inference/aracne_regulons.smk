@@ -72,7 +72,7 @@ rule regulon_inference_aracne_java_threshold:
     output:
         touch(os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{event_type}",".done","done_threshold"))
     params:
-        src = "scripts/ARACNe-AP",
+        src = "scripts/aracne/ARACNe-AP",
         output_dir = os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{event_type}"),
         random_seed = PARAMS["ARACNE_MI_THRESH_SEED"],
         mi_pvalue_thresh = str(PARAMS["ARACNE_MI_THRESH_PVALUE"]).replace("e","E"),
@@ -107,7 +107,7 @@ rule regulon_inference_aracne_java_bootstrap:
     output:
         touch(os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{event_type}",".done","done_bootstrap_{boot_i}"))
     params:
-        src = "scripts/ARACNe-AP",
+        src = "scripts/aracne/ARACNe-AP",
         output_dir = os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{event_type}"),
         random_seed = "{boot_i}",
         mi_pvalue_thresh = str(PARAMS["ARACNE_MI_THRESH_PVALUE"]).replace("e","E")
@@ -150,7 +150,7 @@ rule regulon_inference_aracne_prune_bootstraps:
         """
         set -eo pipefail
 
-        perl scripts/filter_arachne_bootstraps.pl \
+        perl scripts/aracne/filter_arachne_bootstraps.pl \
                     --regulon-size {params.max_targets} \
                     {params.output_dir} \
                     {params.output_dir}/pruned
@@ -167,7 +167,7 @@ rule regulon_inference_aracne_java_consolidation:
     output:
         os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{event_type}","pruned","network.txt")
     params:
-        src = "scripts/ARACNe-AP",
+        src = "scripts/aracne/ARACNe-AP",
         output_dir = os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{event_type}","pruned"),
         consolidate_pvalue = PARAMS["ARACNE_CONSOLIDATE_PVALUE"]
     threads: 12
@@ -203,7 +203,7 @@ rule prepare_regulons:
         """
         set -eo pipefail
         
-        Rscript scripts/estimate_mor.R \
+        Rscript scripts/aracne/estimate_mor.R \
                     --splicing_file={input.splicing} \
                     --genexpr_file={input.genexpr} \
                     --aracne_network_file={input.aracne_network} \
