@@ -134,7 +134,7 @@ plot_comparison = function(diff_activity, diff_genexpr, survival_activity, survi
 }
 
 
-plot_drivers = function(driver_activity, driver_genexpr){
+plot_driver_selection = function(driver_activity, driver_genexpr, diff_activity, diff_genexpr){
     plts = list()
     
     # SF activity
@@ -165,7 +165,7 @@ plot_drivers = function(driver_activity, driver_genexpr){
             filter(driver_type=="Tumor suppressor")
         )
 
-    plts[["diff_protein_activity-n_signif_vs_driver_type-bar"]] = x %>%
+    plts[["driver_selection-n_signif_vs_driver_type-activity-bar"]] = x %>%
         mutate(GENE = factor(GENE, levels=sf_order)) %>%
         ggbarplot(x="GENE", y="n_sign", fill="driver_type", color=NA) +
         geom_text(
@@ -199,7 +199,41 @@ plot_drivers = function(driver_activity, driver_genexpr){
         fill_palette(PAL_DRIVER_TYPE) +
         theme_pubr(x.text.angle=70) +
         labs(x="Splicing Factor", y="Count", fill="Driver Type")
-   
+    
+    # are activities different between groups?
+    Y = x %>% 
+        filter(abs(n_sum)>THRESH_N_SUM) %>%
+        group_by(GENE) %>%
+        slice_max(n, n=1) %>%
+        ungroup() %>%
+        left_join(diff_activity, by="GENE") %>%
+        drop_na(driver_type, cancer_type)
+    plts[["driver_selection-drivers_vs_cancer_type-activity_drivers_vs_activity-violin"]] = Y %>%
+        ggplot(aes(x=cancer_type, y=`condition_a-median`, group=interaction(cancer_type,driver_type))) +
+        geom_violin(aes(fill=driver_type), color=NA, position=position_dodge(0.9)) +
+        geom_boxplot(fill=NA, width=0.1, outlier.size=0.1, position=position_dodge(0.9)) +
+        fill_palette(PAL_DRIVER_TYPE) +
+        theme_pubr(x.text.angle = 70) +
+        stat_compare_means(method="wilcox.test", label="p.signif", size=FONT_SIZE, family=FONT_FAMILY) +
+        labs(x="Cancer Type", y="median(Protein Activity)", fill="Driver Type")
+
+    Y = x %>% 
+        filter(abs(n_sum)>THRESH_N_SUM) %>%
+        group_by(GENE) %>%
+        slice_max(n, n=1) %>%
+        ungroup() %>%
+        left_join(diff_genexpr, by="GENE") %>%
+        drop_na(driver_type, cancer_type)
+    plts[["driver_selection-drivers_vs_cancer_type-activity_drivers_vs_genexpr-violin"]] = Y %>%
+        ggplot(aes(x=cancer_type, y=`condition_a-median`, group=interaction(cancer_type,driver_type))) +
+        geom_violin(aes(fill=driver_type), color=NA, position=position_dodge(0.9)) +
+        geom_boxplot(fill=NA, width=0.1, outlier.size=0.1, position=position_dodge(0.9)) +
+        fill_palette(PAL_DRIVER_TYPE) +
+        theme_pubr(x.text.angle = 70) +
+        stat_compare_means(method="wilcox.test", label="p.signif", size=FONT_SIZE, family=FONT_FAMILY) +
+        labs(x="Cancer Type", y="median(Protein Activity)", fill="Driver Type")
+    
+    
     # SF genexpr
     X = driver_genexpr
     x = X %>%
@@ -211,7 +245,7 @@ plot_drivers = function(driver_activity, driver_genexpr){
         ) %>%
         ungroup()
     
-    plts[["diff_genexpr_tpm-n_signif_vs_driver_type-bar"]] = x %>%
+    plts[["driver_selection-n_signif_vs_driver_type-genexpr-bar"]] = x %>%
         mutate(GENE = factor(GENE, levels=sf_order)) %>%
         ggbarplot(x="GENE", y="n_sign", fill="driver_type", color=NA) +
         geom_text(
@@ -229,6 +263,40 @@ plot_drivers = function(driver_activity, driver_genexpr){
         fill_palette(PAL_DRIVER_TYPE) +
         theme_pubr(x.text.angle=70) +
         labs(x="Splicing Factor", y="Count", fill="Driver Type")
+    
+    # are expressions different between oncogenic and tumor suppressor selected via gene expression?
+    Y = x %>% 
+        filter(abs(n_sum)>THRESH_N_SUM) %>%
+        group_by(GENE) %>%
+        slice_max(n, n=1) %>%
+        ungroup() %>%
+        left_join(diff_genexpr, by="GENE") %>%
+        drop_na(driver_type, cancer_type)
+    plts[["driver_selection-drivers_vs_cancer_type-genexpr_drivers_vs_genexpr-violin"]] = Y %>%
+        ggplot(aes(x=cancer_type, y=`condition_a-median`, group=interaction(cancer_type,driver_type))) +
+        geom_violin(aes(fill=driver_type), color=NA, position=position_dodge(0.9)) +
+        geom_boxplot(fill=NA, width=0.1, outlier.size=0.1, position=position_dodge(0.9)) +
+        fill_palette(PAL_DRIVER_TYPE) +
+        theme_pubr(x.text.angle = 70) +
+        stat_compare_means(method="wilcox.test", label="p.signif", size=FONT_SIZE, family=FONT_FAMILY) +
+        labs(x="Cancer Type", y="median(Gene Expression)", fill="Driver Type")
+    
+    # are activities different between oncogenic and tumor suppressor selected via gene expression?
+    Y = x %>% 
+        filter(abs(n_sum)>THRESH_N_SUM) %>%
+        group_by(GENE) %>%
+        slice_max(n, n=1) %>%
+        ungroup() %>%
+        left_join(diff_activity, by="GENE") %>%
+        drop_na(driver_type, cancer_type)
+    plts[["driver_selection-drivers_vs_cancer_type-genexpr_drivers_vs_activity-violin"]] = Y %>%
+        ggplot(aes(x=cancer_type, y=`condition_a-median`, group=interaction(cancer_type,driver_type))) +
+        geom_violin(aes(fill=driver_type), color=NA, position=position_dodge(0.9)) +
+        geom_boxplot(fill=NA, width=0.1, outlier.size=0.1, position=position_dodge(0.9)) +
+        fill_palette(PAL_DRIVER_TYPE) +
+        theme_pubr(x.text.angle = 70) +
+        stat_compare_means(method="wilcox.test", label="p.signif", size=FONT_SIZE, family=FONT_FAMILY) +
+        labs(x="Cancer Type", y="median(Protein Activity)", fill="Driver Type")
     
     return(plts)
 }
@@ -553,19 +621,31 @@ plot_tf_enrichments = function(tf_enrichments){
     return(plts)
 }
 
+plot_examples = function(){
+    # SRSF1 is a driver of breast cancer and pancreatic cancer
+    diff_activity %>% filter(GENE == "SRSF1")
+    diff_genexpr %>% filter(GENE == "SRSF1")
+    
+    # 
+}
 
-make_plots = function(diff_activity, diff_genexpr, 
-                      assocs_gene_dependency, 
-                      survival_roc_activity, survival_roc_genexpr,
-                      survival_activity, survival_genexpr,
-                      driver_activity, driver_genexpr, 
-                      sf_crossreg_activity, sf_crossreg_genexpr, 
-                      tf_enrichments, sf_activity_vs_genexpr){
+make_plots = function(
+        diff_activity, diff_genexpr,
+        assocs_gene_dependency, 
+        survival_roc_activity, survival_roc_genexpr, 
+        survival_roc_genexpr_w_activity_labs, survival_roc_activity_w_genexpr_labs,
+        survival_activity, survival_genexpr, 
+        driver_activity, driver_genexpr, 
+        sf_crossreg_activity, sf_crossreg_genexpr, 
+        tf_enrichments, sf_activity_vs_genexpr
+){
     plts = list(
-        plot_drivers(driver_activity, driver_genexpr),
+        plot_driver_selection(driver_activity, driver_genexpr, diff_activity, diff_genexpr),
         plot_prolif_driver(diff_activity, assocs_gene_dependency),
         plot_survival_analysis(survival_roc_activity, survival_activity, driver_activity, "-activity"),
         plot_survival_analysis(survival_roc_genexpr, survival_genexpr, driver_genexpr, "-genexpr"),
+        plot_survival_analysis(survival_roc_genexpr_w_activity_labs, survival_genexpr, driver_activity, "-genexpr_w_activity_labs"),
+        plot_survival_analysis(survival_roc_activity_w_genexpr_labs, survival_activity, driver_genexpr, "-activity_w_genexpr_labs"),
         plot_sf_crossreg(driver_activity, sf_crossreg_activity, "-activity"),
         plot_sf_crossreg(driver_genexpr, sf_crossreg_genexpr, "-genexpr"),
         plot_tf_enrichments(tf_enrichments),
@@ -611,8 +691,12 @@ save_plt = function(plts, plt_name, extension='.pdf',
 
 
 save_plots = function(plts, figs_dir){
-    save_plt(plts, "diff_protein_activity-n_signif_vs_driver_type-bar", '.pdf', figs_dir, width=12, height=9)
-    save_plt(plts, "diff_genexpr_tpm-n_signif_vs_driver_type-bar", '.pdf', figs_dir, width=12, height=9)
+    save_plt(plts, "driver_selection-n_signif_vs_driver_type-genexpr-bar", '.pdf', figs_dir, width=12, height=9)
+    save_plt(plts, "driver_selection-n_signif_vs_driver_type-genexpr-bar", '.pdf', figs_dir, width=12, height=9)
+    save_plt(plts, "driver_selection-drivers_vs_cancer_type-activity_drivers_vs_activity-violin", '.pdf', figs_dir, width=8, height=6)
+    save_plt(plts, "driver_selection-drivers_vs_cancer_type-activity_drivers_vs_genexpr-violin", '.pdf', figs_dir, width=8, height=6)
+    save_plt(plts, "driver_selection-drivers_vs_cancer_type-genexpr_drivers_vs_genexpr-violin", '.pdf', figs_dir, width=8, height=6)
+    save_plt(plts, "driver_selection-drivers_vs_cancer_type-genexpr_drivers_vs_activity-violin", '.pdf', figs_dir, width=8, height=6)
     
     save_plt(plts, "prolif_driver-driver_type_vs_demeter2-violin", '.pdf', figs_dir, width=5, height=5)
     
@@ -625,6 +709,11 @@ save_plots = function(plts, figs_dir){
     save_plt(plts, "survival_analysis-cancers_differential-roc_curves-genexpr", '.pdf', figs_dir, width=5, height=6)
     save_plt(plts, "survival_analysis-cancers_all-violin-genexpr", '.pdf', figs_dir, width=5, height=6)
     save_plt(plts, "survival_analysis-cancers_differential-violin-genexpr", '.pdf', figs_dir, width=5, height=6)
+
+    save_plt(plts, "survival_analysis-cancers_all-roc_curves-genexpr_w_activity_labs", '.pdf', figs_dir, width=5, height=6)
+    save_plt(plts, "survival_analysis-cancers_differential-roc_curves-genexpr_w_activity_labs", '.pdf', figs_dir, width=5, height=6)
+    save_plt(plts, "survival_analysis-cancers_all-roc_curves-activity_w_genexpr_labs", '.pdf', figs_dir, width=5, height=6)
+    save_plt(plts, "survival_analysis-cancers_differential-roc_curves-activity_w_genexpr_labs", '.pdf', figs_dir, width=5, height=6)
     
     save_plt(plts, "sf_cross_regulation-correlations-violin-activity", '.pdf', figs_dir, width=5, height=5)
     save_plt(plts, "sf_cross_regulation-correlations-violin-genexpr", '.pdf', figs_dir, width=5, height=5)
@@ -719,15 +808,16 @@ main = function(){
         )
     
     diff_genexpr = diff_genexpr %>%
+        dplyr::rename("ENSEMBL"="ID") %>%
+        filter(ENSEMBL %in% diff_activity[["ENSEMBL"]]) %>%
         mutate(
+            padj = p.adjust(pvalue, method="fdr"),
             is_significant = padj < THRESH_FDR
         ) %>%
-        dplyr::rename("ENSEMBL"="ID") %>%
         left_join(
             gene_annotation[,c("ENSEMBL","GENE")],
             by = "ENSEMBL"
-        ) %>%
-        filter(GENE %in% diff_activity[["GENE"]])
+        ) 
     
     driver_activity = diff_activity %>%
         mutate(driver_type = ifelse(
@@ -787,12 +877,37 @@ main = function(){
             mutate(cancers_subset="differential")
         )
     
+    survival_roc_genexpr_w_activity_labs = make_roc_analysis(driver_activity, survival_genexpr) %>%
+        mutate(cancers_subset="full") %>%
+        rbind(
+            make_roc_analysis(
+                driver_activity %>% 
+                filter(cancer_type %in% diff_activity[["cancer_type"]]), 
+                survival_genexpr %>% 
+                filter(cancer_type %in% diff_activity[["cancer_type"]])
+            ) %>%
+            mutate(cancers_subset="differential")
+        )
+    
+    survival_roc_activity_w_genexpr_labs = make_roc_analysis(driver_genexpr, survival_activity) %>%
+        mutate(cancers_subset="full") %>%
+        rbind(
+            make_roc_analysis(
+                driver_genexpr %>% 
+                filter(cancer_type %in% diff_activity[["cancer_type"]]), 
+                survival_activity %>% 
+                filter(cancer_type %in% diff_activity[["cancer_type"]])
+            ) %>%
+            mutate(cancers_subset="differential")
+        )
+    
     # plot
     plts = make_plots(
         diff_activity, diff_genexpr,
         assocs_gene_dependency, 
-        survival_roc_activity, survival_roc_genexpr,
-        survival_activity, survival_genexpr,
+        survival_roc_activity, survival_roc_genexpr, 
+        survival_roc_genexpr_w_activity_labs, survival_roc_activity_w_genexpr_labs,
+        survival_activity, survival_genexpr, 
         driver_activity, driver_genexpr, 
         sf_crossreg_activity, sf_crossreg_genexpr, 
         tf_enrichments, sf_activity_vs_genexpr
@@ -803,7 +918,8 @@ main = function(){
         diff_activity, diff_genexpr,
         assocs_gene_dependency, 
         survival_roc_activity, survival_roc_genexpr,
-        survival_activity, survival_genexpr,
+        survival_roc_genexpr_w_activity_labs, survival_roc_activity_w_genexpr_labs,
+        survival_activity, survival_genexpr, 
         driver_activity, driver_genexpr, 
         sf_crossreg_activity, sf_crossreg_genexpr, 
         tf_enrichments, sf_activity_vs_genexpr
