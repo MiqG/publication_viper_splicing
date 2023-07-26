@@ -15,7 +15,10 @@ EVENT_TYPES = ["EX"]
 rule all:
     input:
         # run gene set enrichment analysis
-        expand(os.path.join(RESULTS_DIR,"regulons_eda_gsea","experimentally_derived_regulons_pruned-{event_type}.tsv.gz"), event_type=EVENT_TYPES),
+        expand(os.path.join(RESULTS_DIR,"files","regulons_eda_gsea","experimentally_derived_regulons_pruned-{event_type}.tsv.gz"), event_type=EVENT_TYPES),
+        
+        # figures
+        expand(os.path.join(RESULTS_DIR,'figures','eda_regulons-{event_type}'), event_type=EVENT_TYPES)
         
         
 rule run_gsea:
@@ -25,7 +28,7 @@ rule run_gsea:
         msigdb_dir = os.path.join(RAW_DIR,'MSigDB','msigdb_v7.4','msigdb_v7.4_files_to_download_locally','msigdb_v7.4_GMTs'),
         protein_impact = os.path.join(RAW_DIR,'VastDB','PROT_IMPACT-hg38-v3.tab.gz')
     output:
-        os.path.join(RESULTS_DIR,"regulons_eda_gsea","experimentally_derived_regulons_pruned-{event_type}.tsv.gz")
+        os.path.join(RESULTS_DIR,"files","regulons_eda_gsea","experimentally_derived_regulons_pruned-{event_type}.tsv.gz")
     shell:
         """
         Rscript scripts/run_gsea.R \
@@ -34,4 +37,19 @@ rule run_gsea:
                     --msigdb_dir={input.msigdb_dir} \
                     --protein_impact_file={input.protein_impact} \
                     --output_file={output}
+        """
+
+        
+rule figures_eda_regulons:
+    input:
+        regulons = os.path.join(RESULTS_DIR,"files","experimentally_derived_regulons_pruned-{event_type}"),
+        protein_impact = os.path.join(RAW_DIR,'VastDB','PROT_IMPACT-hg38-v3.tab.gz')
+    output:
+        directory(os.path.join(RESULTS_DIR,'figures','eda_regulons-{event_type}'))
+    shell:
+        """
+        Rscript scripts/figures_eda_regulons.R \
+                    --regulons_dir={input.regulons} \
+                    --protein_impact_file={input.protein_impact} \
+                    --figs_dir={output}
         """
