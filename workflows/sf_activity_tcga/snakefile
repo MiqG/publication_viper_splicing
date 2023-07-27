@@ -94,6 +94,7 @@ rule all:
         expand(os.path.join(RESULTS_DIR,"files","signatures","{cancer}-PrimaryTumor_vs_SolidTissueNormal-EX.tsv.gz"), cancer=CANCER_TYPES_PTSTN),
         expand(os.path.join(RESULTS_DIR,"files","signatures","{cancer}-Metastatic_vs_PrimaryTumor-EX.tsv.gz"), cancer=CANCER_TYPES_METPT),
         expand(os.path.join(RESULTS_DIR,"files","signatures","{cancer}-{sample}-EX.tsv.gz"), zip, cancer=CANCER_TYPES, sample=SAMPLE_TYPES),
+        expand(os.path.join(RESULTS_DIR,"files","signatures","PANCAN-{sample}-EX.tsv.gz"), zip, sample=["SolidTissueNormal"]),
 
         # compute viper SF activities
         ## PT vs STN
@@ -102,7 +103,7 @@ rule all:
         expand(os.path.join(RESULTS_DIR,"files","protein_activity","{cancer}-{sample}-EX.tsv.gz"), cancer=CANCER_TYPES_METPT, sample=["Metastatic_vs_PrimaryTumor"]),
         ## within
         expand(os.path.join(RESULTS_DIR,"files","protein_activity","{cancer}-{sample}-EX.tsv.gz"), zip, cancer=CANCER_TYPES, sample=SAMPLE_TYPES),
-        expand(os.path.join(RESULTS_DIR,"files","protein_activity","PANCAN-{sample}-EX.tsv.gz"), sample=CANCER_TYPES_BY_SAMPLETYPE),
+        expand(os.path.join(RESULTS_DIR,"files","protein_activity","PANCAN-{sample}-EX.tsv.gz"), sample=["SolidTissueNormal"]),
 
         # differential analyses
         ## SF activities
@@ -113,7 +114,7 @@ rule all:
         expand(os.path.join(RESULTS_DIR,'files',"diff_genexpr_tpm",'{cancer}-{comparison}.tsv.gz'), comparison=["Metastatic_vs_PrimaryTumor"], cancer=CANCER_TYPES_METPT),
         ## merge
         expand(os.path.join(RESULTS_DIR,'files','PANCAN','{omic}-mannwhitneyu-{comparison}.tsv.gz'), comparison=DIFF_CANCER_TYPES.keys(), omic=OMICS),
-        
+
         # survival
         ## SF activity
         expand(os.path.join(RESULTS_DIR,'files',"survival_analysis",'{omic}-{cancer}-{sample_type}-surv.tsv.gz'), zip, cancer=CANCER_TYPES_SURV["cancer_type"].values, sample_type=CANCER_TYPES_SURV["sample_type_clean"].values, omic=["protein_activity"]),
@@ -127,11 +128,11 @@ rule all:
         # cross regulation
         expand(os.path.join(RESULTS_DIR,'files',"sf_cross_regulation",'{omic}-{cancer}-{sample_type}.tsv.gz'), zip, cancer=CANCER_TYPES_SURV["cancer_type"].values, sample_type=CANCER_TYPES_SURV["sample_type_clean"].values, omic=OMICS),
         expand(os.path.join(RESULTS_DIR,'files','PANCAN',"{omic}-sf_cross_regulation.tsv.gz"), omic=OMICS),
-        
+
         # correl genexpr vs activity
         expand(os.path.join(RESULTS_DIR,'files',"sf_activity_regulation",'genexpr_tpm_vs_activity-{cancer}-{sample_type}.tsv.gz'), zip, cancer=CANCER_TYPES_SURV["cancer_type"].values, sample_type=CANCER_TYPES_SURV["sample_type_clean"].values),
         os.path.join(RESULTS_DIR,'files','PANCAN',"genexpr_tpm_vs_activity.tsv.gz"),
-        
+
         # figures
         os.path.join(RESULTS_DIR,"figures","cancer_program")
         
@@ -175,7 +176,7 @@ rule merge_event_psi_by_sample_type:
         import pandas as pd
         
         psi = pd.concat([pd.read_table(f, index_col=0) for f in input.psi], axis=1)
-        psi.to_csv(output.psi, **SAVE_PARAMS)
+        psi.reset_index().to_csv(output.psi, **SAVE_PARAMS)
         
         print("Done!")
         
@@ -219,7 +220,7 @@ rule merge_genexpr_tpm_by_sample_type:
         import pandas as pd
         
         genexpr = pd.concat([pd.read_table(f, index_col=0) for f in input.genexpr], axis=1)
-        genexpr.to_csv(output.genexpr, **SAVE_PARAMS)
+        genexpr.reset_index().to_csv(output.genexpr, **SAVE_PARAMS)
         
         print("Done!")
 
@@ -289,11 +290,11 @@ rule compute_signature_within:
         
         print("Done!")
 
-ruleorder: combine_protein_activity > compute_protein_activity      
+#ruleorder: combine_protein_activity > compute_protein_activity      
 rule compute_protein_activity:
     input:
         signature = os.path.join(RESULTS_DIR,"files","signatures","{cancer}-{sample}-EX.tsv.gz"),
-        regulons_dir = os.path.join(REGULONS_DIR,"files","experimentally_derived_regulons_pruned-EX")
+        regulons_path = os.path.join(REGULONS_DIR,"files","experimentally_derived_regulons_pruned-EX")
     output:
         os.path.join(RESULTS_DIR,"files","protein_activity","{cancer}-{sample}-EX.tsv.gz")
     params:
@@ -302,27 +303,27 @@ rule compute_protein_activity:
         """
         Rscript {params.script_dir}/compute_protein_activity.R \
                     --signature_file={input.signature} \
-                    --regulons_dir={input.regulons_dir} \
+                    --regulons_path={input.regulons_path} \
                     --output_file={output}
         """
 
         
-rule combine_protein_activity:
-    input:
-        protein_activity = lambda wildcards: [os.path.join(RESULTS_DIR,"files","protein_activity","{cancer}-{sample}-EX.tsv.gz").format(cancer=cancer, sample=wildcards.sample) for cancer in CANCER_TYPES_BY_SAMPLETYPE[wildcards.sample]]
-    output:
-        os.path.join(RESULTS_DIR,"files","protein_activity","PANCAN-{sample}-EX.tsv.gz")
-    run:
-        import pandas as pd
+# rule combine_protein_activity:
+#     input:
+#         protein_activity = lambda wildcards: [os.path.join(RESULTS_DIR,"files","protein_activity","{cancer}-{sample}-EX.tsv.gz").format(cancer=cancer, sample=wildcards.sample) for cancer in CANCER_TYPES_BY_SAMPLETYPE[wildcards.sample]]
+#     output:
+#         os.path.join(RESULTS_DIR,"files","protein_activity","PANCAN-{sample}-EX.tsv.gz")
+#     run:
+#         import pandas as pd
         
-        dfs = pd.concat([
-            pd.read_table(f).melt(id_vars="regulator", var_name="sampleID", value_name="activity")
-            for f in input.protein_activity
-        ])
+#         dfs = pd.concat([
+#             pd.read_table(f).melt(id_vars="regulator", var_name="sampleID", value_name="activity")
+#             for f in input.protein_activity
+#         ])
         
-        dfs.to_csv(output[0], **SAVE_PARAMS)
+#         dfs.to_csv(output[0], **SAVE_PARAMS)
         
-        print("Done!")
+#         print("Done!")
         
         
 rule compute_differential_protein_activity:

@@ -60,6 +60,9 @@ PAL_CANCER_TYPES = setNames(
 # sf_crossreg_genexpr_file = file.path(RESULTS_DIR,'files','PANCAN',"genexpr_tpm-sf_cross_regulation.tsv.gz")
 # ontology_chea_file = file.path(RAW_DIR,"Harmonizome","CHEA-TranscriptionFactorTargets.gmt.gz")
 # sf_activity_vs_genexpr_file = file.path(RESULTS_DIR,'files','PANCAN',"genexpr_tpm_vs_activity.tsv.gz")
+# protein_activity_stn_file = file.path(RESULTS_DIR,"files","protein_activity","PANCAN-SolidTissueNormal-EX.tsv.gz")
+# genexpr_tpm_stn_file = file.path(PREP_DIR,"genexpr_tpm","PANCAN-SolidTissueNormal.tsv.gz")
+# metadata_file = file.path(PREP_DIR,"metadata","PANCAN.tsv.gz")
 
 ##### FUNCTIONS #####
 plot_comparison = function(diff_activity, diff_genexpr, survival_activity, survival_genexpr, sf_activity_vs_genexpr){
@@ -621,6 +624,7 @@ plot_tf_enrichments = function(tf_enrichments){
     return(plts)
 }
 
+
 plot_examples = function(){
     # SRSF1 is a driver of breast cancer and pancreatic cancer
     diff_activity %>% filter(GENE == "SRSF1")
@@ -629,15 +633,54 @@ plot_examples = function(){
     # 
 }
 
+
+plot_drivers_activity_stn = function(protein_activity_stn){
+    plts = list()
+    
+    X = protein_activity_stn
+    
+    # median activity of oncogenic and tumor suppressor SFs per sample across cancers
+    cancer_order = X %>%
+        group_by(cancer_type) %>%
+        summarize(MKI67 = median(MKI67, na.rm=TRUE)) %>%
+        ungroup() %>%
+        arrange(MKI67) %>%
+        pull(cancer_type)
+    
+    plts[["drivers_activity_stn-cancer_vs_MKI67-line"]] = X %>%
+        mutate(cancer_type = factor(cancer_type, levels=cancer_order)) %>%
+        ggplot(aes(x=cancer_type, y=MKI67, group=1)) +
+        geom_smooth(color="black", fill="lightgrey", size=LINE_SIZE, linetype="dashed") + 
+        theme_pubr(x.text.angle = 70) +
+        labs(x="STN Tissue Type", y="log2(TPM+1) of MKI67")
+
+    plts[["drivers_activity_stn-cancer_vs_oncogenic-line"]] = X %>%
+        group_by(cancer_type, driver_type, GENE) %>%
+        summarize(
+            activity = median(activity, na.rm=TRUE)
+        ) %>%
+        ungroup() %>%
+        mutate(cancer_type = factor(cancer_type, levels=cancer_order)) %>%
+        ggplot(aes(x=cancer_type, y=activity, group=driver_type)) +
+        geom_smooth(aes(color=driver_type), size=LINE_SIZE, linetype="dashed", fill="lightgrey") +
+        color_palette(PAL_DRIVER_TYPE) +
+        theme_pubr(x.text.angle = 70) +
+        labs(x="STN Tissue Type", y="median(Protein Activity per SF)", color="Driver Type")
+    
+    return(plts)
+}
+
+
 make_plots = function(
-        diff_activity, diff_genexpr,
-        assocs_gene_dependency, 
-        survival_roc_activity, survival_roc_genexpr, 
-        survival_roc_genexpr_w_activity_labs, survival_roc_activity_w_genexpr_labs,
-        survival_activity, survival_genexpr, 
-        driver_activity, driver_genexpr, 
-        sf_crossreg_activity, sf_crossreg_genexpr, 
-        tf_enrichments, sf_activity_vs_genexpr
+    diff_activity, diff_genexpr,
+    assocs_gene_dependency, 
+    survival_roc_activity, survival_roc_genexpr, 
+    survival_roc_genexpr_w_activity_labs, survival_roc_activity_w_genexpr_labs,
+    survival_activity, survival_genexpr, 
+    driver_activity, driver_genexpr, 
+    sf_crossreg_activity, sf_crossreg_genexpr, 
+    tf_enrichments, sf_activity_vs_genexpr,
+    protein_activity_stn
 ){
     plts = list(
         plot_driver_selection(driver_activity, driver_genexpr, diff_activity, diff_genexpr),
@@ -649,7 +692,8 @@ make_plots = function(
         plot_sf_crossreg(driver_activity, sf_crossreg_activity, "-activity"),
         plot_sf_crossreg(driver_genexpr, sf_crossreg_genexpr, "-genexpr"),
         plot_tf_enrichments(tf_enrichments),
-        plot_comparison(diff_activity, diff_genexpr, survival_activity, survival_genexpr, sf_activity_vs_genexpr)
+        plot_comparison(diff_activity, diff_genexpr, survival_activity, survival_genexpr, sf_activity_vs_genexpr),
+        plot_drivers_activity_stn(protein_activity_stn)
     )
     plts = do.call(c,plts)
     return(plts)
@@ -724,6 +768,9 @@ save_plots = function(plts, figs_dir){
     save_plt(plts, "comparison-survival-scatter", '.pdf', figs_dir, width=4, height=4)
     save_plt(plts, "comparison-correlation_by_cancer-violin", '.pdf', figs_dir, width=12, height=5)
     save_plt(plts, "comparison-correlation_median_pancan-violin", '.pdf', figs_dir, width=4, height=4)
+    
+    save_plt(plts, "drivers_activity_stn-cancer_vs_MKI67-line", '.pdf', figs_dir, width=6, height=3)
+    save_plt(plts, "drivers_activity_stn-cancer_vs_oncogenic-line", '.pdf', figs_dir, width=6, height=6)
 }
 
 
@@ -790,6 +837,9 @@ main = function(){
     assocs_gene_dependency = read_tsv(assocs_gene_dependency_file)
     ontology_chea = read.gmt(ontology_chea_file)
     sf_activity_vs_genexpr = read_tsv(sf_activity_vs_genexpr_file)
+    genexpr_tpm_stn = read_tsv(genexpr_tpm_stn_file)
+    protein_activity_stn = read_tsv(protein_activity_stn_file)
+    metadata = read_tsv(metadata_file)
     gene_annotation = read_tsv(gene_annotation_file) %>%
         dplyr::rename(
             GENE = `Approved symbol`,
@@ -847,6 +897,36 @@ main = function(){
         left_join(
             gene_annotation[,c("ENSEMBL","GENE")],
             by = c("sf_activity"="ENSEMBL")
+        )
+    
+    genexpr_mki67 = genexpr_tpm_stn %>%
+        filter(ID == "ENSG00000148773") %>%
+        pivot_longer(-ID, names_to="sampleID", values_to="MKI67")
+    
+    protein_activity_stn = driver_activity %>%
+        count(GENE, ENSEMBL, driver_type) %>%
+        group_by(GENE, ENSEMBL) %>%
+        mutate(
+            n_sign = ifelse(driver_type=="Tumor suppressor", -n, n),
+            n_sum = sum(n_sign)
+        ) %>%
+        ungroup() %>% 
+        filter(abs(n_sum)>THRESH_N_SUM) %>%
+        group_by(GENE, ENSEMBL) %>%
+        slice_max(n, n=1) %>%
+        ungroup() %>%
+        left_join(
+            protein_activity_stn %>%
+            pivot_longer(-regulator, names_to="sampleID", values_to="activity"),
+            by=c("ENSEMBL"="regulator")
+        ) %>%
+        left_join(
+            genexpr_mki67,
+            by="sampleID"
+        ) %>%
+        left_join(
+            metadata,
+            by="sampleID"
         )
     
     # enrichment
@@ -910,7 +990,8 @@ main = function(){
         survival_activity, survival_genexpr, 
         driver_activity, driver_genexpr, 
         sf_crossreg_activity, sf_crossreg_genexpr, 
-        tf_enrichments, sf_activity_vs_genexpr
+        tf_enrichments, sf_activity_vs_genexpr,        
+        protein_activity_stn
     )
     
     # make figdata
@@ -922,7 +1003,8 @@ main = function(){
         survival_activity, survival_genexpr, 
         driver_activity, driver_genexpr, 
         sf_crossreg_activity, sf_crossreg_genexpr, 
-        tf_enrichments, sf_activity_vs_genexpr
+        tf_enrichments, sf_activity_vs_genexpr,
+        protein_activity_stn
     )
 
     # save

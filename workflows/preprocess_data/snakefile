@@ -118,6 +118,7 @@ rule all:
         expand(os.path.join(PREP_DIR,"event_psi","{cancer}-INT.tsv.gz"), cancer=CANCER_TYPES),
         expand(os.path.join(PREP_DIR,'genexpr_tpm','{cancer}.tsv.gz'), cancer=CANCER_TYPES),
         expand(os.path.join(PREP_DIR,"mutations","{cancer}.tsv.gz"), cancer=CANCER_TYPES),
+        os.path.join(PREP_DIR,"metadata","PANCAN.tsv.gz"),
         
         # preprocess ENASFS
         os.path.join(PREP_DIR,"metadata","ENASFS.tsv.gz"),
@@ -652,6 +653,21 @@ rule preprocess_TCGA_mutations:
         
         print("Done!")
 
+
+rule merge_tcga_metadata:
+    input:
+        metadatas = [os.path.join(PREP_DIR,"metadata","{cancer}.tsv.gz").format(cancer=c) for c in CANCER_TYPES]
+    output:
+        metadata = os.path.join(PREP_DIR,"metadata","PANCAN.tsv.gz")
+    run:
+        import pandas as pd
+        
+        metadata = pd.concat([pd.read_table(f) for f in input.metadatas])
+        
+        metadata.to_csv(output[0], **SAVE_PARAMS)
+        
+        print("Done!")
+        
         
 rule preprocess_encorekd:
     input:
