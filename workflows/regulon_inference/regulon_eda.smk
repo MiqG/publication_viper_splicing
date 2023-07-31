@@ -17,6 +17,9 @@ rule all:
         # run gene set enrichment analysis
         expand(os.path.join(RESULTS_DIR,"files","regulons_eda_gsea","experimentally_derived_regulons_pruned-{event_type}.tsv.gz"), event_type=EVENT_TYPES),
         
+        # jaccard distances
+        expand(os.path.join(RESULTS_DIR,"files","regulons_eda_jaccard","experimentally_derived_regulons_pruned-{event_type}.tsv.gz"), event_type=EVENT_TYPES),
+        
         # figures
         expand(os.path.join(RESULTS_DIR,'figures','eda_regulons-{event_type}'), event_type=EVENT_TYPES)
         
@@ -40,10 +43,43 @@ rule run_gsea:
         """
 
         
+rule compute_jaccard_distances:
+    input:
+        regulons_dir = os.path.join(RESULTS_DIR,"files","experimentally_derived_regulons_pruned-{event_type}")
+    output:
+        dist = os.path.join(RESULTS_DIR,"files","regulons_eda_jaccard","experimentally_derived_regulons_pruned-{event_type}.tsv.gz")
+    run:
+        import os
+        import pandas as pd
+        import numpy as np
+        from sklearn.metrics import pairwise_distances
+        
+        regulons = pd.concat([pd.read_table(os.path.join(input.regulons_dir,f)) for f in os.listdir(input.regulons_dir) if f.endswith(".tsv.gz")])
+        regulons = regulons[["regulator","target"]].drop_duplicates().copy()
+        regulons["edge"] = True
+        regulons_mat = pd.pivot_table(
+            regulons, values="edge", index="target", columns="regulator", fill_value=False
+        ).astype(bool)
+        
+        dist = pairwise_distances(regulons_mat.T.values, metric="jaccard")
+        dist = pd.DataFrame(dist, index=regulons_mat.columns, columns=regulons_mat.columns)
+        dist = dist.where(np.triu(np.ones(dist.shape), k=1).astype(bool))
+        dist = dist.stack()
+        dist.name = "distance"
+        dist.index.names = ["regulator_a","regulator_b"]
+        dist = dist.reset_index()
+        dist["method"] = "jaccard"
+
+        dist.to_csv(output.dist, **SAVE_PARAMS)
+        
+        print("Done!")
+        
+
 rule figures_eda_regulons:
     input:
         regulons = os.path.join(RESULTS_DIR,"files","experimentally_derived_regulons_pruned-{event_type}"),
-        protein_impact = os.path.join(RAW_DIR,'VastDB','PROT_IMPACT-hg38-v3.tab.gz')
+        protein_impact = os.path.join(RAW_DIR,'VastDB','PROT_IMPACT-hg38-v3.tab.gz'),
+        annotation = os.path.join(RAW_DIR,'VastDB','EVENT_INFO-hg38_noseqs.tsv')
     output:
         directory(os.path.join(RESULTS_DIR,'figures','eda_regulons-{event_type}'))
     shell:
@@ -51,5 +87,6 @@ rule figures_eda_regulons:
         Rscript scripts/figures_eda_regulons.R \
                     --regulons_dir={input.regulons} \
                     --protein_impact_file={input.protein_impact} \
+                    --annotation_file={input.annotation} \
                     --figs_dir={output}
         """

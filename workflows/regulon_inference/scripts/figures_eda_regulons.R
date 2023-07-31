@@ -17,8 +17,8 @@ require(optparse)
 require(tidyverse)
 require(ggpubr)
 require(cowplot)
-require(scattermore)
 require(extrafont)
+require(ggrepel)
 require(proxy)
 require(umap)
 
@@ -43,11 +43,38 @@ PAL_DUAL = c("grey","orange") # '#1B9E77''#7570B3'
 # SUPPORT_DIR = file.path(ROOT,"support")
 # regulons_dir = file.path(RESULTS_DIR,"files","experimentally_derived_regulons_pruned-EX")
 # enrichments_file = file.path(RESULTS_DIR,"files","regulons_eda_gsea","experimentally_derived_regulons_pruned-EX.tsv.gz")
+# annotation_file = file.path(RAW_DIR,'VastDB','EVENT_INFO-hg38_noseqs.tsv')
 # protein_impact_file = file.path(RAW_DIR,'VastDB','PROT_IMPACT-hg38-v3.tab.gz')
 # spliceosomedb_file = file.path(SUPPORT_DIR,"splicing_factors","literature_suptabs","SpliceosomeDB-human.csv")
 # figs_dir = file.path(RESULTS_DIR,'figures','eda_regulons-EX')
 
 ##### FUNCTIONS #####
+plot_regulons = function(regulons){
+    plts = list()
+    
+    X = regulons %>%
+        distinct(regulator, target) %>%
+        mutate(regulon_id = "Merged Regulons")
+    
+    plts[["regulons-n_targets_per_regulator-box"]] = X %>%
+        count(regulon_id, regulator) %>%
+        ggboxplot(x="regulon_id", y="n", width=0.5, outlier.size=0.1, fill="orange") +
+        guides(fill="none") +
+        theme_pubr(x.text.angle=45) +
+        yscale("log10", .format=TRUE) +
+        labs(x="Regulon ID", y="N. Targets per Regulator")
+    
+    plts[["regulons-n_regulators_per_target-box"]] = X %>%
+        count(regulon_id, target) %>%
+        ggboxplot(x="regulon_id", y="n", width=0.5, outlier.size=0.1, fill="orange") +
+        guides(fill="none") +
+        theme_pubr(x.text.angle=45) +
+        labs(x="Regulon ID", y="N. Regulators per Target")
+    
+    return(plts)
+}
+
+
 plot_protein_impact = function(protimp_freqs){
     plts = list()
     
@@ -84,32 +111,6 @@ plot_protein_impact = function(protimp_freqs){
 # }
 
 
-plot_regulons = function(regulons){
-    plts = list()
-    
-    X = regulons %>%
-        distinct(regulator, target) %>%
-        mutate(regulon_id = "Merged Regulons")
-    
-    plts[["regulons-n_targets_per_regulator-box"]] = X %>%
-        count(regulon_id, regulator) %>%
-        ggboxplot(x="regulon_id", y="n", width=0.5, outlier.size=0.1, fill="orange") +
-        guides(fill="none") +
-        theme_pubr(x.text.angle=45) +
-        yscale("log10", .format=TRUE) +
-        labs(x="Regulon ID", y="N. Targets per Regulator")
-    
-    plts[["regulons-n_regulators_per_target-box"]] = X %>%
-        count(regulon_id, target) %>%
-        ggboxplot(x="regulon_id", y="n", width=0.5, outlier.size=0.1, fill="orange") +
-        guides(fill="none") +
-        theme_pubr(x.text.angle=45) +
-        labs(x="Regulon ID", y="N. Regulators per Target")
-    
-    return(plts)
-}
-
-
 plot_similarities = function(regulons_umap){
     plts = list()
     
@@ -122,18 +123,56 @@ plot_similarities = function(regulons_umap){
     return(plts)
 }
 
-make_plots = function(regulons, protimp_freqs, regulons_umap){
+
+plot_target_lengths = function(regulons, annot){
+    plts = list()
+    
+    X = regulons %>%
+        distinct(GENE, target) %>%
+        left_join(annot %>% distinct(EVENT, LE_o), by=c("target"="EVENT")) %>%
+        group_by(GENE) %>%
+        summarize(
+            event_length = median(LE_o, na.rm=TRUE),
+            n_targets = n()
+        ) %>%
+        ungroup() %>%
+        arrange(event_length) %>%
+        mutate(ranking = row_number()) %>%
+        drop_na()
+    
+    plts[["target_lengths-regulators-scatter"]] = X %>%
+        ggscatter(x="ranking", y="event_length", size="n_targets", color="brown", alpha=0.5) +
+        geom_text_repel(
+            aes(label=GENE),
+            . %>% slice_min(event_length, n=5),
+            size=FONT_SIZE, family=FONT_FAMILY, max.overlaps=50, segment.size=0.1
+        ) +
+        geom_text_repel(
+            aes(label=GENE),
+            . %>% slice_max(event_length, n=5),
+            size=FONT_SIZE, family=FONT_FAMILY, max.overlaps=50, segment.size=0.1
+        ) +
+        scale_size(range=c(0.5,3)) +
+        theme(aspect.ratio=1) +
+        labs(x="Regulator", y="median(Target Length)", size="N. Targets")
+    
+    return(plts)
+}
+
+
+make_plots = function(regulons, protimp_freqs, regulons_umap, annot){
     plts = list(
         plot_regulons(regulons),
         plot_protein_impact(protimp_freqs),
-        plot_similarities(regulons_umap)
+        plot_similarities(regulons_umap),
+        plot_target_lengths(regulons, annot)
     )
     plts = do.call(c,plts)
     return(plts)
 }
 
 
-make_figdata = function(regulons, protimp_freqs, regulons_umap){
+make_figdata = function(regulons, protimp_freqs, regulons_umap, annot){
     
     figdata = list(
         "eda" = list(
@@ -166,6 +205,7 @@ save_plots = function(plts, figs_dir){
     save_plt(plts, "regulons-n_regulators_per_target-box", '.pdf', figs_dir, width=2, height=5)
     save_plt(plts, "protein_impact-freqs-violin", '.pdf', figs_dir, width=6, height=6)
     save_plt(plts, "similarities-umap-scatter", '.pdf', figs_dir, width=5, height=5)
+    save_plt(plts, "target_lengths-regulators-scatter", '.pdf', figs_dir, width=5, height=6)
 }
 
 
@@ -189,6 +229,7 @@ parseargs = function(){
     option_list = list( 
         make_option("--regulons_dir", type="character"),
         make_option("--protein_impact_file", type="character"),
+        make_option("--annotation_file", type="character"),
         make_option("--figs_dir", type="character")
     )
 
@@ -202,6 +243,7 @@ main = function(){
     
     regulons_dir = args[["regulons_dir"]]
     protein_impact_file = args[["protein_impact_file"]]
+    annotation_file = args[["annotation_file"]]
     figs_dir = args[["figs_dir"]]
     
     dir.create(figs_dir, recursive = TRUE)
@@ -223,6 +265,7 @@ main = function(){
                                    "ORF disruption (inclusion)",term_clean),
                    term_clean=gsub("In the CDS, with uncertain impact",
                                    "In the CDS (uncertain)",term_clean))
+    annot = read_tsv(annotation_file)
     
     # prep
     protimp_freqs = regulons %>%
@@ -249,10 +292,10 @@ main = function(){
         rownames_to_column("regulator") 
     
     # plot
-    plts = make_plots(regulons, protimp_freqs, regulons_umap)
+    plts = make_plots(regulons, protimp_freqs, regulons_umap, annot)
     
     # make figdata
-    figdata = make_figdata(regulons, protimp_freqs, regulons_umap)
+    figdata = make_figdata(regulons, protimp_freqs, regulons_umap, annot)
 
     # save
     save_plots(plts, figs_dir)
