@@ -16,6 +16,7 @@ SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
 # load metadata
 metadata = pd.read_table(os.path.join(SUPPORT_DIR,'ENA_filereport-PRJNA673205-Nijhuis2020.tsv'))
 metadata = metadata.loc[metadata["library_source"]=="TRANSCRIPTOMIC"]
+metadata = metadata.loc[metadata["fastq_ftp"].str.split(';').apply(len)==2]
 
 ## URLS to download
 URLS = metadata['fastq_ftp'].str.split(';').str[0].apply(os.path.dirname).to_list()
@@ -27,29 +28,36 @@ N_SAMPLES = len(SAMPLES)
 SIZES = metadata.set_index("run_accession")["fastq_bytes"].astype(str).str.split(";").apply(lambda x: max(np.array(x, dtype=int))).to_dict()
 SIZE_THRESH = 5e9
 
+ENDS = ["1","2"]
+
 ##### RULES #####
 rule all:
     input:
+        # PROTEOMICS
         # download supplementary tables
         os.path.join(ARTICLE_DIR,"supplementary_data","rnaseq_geo"),
         os.path.join(ARTICLE_DIR,"supplementary_data","MQ_S1-12_search_results_txt_folder"),
         os.path.join(ARTICLE_DIR,"supplementary_data","MQ_S13-16_search_results_txt_folder"),
         
+        # preprocess supplementary tables
+        os.path.join(ARTICLE_DIR,"supplementary_data","proteomics_lfq_intensity.tsv.gz"),
+        
+        # TRANSCRIPTOMICS
         # download metadata
         os.path.join(ARTICLE_DIR,"metadata.tsv"),
         
         # download .fastq
-        expand(os.path.join(ARTICLE_DIR,'fastqs','.done','{sample}_{end}'), end=["1"], sample=SAMPLES),
+        expand(os.path.join(ARTICLE_DIR,'fastqs','.done','{sample}_{end}'), end=ENDS, sample=SAMPLES),
         
         # quantify event PSI and gene expression TPM
         expand(os.path.join(ARTICLE_DIR,'vast_out','.done','{sample}'), sample=SAMPLES),
         
         # combine
-        #os.path.join(ARTICLE_DIR,'vast_out','.done/vasttools_combine-{n_samples}').format(n_samples=N_SAMPLES),
+        os.path.join(ARTICLE_DIR,'vast_out','.done/vasttools_combine-{n_samples}').format(n_samples=N_SAMPLES),
         
         # tidy PSI
-        #os.path.join(ARTICLE_DIR,'vast_out','PSI-minN_1-minSD_0-noVLOW-min_ALT_use25-Tidy.tab.gz'),
-        #'.done/Nijhuis2020.done'
+        os.path.join(ARTICLE_DIR,'vast_out','PSI-minN_1-minSD_0-noVLOW-min_ALT_use25-Tidy.tab.gz'),
+        '.done/Nijhuis2020.done'
 
 
 rule download_supdata:
@@ -84,43 +92,19 @@ rule download_supdata:
 
 rule prep_supdata:
     input:
-        rnaseq_geo = os.path.join(ARTICLE_DIR,"supplementary_data","rnaseq_geo"),
         proteomics1 = os.path.join(ARTICLE_DIR,"supplementary_data","MQ_S1-12_search_results_txt_folder"),
-        proteomics2 = os.path.join(ARTICLE_DIR,"supplementary_data","MQ_S13-16_search_results_txt_folder"),
-        gene_annotation = os.path.join(RAW_DIR,"HGNC","gene_annotations.tsv.gz")
+        proteomics2 = os.path.join(ARTICLE_DIR,"supplementary_data","MQ_S13-16_search_results_txt_folder")
     output:
-        transcriptomics = ,
-        proteomics = 
+        proteomics = os.path.join(ARTICLE_DIR,"supplementary_data","proteomics_lfq_intensity.tsv.gz")
     run:
         import pandas as pd
         import numpy as np
         
         # load
-        ## transcriptomics
-        transcriptomics = pd.concat([
-            pd.read_table(os.path.join(input.rnaseq_geo,f), index_col=0) for f in os.listdir(input.rnaseq_geo)
-        ], axis=1)
         ## proteomics
         proteomics1 = pd.read_table(os.path.join(input.proteomics1,"txt","proteinGroups.txt"), low_memory=False)
         proteomics2 = pd.read_table(os.path.join(input.proteomics2,"txt","proteinGroups.txt"), low_memory=False)
-        ## gene annotaion
-        gene_annotation = pd.read_table(input.gene_annotation)
-        
-        # prep transcriptomics (translate Entrez to Ensembl)
-        gene_annotation = gene_annotation.loc[~gene_annotation["NCBI Gene ID"].isnull()].copy()
-        gene_annotation["NCBI Gene ID"] = gene_annotation["NCBI Gene ID"].astype(int)
-        transcriptomics = pd.merge(
-            transcriptomics.reset_index(), 
-            gene_annotation[["NCBI Gene ID","Ensembl gene ID"]], 
-            how="left", left_on="index", right_on="NCBI Gene ID"
-        ).dropna().set_index("Ensembl gene ID").drop(columns=["index","NCBI Gene ID"])
-        transcriptomics.index.name = "ID"
-        
-        ## log-transform raw counts to counts per million
-        transcriptomics = np.log2(transcriptomics / transcriptomics.sum() * 10**6 + 1)
-        #df = df - df[["S1.06hVC.sorted.bam","S4.16hVC.sorted.bam"]].mean(axis=1).values.reshape(-1,1)
-        #df.loc["ENSG00000131051"].sort_values().hist()
-        
+
         # prep proteomics
         common_cols = set(proteomics1.columns).intersection(proteomics2.columns)
         samples1 = set(proteomics1.columns) - set(common_cols)
@@ -137,11 +121,11 @@ rule prep_supdata:
         cols_oi = [c for c in proteomics.columns if "LFQ" in c]
         proteomics = proteomics[["Gene names"] + sorted(cols_oi)].copy()
         proteomics = proteomics.loc[~proteomics["Gene names"].isnull()].set_index("Gene names").copy()
-        ## change sample names
-        #proteomics.loc["RBM39"].sort_values().hist()
+        
+        # sample identifiers
+        proteomics.columns = [c.replace("LFQ intensity ","sample") for c in proteomics.columns]
         
         # save
-        transcriptomics.reset_index().to_csv(output.transcriptomics, **SAVE_PARAMS)
         proteomics.to_csv(output.proteomics, **SAVE_PARAMS)
         
         print("Done!")
@@ -191,7 +175,7 @@ rule download:
         
         wget --user-agent="Chrome" \
              --no-check-certificate \
-             {params.url}/{params.sample}.fastq.gz \
+             {params.url}/{params.sample}_{params.end}.fastq.gz \
              -O {params.fastqs_dir}/{params.sample}_{params.end}.fastq.gz
         
         touch {output.download_done}
@@ -210,7 +194,7 @@ rule align:
         vast_out = directory(os.path.join(ARTICLE_DIR,'vast_out','{sample}'))
     input:
         dbDir = os.path.join(VASTDB_DIR,'assemblies'),
-        download_done = [os.path.join(ARTICLE_DIR,'fastqs','.done','{sample}_{end}').format(end=end, sample='{sample}') for end in ["1"]]
+        download_done = [os.path.join(ARTICLE_DIR,'fastqs','.done','{sample}_{end}').format(end=end, sample='{sample}') for end in ENDS]
     output:
         align_done = touch(os.path.join(ARTICLE_DIR,'vast_out','.done','{sample}'))
     threads: 12
@@ -225,6 +209,7 @@ rule align:
         echo "Aligning {params.sample}..."
         {params.bin_dir}/vast-tools align \
                     {params.fastqs_dir}/{params.sample}_1.fastq.gz \
+                    {params.fastqs_dir}/{params.sample}_2.fastq.gz \
                     --sp Hs2 \
                     --dbDir {input.dbDir} \
                     --expr \
