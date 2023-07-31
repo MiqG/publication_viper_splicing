@@ -641,6 +641,10 @@ rule figures_cancer_program:
         sf_crossreg_genexpr = os.path.join(RESULTS_DIR,'files','PANCAN',"genexpr_tpm-sf_cross_regulation.tsv.gz"),
         ontology_chea = os.path.join(RAW_DIR,"Harmonizome","CHEA-TranscriptionFactorTargets.gmt.gz"),
         sf_activity_vs_genexpr = os.path.join(RESULTS_DIR,'files','PANCAN',"genexpr_tpm_vs_activity.tsv.gz"),
+        protein_activity_stn = os.path.join(RESULTS_DIR,"files","protein_activity","PANCAN-SolidTissueNormal-EX.tsv.gz")
+        genexpr_tpm_stn = os.path.join(PREP_DIR,"genexpr_tpm","PANCAN-SolidTissueNormal.tsv.gz")
+        metadata = os.path.join(PREP_DIR,"metadata","PANCAN.tsv.gz")
+        regulons_jaccard = os.path.join(REGULONS_DIR,"files","regulons_eda_jaccard","experimentally_derived_regulons_pruned-EX.tsv.gz")
         gene_annotation = os.path.join(RAW_DIR,"HGNC","gene_annotations.tsv.gz")
     output:
         directory(os.path.join(RESULTS_DIR,"figures","cancer_program"))
@@ -656,6 +660,10 @@ rule figures_cancer_program:
                     --assocs_gene_dependency_file={input.assocs_gene_dependency} \
                     --ontology_chea_file={input.ontology_chea} \
                     --sf_activity_vs_genexpr_file={input.sf_activity_vs_genexpr} \
+                    --genexpr_tpm_stn_file={input.genexpr_tpm_stn} \
+                    --protein_activity_stn_file={input.protein_activity_stn} \
+                    --metadata_file={input.metadata} \
+                    --regulons_jaccard_file={input.regulons_jaccard} \
                     --gene_annotation_file={input.gene_annotation} \
                     --figs_dir={output}
         """

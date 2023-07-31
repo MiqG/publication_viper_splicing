@@ -49,6 +49,7 @@ PAL_CANCER_TYPES = setNames(
 # PREP_DIR = file.path(ROOT,'data','prep')
 # SUPPORT_DIR = file.path(ROOT,"support")
 # RESULTS_DIR = file.path(ROOT,"results","sf_activity_tcga")
+# REGINF_DIR = file.path(ROOT,"results","regulon_inference")
 # diff_activity_file = file.path(RESULTS_DIR,'files','PANCAN','protein_activity-mannwhitneyu-PrimaryTumor_vs_SolidTissueNormal.tsv.gz')
 # diff_genexpr_file = file.path(RESULTS_DIR,'files','PANCAN','genexpr_tpm-mannwhitneyu-PrimaryTumor_vs_SolidTissueNormal.tsv.gz')
 # gene_annotation_file = file.path(RAW_DIR,"HGNC","gene_annotations.tsv.gz")
@@ -63,6 +64,7 @@ PAL_CANCER_TYPES = setNames(
 # protein_activity_stn_file = file.path(RESULTS_DIR,"files","protein_activity","PANCAN-SolidTissueNormal-EX.tsv.gz")
 # genexpr_tpm_stn_file = file.path(PREP_DIR,"genexpr_tpm","PANCAN-SolidTissueNormal.tsv.gz")
 # metadata_file = file.path(PREP_DIR,"metadata","PANCAN.tsv.gz")
+# regulons_jaccard_file = file.path(REGINF_DIR,"files","regulons_eda_jaccard","experimentally_derived_regulons_pruned-EX.tsv.gz")
 
 ##### FUNCTIONS #####
 plot_comparison = function(diff_activity, diff_genexpr, survival_activity, survival_genexpr, sf_activity_vs_genexpr){
@@ -512,8 +514,14 @@ plot_survival_analysis = function(survival_roc, survival_omic, driver_omic, patt
 }
 
 
-plot_sf_crossreg = function(driver_omic, sf_crossreg, patt=""){
+plot_sf_crossreg = function(driver_omic, sf_crossreg, regulons_jaccard, patt=""){
     plts = list()
+    
+    lab_pairs = c(
+        "Tumor suppressor\n&\nTumor suppressor",
+        "Oncogenic\n&\nTumor suppressor",
+        "Oncogenic\n&\nOncogenic"
+    )
     
     driver_classif = driver_omic %>%
         count(GENE, ENSEMBL, driver_type) %>%
@@ -552,9 +560,7 @@ plot_sf_crossreg = function(driver_omic, sf_crossreg, patt=""){
     
     # are oncogenic vs suppressor corregulated?
     plts[["sf_cross_regulation-correlations-violin"]] = X %>%
-        mutate(
-            lab_pair=factor(lab_pair, levels=c("Tumor suppressor\n&\nTumor suppressor","Oncogenic\n&\nTumor suppressor","Oncogenic\n&\nOncogenic"))
-        ) %>%
+        mutate(lab_pair=factor(lab_pair, levels=lab_pairs)) %>%
         ggviolin(x="lab_pair", y="correlation", fill="lab_pair", color=NA, trim=TRUE,
                  palette=c(PAL_DRIVER_TYPE[[1]],"lightgray",PAL_DRIVER_TYPE[[2]])) +
         geom_boxplot(width=0.1, outlier.size=0.1, fill=NA, position=position_dodge(0.9)) +
@@ -570,6 +576,48 @@ plot_sf_crossreg = function(driver_omic, sf_crossreg, patt=""){
         guides(fill="none") +
         theme(aspect.ratio=1) +
         labs(x="", y="SF-SF Protein Activity Correlation")
+    
+    # are regulator targets shared among cancer-driver genes?
+    X = regulons_jaccard %>%
+        mutate(
+            driver_type_a = case_when(
+                regulator_a %in% oncogenic ~ "Oncogenic",
+                regulator_a %in% suppressor ~ "Tumor suppressor"
+            ),
+            driver_type_b = case_when(
+                regulator_b %in% oncogenic ~ "Oncogenic",
+                regulator_b %in% suppressor ~ "Tumor suppressor"
+            ),
+            same_driver_type = driver_type_a==driver_type_b,
+            similarity = 1 - distance
+        ) %>%
+        drop_na(driver_type_a, driver_type_b) %>%
+        rowwise() %>%
+        mutate(lab_pair = paste(sort(c(driver_type_a,driver_type_b)), collapse="\n&\n")) %>%
+        ungroup() %>%
+        group_by(regulator_a,regulator_b,lab_pair) %>%
+        summarize(similarity = median(similarity)) %>%
+        ungroup()
+    
+    
+    plts[["sf_cross_regulation-regulon_similarity-violin"]] = X %>%
+        mutate(lab_pair=factor(lab_pair, levels=lab_pairs)) %>%
+        ggviolin(x="lab_pair", y="similarity", fill="lab_pair", color=NA, trim=TRUE,
+                 palette=c(PAL_DRIVER_TYPE[[1]],"lightgray",PAL_DRIVER_TYPE[[2]])) +
+        geom_boxplot(width=0.1, outlier.size=0.1, fill=NA, position=position_dodge(0.9)) +
+        stat_compare_means(
+            method="wilcox.test", label="p.signif", ref.group="Oncogenic\n&\nTumor suppressor",
+            size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        geom_text(
+            aes(y=-0.005, label=label),
+            . %>% count(lab_pair) %>% mutate(label=paste0("n=",n)),
+            size=FONT_SIZE, family=FONT_FAMILY, position=position_dodge(0.9)
+        ) +
+        guides(fill="none") +
+        theme(aspect.ratio=1) +
+        labs(x="", y="SF-SF Regulons Jaccard Similarity")
+    
     
     names(plts) = paste0(names(plts),patt)
     
@@ -680,7 +728,7 @@ make_plots = function(
     driver_activity, driver_genexpr, 
     sf_crossreg_activity, sf_crossreg_genexpr, 
     tf_enrichments, sf_activity_vs_genexpr,
-    protein_activity_stn
+    protein_activity_stn, regulons_jaccard
 ){
     plts = list(
         plot_driver_selection(driver_activity, driver_genexpr, diff_activity, diff_genexpr),
@@ -689,8 +737,8 @@ make_plots = function(
         plot_survival_analysis(survival_roc_genexpr, survival_genexpr, driver_genexpr, "-genexpr"),
         plot_survival_analysis(survival_roc_genexpr_w_activity_labs, survival_genexpr, driver_activity, "-genexpr_w_activity_labs"),
         plot_survival_analysis(survival_roc_activity_w_genexpr_labs, survival_activity, driver_genexpr, "-activity_w_genexpr_labs"),
-        plot_sf_crossreg(driver_activity, sf_crossreg_activity, "-activity"),
-        plot_sf_crossreg(driver_genexpr, sf_crossreg_genexpr, "-genexpr"),
+        plot_sf_crossreg(driver_activity, sf_crossreg_activity, regulons_jaccard, "-activity"),
+        plot_sf_crossreg(driver_genexpr, sf_crossreg_genexpr, regulons_jaccard, "-genexpr"),
         plot_tf_enrichments(tf_enrichments),
         plot_comparison(diff_activity, diff_genexpr, survival_activity, survival_genexpr, sf_activity_vs_genexpr),
         plot_drivers_activity_stn(protein_activity_stn)
@@ -700,13 +748,17 @@ make_plots = function(
 }
 
 
-make_figdata = function(diff_activity, diff_genexpr, 
-                        assocs_gene_dependency, 
-                        survival_roc_activity, survival_roc_genexpr,
-                        survival_activity, survival_genexpr,
-                        driver_activity, driver_genexpr, 
-                        sf_crossreg_activity, sf_crossreg_genexpr, 
-                        tf_enrichments, sf_activity_vs_genexpr){
+make_figdata = function(
+    diff_activity, diff_genexpr,
+    assocs_gene_dependency, 
+    survival_roc_activity, survival_roc_genexpr, 
+    survival_roc_genexpr_w_activity_labs, survival_roc_activity_w_genexpr_labs,
+    survival_activity, survival_genexpr, 
+    driver_activity, driver_genexpr, 
+    sf_crossreg_activity, sf_crossreg_genexpr, 
+    tf_enrichments, sf_activity_vs_genexpr,
+    protein_activity_stn, regulons_jaccard
+){
     figdata = list(
         "tcga_tumorigenesis" = list(
             "diff_protein_activity" = diff_activity,
@@ -760,7 +812,9 @@ save_plots = function(plts, figs_dir){
     save_plt(plts, "survival_analysis-cancers_differential-roc_curves-activity_w_genexpr_labs", '.pdf', figs_dir, width=5, height=6)
     
     save_plt(plts, "sf_cross_regulation-correlations-violin-activity", '.pdf', figs_dir, width=5, height=5)
+    save_plt(plts, "sf_cross_regulation-regulon_similarity-violin-activity", '.pdf', figs_dir, width=5, height=5)
     save_plt(plts, "sf_cross_regulation-correlations-violin-genexpr", '.pdf', figs_dir, width=5, height=5)
+    save_plt(plts, "sf_cross_regulation-regulon_similarity-violin-genexpr", '.pdf', figs_dir, width=5, height=5)
     save_plt(plts, "tf_enrichments-oncogenic-cnet", '.pdf', figs_dir, width=4, height=4)
     save_plt(plts, "tf_enrichments-suppressor-cnet", '.pdf', figs_dir, width=4, height=4)
     
@@ -801,6 +855,10 @@ parseargs = function(){
         make_option("--assocs_gene_dependency_file", type="character"),
         make_option("--ontology_chea_file", type="character"),
         make_option("--sf_activity_vs_genexpr_file", type="character"),
+        make_option("--genexpr_tpm_stn_file", type="character"),
+        make_option("--protein_activity_stn_file", type="character"),
+        make_option("--metadata_file", type="character"),
+        make_option("--regulons_jaccard_file", type="character"),
         make_option("--gene_annotation_file", type="character"),
         make_option("--figs_dir", type="character")
     )
@@ -822,6 +880,10 @@ main = function(){
     assocs_gene_dependency_file = args[["assocs_gene_dependency_file"]]
     ontology_chea_file = args[["ontology_chea_file"]]
     sf_activity_vs_genexpr_file = args[["sf_activity_vs_genexpr_file"]]
+    genexpr_tpm_stn_file = args[["genexpr_tpm_stn_file"]]
+    protein_activity_stn_file = args[["protein_activity_stn_file"]]
+    metadata_file = args[["metadata_file"]]
+    regulons_jaccard_file = args[["regulons_jaccard_file"]]
     gene_annotation_file = args[["gene_annotation_file"]]
     figs_dir = args[["figs_dir"]]
     
@@ -840,6 +902,7 @@ main = function(){
     genexpr_tpm_stn = read_tsv(genexpr_tpm_stn_file)
     protein_activity_stn = read_tsv(protein_activity_stn_file)
     metadata = read_tsv(metadata_file)
+    regulons_jaccard = read_tsv(regulons_jaccard_file)
     gene_annotation = read_tsv(gene_annotation_file) %>%
         dplyr::rename(
             GENE = `Approved symbol`,
@@ -991,7 +1054,7 @@ main = function(){
         driver_activity, driver_genexpr, 
         sf_crossreg_activity, sf_crossreg_genexpr, 
         tf_enrichments, sf_activity_vs_genexpr,        
-        protein_activity_stn
+        protein_activity_stn, regulons_jaccard
     )
     
     # make figdata
@@ -1004,7 +1067,7 @@ main = function(){
         driver_activity, driver_genexpr, 
         sf_crossreg_activity, sf_crossreg_genexpr, 
         tf_enrichments, sf_activity_vs_genexpr,
-        protein_activity_stn
+        protein_activity_stn, regulons_jaccard
     )
 
     # save
