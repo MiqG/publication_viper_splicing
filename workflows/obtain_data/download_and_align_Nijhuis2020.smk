@@ -126,7 +126,7 @@ rule prep_supdata:
         proteomics.columns = [c.replace("LFQ intensity ","sample") for c in proteomics.columns]
         
         # save
-        proteomics.to_csv(output.proteomics, **SAVE_PARAMS)
+        proteomics.reset_index().to_csv(output.proteomics, **SAVE_PARAMS)
         
         print("Done!")
 

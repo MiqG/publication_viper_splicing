@@ -1383,7 +1383,7 @@ rule preprocess_Nijhuis2020:
         metadata = metadata.loc[metadata["run_accession"].isin(common_samples)]
         
         ## append metadata proteomics
-        metadata_proteomics["sampleID"] = "sample"+metadata_proteomics["SampleNumber"]
+        metadata_proteomics["sampleID"] = "sample"+metadata_proteomics["SampleNumber"].astype(str)
         
         # save
         print("Saving...")

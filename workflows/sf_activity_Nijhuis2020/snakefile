@@ -12,7 +12,7 @@ PREP_DIR = os.path.join(ROOT,"data","prep")
 SUPPORT_DIR = os.path.join(ROOT,"support")
 BIN_DIR = os.path.join(ROOT,"bin")
 RESULTS_DIR = os.path.join(ROOT,"results","sf_activity_Nijhuis2020")
-ACTVAL_DIR = os.path.join(ROOT,"results","validation_activity")
+REGULONS_DIR = os.path.join(ROOT,"results","regulon_inference")
 SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
 
 EVENT_TYPES = ["EX"]
@@ -27,7 +27,7 @@ rule all:
         expand(os.path.join(RESULTS_DIR,"files","protein_activity","Nijhuis2020-{event_type}.tsv.gz"), event_type=EVENT_TYPES),
         
         # figures
-        expand(os.path.join(RESULTS_DIR,"figures","validation_drug_targets-{event_type}"), event_type=EVENT_TYPES)
+        #expand(os.path.join(RESULTS_DIR,"figures","validation_drug_targets-{event_type}"), event_type=EVENT_TYPES)
         
         
 rule compute_signature:
@@ -42,24 +42,26 @@ rule compute_signature:
         splicing = pd.read_table(input.splicing, index_col=0)
         metadata = pd.read_table(input.metadata)
         
-        # subtract median DMSO to corresponding cell type
-        signature = []
-        for cell_line_oi in metadata["cell_line_name"].unique():
-            samples_cell_line = metadata.loc[
-                metadata["cell_line_name"] == cell_line_oi,
-                "sampleID"
-            ]
-            samples_ctl = metadata.loc[
-                (metadata["cell_line_name"] == cell_line_oi) &\
-                (metadata["condition"] == "DMSO"),
-                "sampleID"
-            ]
+        # delta PSI as the difference between conditions and the mean of the conditions
+        signature = {}
+        for sample_oi in metadata["sampleID"]:
+            # get the controls of the sample
+            ctls = metadata.loc[metadata["sampleID"]==sample_oi, "control_samples"].values[0]
             
-            signature.append(
-                splicing[samples_cell_line] - \
-                splicing[samples_ctl].median(axis=1).values.reshape(-1,1)
-            )
-        signature = pd.concat(signature, axis=1)
+            # controls will be np.nan
+            if isinstance(ctls,str):
+                ctls = ctls.split("||")
+                psi_ctls = splicing[ctls].median(axis=1)
+                
+                # compute delta PSI
+                dpsi = splicing[sample_oi] - psi_ctls
+                
+                signature[sample_oi] = dpsi
+                
+                del dpsi, psi_ctls, ctls
+                
+        
+        signature = pd.DataFrame(signature)
         
         # save
         signature.reset_index().to_csv(output.signature, **SAVE_PARAMS)
@@ -70,7 +72,7 @@ rule compute_signature:
 rule compute_protein_activity:
     input:
         signature = os.path.join(RESULTS_DIR,"files","signatures","Nijhuis2020-{event_type}.tsv.gz"),
-        regulons = os.path.join(RESULTS_DIR,"files","experimentally_derived_regulons_pruned-{event_type}")
+        regulons_path = os.path.join(REGULONS_DIR,"files","experimentally_derived_regulons_pruned-{event_type}")
     output:
         os.path.join(RESULTS_DIR,"files","protein_activity","Nijhuis2020-{event_type}.tsv.gz")
     params:
@@ -79,7 +81,7 @@ rule compute_protein_activity:
         """
         Rscript {params.script_dir}/compute_protein_activity.R \
                     --signature_file={input.signature} \
-                    --regulons_dir={input.regulons_dir} \
+                    --regulons_path={input.regulons_path} \
                     --output_file={output}
         """
 
@@ -95,6 +97,7 @@ rule validation_drug_targets:
     shell:
         """
         Rscript scripts/figures_validation_drug_targets.R \
+                    --proteomics_file=
                     --genexpr_file={input.genexpr} \
                     --protein_activity_file={input.protein_activity} \
                     --metadata_file={input.metadata} \
