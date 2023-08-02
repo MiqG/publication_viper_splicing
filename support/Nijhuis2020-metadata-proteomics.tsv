@@ -1,17 +1,17 @@
-SampleNumber	Condition
-1	IMR-32 6hr Vehicle rep 1
-2	IMR-32 6hr Vehicle rep 2
-3	IMR-32 6hr Vehicle rep 3
-4	IMR-32 6hr Indisulam 5uM rep 1
-5	IMR-32 6hr Indisulam 5uM rep 2
-6	IMR-32 6hr Indisulam 5uM rep 3
-7	IMR-32 16hr Vehicle rep 1
-8	IMR-32 16hr Vehicle rep 2
-9	IMR-32 16hr Vehicle rep 3
-10	IMR-32 16hr Indisulam 5uM rep 1
-11	IMR-32 16hr Indisulam 5uM rep 2
-12	IMR-32 16hr Indisulam 5uM rep 3
-13	HCT116 6hr Vehicle 
-14	HCT116 6hr Indisulam 5uM
-15	HCT116 16hr Vehicle
-16	HCT116 16hr Indisulam 5uM
+"SampleNumber"	"Condition"	"sampleID"	"condition"	"DepMap_ID"	"CCLE_Name"	"cell_line_name"	"replicate"	"pert_concentration"	"pert_concentration_units"	"pert_time"	"pert_time_units"
+1	"IMR-32 6hr Vehicle rep 1"	"sample1"	"DMSO"	"ACH-000310"	"IMR32_AUTONOMIC_GANGLIA"	"IMR32_AUTONOMIC_GANGLIA"	"rep1"			6	"hours"
+2	"IMR-32 6hr Vehicle rep 2"	"sample2"	"DMSO"	"ACH-000310"	"IMR32_AUTONOMIC_GANGLIA"	"IMR32_AUTONOMIC_GANGLIA"	"rep2"			6	"hours"
+3	"IMR-32 6hr Vehicle rep 3"	"sample3"	"DMSO"	"ACH-000310"	"IMR32_AUTONOMIC_GANGLIA"	"IMR32_AUTONOMIC_GANGLIA"	"rep3"			6	"hours"
+4	"IMR-32 6hr Indisulam 5uM rep 1"	"sample4"	"INDISULAM"	"ACH-000310"	"IMR32_AUTONOMIC_GANGLIA"	"IMR32_AUTONOMIC_GANGLIA"	"rep1"	5	"micromolar"	6	"hours"
+5	"IMR-32 6hr Indisulam 5uM rep 2"	"sample5"	"INDISULAM"	"ACH-000310"	"IMR32_AUTONOMIC_GANGLIA"	"IMR32_AUTONOMIC_GANGLIA"	"rep2"	5	"micromolar"	6	"hours"
+6	"IMR-32 6hr Indisulam 5uM rep 3"	"sample6"	"INDISULAM"	"ACH-000310"	"IMR32_AUTONOMIC_GANGLIA"	"IMR32_AUTONOMIC_GANGLIA"	"rep3"	5	"micromolar"	6	"hours"
+7	"IMR-32 16hr Vehicle rep 1"	"sample7"	"DMSO"	"ACH-000310"	"IMR32_AUTONOMIC_GANGLIA"	"IMR32_AUTONOMIC_GANGLIA"	"rep1"			16	"hours"
+8	"IMR-32 16hr Vehicle rep 2"	"sample8"	"DMSO"	"ACH-000310"	"IMR32_AUTONOMIC_GANGLIA"	"IMR32_AUTONOMIC_GANGLIA"	"rep2"			16	"hours"
+9	"IMR-32 16hr Vehicle rep 3"	"sample9"	"DMSO"	"ACH-000310"	"IMR32_AUTONOMIC_GANGLIA"	"IMR32_AUTONOMIC_GANGLIA"	"rep3"			16	"hours"
+10	"IMR-32 16hr Indisulam 5uM rep 1"	"sample10"	"INDISULAM"	"ACH-000310"	"IMR32_AUTONOMIC_GANGLIA"	"IMR32_AUTONOMIC_GANGLIA"	"rep1"	5	"micromolar"	16	"hours"
+11	"IMR-32 16hr Indisulam 5uM rep 2"	"sample11"	"INDISULAM"	"ACH-000310"	"IMR32_AUTONOMIC_GANGLIA"	"IMR32_AUTONOMIC_GANGLIA"	"rep2"	5	"micromolar"	16	"hours"
+12	"IMR-32 16hr Indisulam 5uM rep 3"	"sample12"	"INDISULAM"	"ACH-000310"	"IMR32_AUTONOMIC_GANGLIA"	"IMR32_AUTONOMIC_GANGLIA"	"rep3"	5	"micromolar"	16	"hours"
+13	"HCT116 6hr Vehicle "	"sample13"	"DMSO"	"ACH-000971"	"HCT116_LARGE_INTESTINE"	"HCT116_LARGE_INTESTINE"	"rep1"			6	"hours"
+14	"HCT116 6hr Indisulam 5uM"	"sample14"	"INDISULAM"	"ACH-000971"	"HCT116_LARGE_INTESTINE"	"HCT116_LARGE_INTESTINE"	"rep1"	5	"micromolar"	6	"hours"
+15	"HCT116 16hr Vehicle"	"sample15"	"DMSO"	"ACH-000971"	"HCT116_LARGE_INTESTINE"	"HCT116_LARGE_INTESTINE"	"rep1"			16	"hours"
+16	"HCT116 16hr Indisulam 5uM"	"sample16"	"INDISULAM"	"ACH-000971"	"HCT116_LARGE_INTESTINE"	"HCT116_LARGE_INTESTINE"	"rep1"	5	"micromolar"	16	"hours"

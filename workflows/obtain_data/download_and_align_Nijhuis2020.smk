@@ -121,6 +121,7 @@ rule prep_supdata:
         cols_oi = [c for c in proteomics.columns if "LFQ" in c]
         proteomics = proteomics[["Gene names"] + sorted(cols_oi)].copy()
         proteomics = proteomics.loc[~proteomics["Gene names"].isnull()].set_index("Gene names").copy()
+        proteomics.index.name = "GENE"
         
         # sample identifiers
         proteomics.columns = [c.replace("LFQ intensity ","sample") for c in proteomics.columns]

@@ -28,6 +28,7 @@ PAL_ACCENT = "darkred"
 PAL_DUAL = c(PAL_DARK, PAL_ACCENT)
 PAL_CONTRAST = c("darkgrey","darkred")
 PAL_CELL_LINES = "Dark2"
+PAL_TIME = "jco"
 
 # Development
 # -----------
@@ -44,22 +45,89 @@ PAL_CELL_LINES = "Dark2"
 # gene_oi = "ENSG00000131051" # RBM39
 
 ##### FUNCTIONS #####
-make_plots = function(genexpr, protein_activity, metadata){
+plot_proteomics_gene_oi = function(proteomics, gene_oi){
+    plts = list()
+    
+    X = proteomics %>%
+        filter(GENE == gene_oi)
+    
+    plts[["proteomics-indisulam_vs_dmso-box"]] = X %>%
+        ggplot(aes(x=condition_lab, y=lfq)) +
+        geom_point(aes(color=cell_line_name), position=position_jitter(0.1), size=0.5) +
+        geom_boxplot(fill=NA, width=0.25, outlier.shape=NA) +
+        color_palette(PAL_CELL_LINES) +
+        theme_pubr() +
+        facet_wrap(~pert_time_lab, nrow=1) +
+        theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        stat_compare_means(method="t.test", label="p.signif", size=FONT_SIZE, family=FONT_FAMILY, ref.group="DMSO") + 
+        labs(x="Condition", y="log2(LFQ+1)", color="Cell Line", subtitle=gene_oi)
+
+    names(plts) = sprintf("%s-%s",names(plts),gene_oi)
+    
+    return(plts)
+}
+
+
+plot_genexpr_gene_oi = function(genexpr, gene_oi){
+    plts = list()
+    
+    X = genexpr %>%
+        filter(ID == gene_oi)
+    
+    plts[["genexpr-indisulam_vs_dmso-box"]] = X %>%
+        ggplot(aes(x=condition_lab, y=genexpr_tpm, group=pert_time_lab)) +
+        geom_point(aes(color=pert_time_lab), position=position_jitter(0.1), size=0.5) +
+        geom_line(aes(color=pert_time_lab), size=LINE_SIZE, linetype="dashed") +
+        color_palette(PAL_TIME) +
+        theme_pubr() +
+        facet_wrap(~cell_line_name, nrow=1) +
+        theme(aspect.ratio=NULL, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Condition", y="log2(TPM+1)", color="Pert. Time", subtitle=gene_oi)
+    
+    names(plts) = sprintf("%s-%s",names(plts),gene_oi)
+    
+    return(plts)
+}
+
+
+plot_activity_gene_oi = function(protein_activity, gene_oi){
+    plts = list()
+    
+    X = protein_activity %>%
+        mutate(is_regulator_oi = regulator == gene_oi)
+    
+    plts[["activity-indisulam_vs_dmso-ranking-scatter"]] = X %>%
+        ggplot(aes(x=activity_ranking, y=activity)) +
+        geom_scattermore(data = . %>% filter(!is_regulator_oi), pixels=c(1000,1000), pointsize=4, color=PAL_DARK, alpha=0.5) +
+        geom_scattermore(data = . %>% filter(is_regulator_oi), pixels=c(1000,1000), pointsize=8, color=PAL_ACCENT) +
+        theme_pubr() +
+        facet_wrap(~condition_lab+pert_time_lab, ncol=2) +
+        theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Ranking", y="Protein Activity", color=sprintf("Is %s", gene_oi))
+    
+    names(plts) = sprintf("%s-%s",names(plts),gene_oi)
+    
+    return(plts)
+}
+
+
+make_plots = function(proteomics, genexpr, protein_activity){
     plts = list(
-        plot_genexpr_gene_oi(genexpr, metadata, "ENSG00000131051"),
-        plot_activity_gene_oi(protein_activity, metadata, "ENSG00000131051")
+        plot_proteomics_gene_oi(proteomics, "RBM39"),
+        plot_genexpr_gene_oi(genexpr, "ENSG00000131051"),
+        plot_activity_gene_oi(protein_activity, "ENSG00000131051")
     )
     plts = do.call(c,plts)
     return(plts)
 }
 
 
-make_figdata = function(genexpr, protein_activity, metadata){
+make_figdata = function(proteomics, genexpr, protein_activity){
     figdata = list(
         "validation_drug_target_activity" = list(
+            "proteomics" = proteomics,
             "genexpr" = genexpr,
-            "protein_activity" = protein_activity,
-            "metadata" = metadata
+            "protein_activity" = protein_activity
         )
     )
     return(figdata)
@@ -82,7 +150,9 @@ save_plt = function(plts, plt_name, extension='.pdf',
 
 
 save_plots = function(plts, figs_dir){
-    save_plt(plts, "genexpr-indisulam_vs_dmso-box-ENSG00000131051", '.pdf', figs_dir, width=5, height=6)
+    save_plt(plts, "proteomics-indisulam_vs_dmso-box-RBM39", '.pdf', figs_dir, width=6, height=6)
+    save_plt(plts, "genexpr-indisulam_vs_dmso-box-ENSG00000131051", '.pdf', figs_dir, width=5.5, height=6)
+    save_plt(plts, "activity-indisulam_vs_dmso-ranking-scatter-ENSG00000131051", '.pdf', figs_dir, width=9, height=15)
 }
 
 save_figdata = function(figdata, dir){
@@ -135,15 +205,69 @@ main = function(){
     gc()
     
     # prep
-    metadata = metadata %>%
-        mutate(condition = factor(condition, levels=c("DMSO","INDISULAM","MS023")))
+    proteomics = proteomics %>%
+        pivot_longer(-GENE, values_to="lfq", names_to="sampleID_rep") %>%
+        mutate(lfq = log2(lfq+1)) %>%
+        separate(sampleID_rep, sep="_", into=c("sampleID","technical_replicate")) %>%
+        mutate(technical_replicate = sprintf("rep%s", technical_replicate)) %>%
+        drop_na() %>%
+        group_by(sampleID, GENE) %>%
+        summarize(lfq = mean(lfq, na.rm=TRUE)) %>%
+        ungroup() %>%
+        left_join(metadata, by="sampleID") %>%
+        mutate(
+            condition_lab = ifelse(
+                is.na(pert_concentration), condition, 
+                sprintf("%s\n(%s%s)", condition, pert_concentration, pert_concentration_units)
+            ),
+            condition_lab = factor(condition_lab, levels=c("DMSO","INDISULAM\n(5micromolar)")),
+            pert_time_lab = sprintf("%s%s", pert_time, pert_time_units),
+            pert_time_lab = factor(pert_time_lab, levels=c("6hours","16hours"))
+        )
+    
+    genexpr = genexpr %>%
+        pivot_longer(-ID, names_to="sampleID", values_to="genexpr_tpm") %>%
+        left_join(metadata, by="sampleID") %>%
+        drop_na(condition) %>%
+        mutate(
+            condition_lab = ifelse(
+                is.na(pert_concentration), condition, 
+                sprintf("%s\n(%s%s)", condition, pert_concentration, pert_concentration_units)
+            ),
+            condition_lab = factor(
+                condition_lab, levels=c("DMSO","INDISULAM\n(1micromolar)","INDISULAM\n(5micromolar)")
+            ),
+            pert_time_lab = sprintf("%s%s", pert_time, pert_time_units),
+            pert_time_lab = factor(pert_time_lab, levels=c("6hours","16hours"))
+        )
+    
+    protein_activity = protein_activity %>%
+        pivot_longer(-regulator, names_to="sampleID", values_to="activity") %>%
+        left_join(metadata, by="sampleID") %>%
+        drop_na(condition) %>%
+        mutate(
+            condition_lab = ifelse(
+                is.na(pert_concentration), condition, 
+                sprintf("%s\n(%s%s)", condition, pert_concentration, pert_concentration_units)
+            ),
+            condition_lab = factor(
+                condition_lab, levels=c("DMSO","INDISULAM\n(1micromolar)","INDISULAM\n(5micromolar)")
+            ),
+            pert_time_lab = sprintf("%s%s", pert_time, pert_time_units),
+            pert_time_lab = factor(pert_time_lab, levels=c("6hours","16hours"))
+        ) %>%
+        group_by(condition_lab, pert_time_lab) %>%
+        arrange(activity) %>%
+        mutate(activity_ranking = row_number()) %>%
+        ungroup()
+    
     
     # plot
-    plts = make_plots(genexpr, protein_activity, metadata)
+    plts = make_plots(proteomics, genexpr, protein_activity)
     gc()
     
     # make figdata
-    figdata = make_figdata(genexpr, protein_activity, metadata)
+    figdata = make_figdata(proteomics, genexpr, protein_activity)
 
     # save
     save_plots(plts, figs_dir)

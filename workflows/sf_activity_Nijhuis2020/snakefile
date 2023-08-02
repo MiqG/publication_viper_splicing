@@ -27,7 +27,7 @@ rule all:
         expand(os.path.join(RESULTS_DIR,"files","protein_activity","Nijhuis2020-{event_type}.tsv.gz"), event_type=EVENT_TYPES),
         
         # figures
-        #expand(os.path.join(RESULTS_DIR,"figures","validation_drug_targets-{event_type}"), event_type=EVENT_TYPES)
+        expand(os.path.join(RESULTS_DIR,"figures","validation_drug_targets-{event_type}"), event_type=EVENT_TYPES)
         
         
 rule compute_signature:
@@ -86,9 +86,9 @@ rule compute_protein_activity:
         """
 
 
-rule validation_drug_targets:
+rule figures_validation_drug_targets:
     input:
-        proteomics = os.path.join(RAW_DIR,"articles","Nijhuis2020","supplementary_data","proteomics_lfq_intensity.tsv.gz")
+        proteomics = os.path.join(RAW_DIR,"articles","Nijhuis2020","supplementary_data","proteomics_lfq_intensity.tsv.gz"),
         genexpr = os.path.join(PREP_DIR,"genexpr_tpm","Nijhuis2020.tsv.gz"),
         protein_activity = os.path.join(RESULTS_DIR,"files","protein_activity","Nijhuis2020-{event_type}.tsv.gz"),
         metadata = os.path.join(PREP_DIR,"metadata","Nijhuis2020.tsv.gz")
@@ -96,8 +96,8 @@ rule validation_drug_targets:
         directory(os.path.join(RESULTS_DIR,"figures","validation_drug_targets-{event_type}"))
     shell:
         """
-        Rscript scripts/figures_validation_drug_targets.R \
-                    --proteomics_file=
+        Rscript scripts/figures_validate_drug_target.R \
+                    --proteomics_file={input.proteomics} \
                     --genexpr_file={input.genexpr} \
                     --protein_activity_file={input.protein_activity} \
                     --metadata_file={input.metadata} \
