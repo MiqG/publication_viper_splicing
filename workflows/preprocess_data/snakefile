@@ -144,8 +144,12 @@ rule all:
         ## ENASFS
         ### delta PSI
         expand(os.path.join(PREP_DIR,'pert_transcriptomes','ENASFS','delta_psi-{event_type}.tsv.gz'), event_type=EVENT_TYPES),
+        ### genexpr fold change
+        os.path.join(PREP_DIR,'pert_transcriptomes','ENASFS','log2_fold_change_tpm.tsv.gz'),
         ### simplify delta PSI
         expand(os.path.join(PREP_DIR,'ground_truth_pert','ENASFS','delta_psi-{event_type}.tsv.gz'), event_type=EVENT_TYPES),
+        ### simplify genexpr fold change
+        os.path.join(PREP_DIR,'ground_truth_pert','ENASFS','log2_fold_change_tpm.tsv.gz'),
         
         # impute event PSI
         #expand(os.path.join(PREP_DIR,'event_psi_imputed','{dataset}-{event_type}.tsv.gz'), dataset=DATASETS, event_type=EVENT_TYPES),
@@ -1758,7 +1762,46 @@ rule delta_psi_ena_splicing_factors:
         print("Done!")
 
         
-rule prepare_ground_truth_pert_dpsi_ena_sfs:
+rule diff_tpm_ena_splicing_factors:
+    input:
+        metadata = os.path.join(PREP_DIR,'metadata','ENASFS.tsv.gz'),
+        genexpr = os.path.join(PREP_DIR,'genexpr_tpm','ENASFS.tsv.gz')
+    output:
+        diff_tpm = os.path.join(PREP_DIR,'pert_transcriptomes','ENASFS','log2_fold_change_tpm.tsv.gz')
+    run:
+        import pandas as pd
+        import numpy as np
+        
+        metadata = pd.read_table(input.metadata)
+        genexpr = pd.read_table(input.genexpr, index_col=0)
+        
+        # as the difference between conditions and the mean of the conditions
+        diff_tpm = {}
+        for sample_oi in metadata["sampleID"]:
+            # get the controls of the sample
+            ctls = metadata.loc[metadata["sampleID"]==sample_oi, "control_samples"].values[0]
+            
+            # controls will be np.nan
+            if isinstance(ctls,str):
+                ctls = ctls.split("||")
+                tpm_ctls = genexpr[ctls].mean(axis=1)
+                
+                # compute log2 fold-change
+                dtpm = genexpr[sample_oi] - tpm_ctls
+                
+                diff_tpm[sample_oi] = dtpm
+                
+                del dtpm, tpm_ctls, ctls
+                
+        diff_tpm = pd.DataFrame(diff_tpm)
+        
+        # save
+        diff_tpm.reset_index().to_csv(output.diff_tpm, sep="\t", index=False, compression="gzip")
+        
+        print("Done!")
+        
+        
+rule prepare_ground_truth_pert_dpsi_ena_splicing_factors:
     input:
         metadata = os.path.join(PREP_DIR,'metadata','ENASFS.tsv.gz'),
         dpsi = os.path.join(PREP_DIR,'pert_transcriptomes','ENASFS','delta_psi-{event_type}.tsv.gz')
@@ -1791,6 +1834,39 @@ rule prepare_ground_truth_pert_dpsi_ena_sfs:
         print("Done!")
         
         
+rule prepare_ground_truth_pert_logFCtpm_ena_splicing_factors:
+    input:
+        metadata = os.path.join(PREP_DIR,'metadata','ENASFS.tsv.gz'),
+        diff_tpm = os.path.join(PREP_DIR,'pert_transcriptomes','ENASFS','log2_fold_change_tpm.tsv.gz')
+    output:
+        diff_tpm = os.path.join(PREP_DIR,'ground_truth_pert','ENASFS','log2_fold_change_tpm.tsv.gz')
+    run:
+        import pandas as pd
+        
+        metadata = pd.read_table(input.metadata)
+        diff_tpm = pd.read_table(input.diff_tpm, index_col=0)
+        
+        # drop control samples
+        metadata = metadata.loc[~metadata["PERT_ENSEMBL"].isnull()].copy()
+        metadata["PERT_ID"] = metadata[
+            ["study_accession","cell_line_name","PERT_ENSEMBL"]
+        ].apply(lambda row: '___'.join(row.values.astype(str)), axis=1)
+        
+        diff_tpms = []
+        for pert_id in metadata["PERT_ID"].unique():
+            samples_oi = metadata.loc[metadata["PERT_ID"]==pert_id, "sampleID"]
+            
+            diff_tpm_avg = diff_tpm[samples_oi].mean(axis=1)
+            diff_tpm_avg.name = pert_id
+            diff_tpms.append(diff_tpm_avg)
+            
+        diff_tpms = pd.concat(diff_tpms, axis=1)
+
+        diff_tpms.reset_index().to_csv(output.diff_tpm, **SAVE_PARAMS)
+        
+        print("Done!")
+            
+            
 rule preprocess_CardosoMoreira2020:
     input:
         metadata = os.path.join(SUPPORT_DIR,"ENA_filereport-PRJEB26969-CardosoMoreira2020.tsv"),

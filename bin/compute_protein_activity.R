@@ -155,7 +155,7 @@ run_viper_and_evaluate = function(signature, regulons, eval_labels){
         evaluation = evaluate_protein_activities(protein_activities, eval_labels)
         
         # add info
-        evaluation[["regulon_id"]] = basename(regulons_oi) %>% gsub("-delta_psi.tsv.gz","",.)
+        evaluation[["regulon_id"]] = basename(regulons_oi) %>% gsub(".tsv.gz","",.)
         
         return(evaluation)
         

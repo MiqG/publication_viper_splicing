@@ -9,13 +9,14 @@ RESULTS_DIR = os.path.join(ROOT,"results","regulon_inference")
 SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
 
 EVENT_TYPES = ["EX"]
+OMIC_TYPES = ["genexpr"] + EVENT_TYPES
 
 GENEXPR_FILES = {
     "CardosoMoreira2020": os.path.join(PREP_DIR,'genexpr_tpm','CardosoMoreira2020.tsv.gz'),
 }
 
 SPLICING_FILES = {
-    "CardosoMoreira2020": os.path.join(PREP_DIR,'event_psi_imputed','CardosoMoreira2020-{event_type}.tsv.gz'),
+    "CardosoMoreira2020": os.path.join(PREP_DIR,'event_psi_imputed','CardosoMoreira2020-{omic_type}.tsv.gz'),
 }
 
 DATASETS = list(SPLICING_FILES.keys())
@@ -37,43 +38,43 @@ BOOTSTRAPS = list(range(N_BOOTSTRAPS))
 rule all:
     input:
         # make regulons
-        expand(os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{event_type}",".done","done_threshold"), dataset=DATASETS, event_type=EVENT_TYPES),
-        expand(os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{event_type}",".done","done_bootstrap_{boot_i}"), dataset=DATASETS, event_type=EVENT_TYPES, boot_i=BOOTSTRAPS),
-        expand(os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{event_type}",".done","done_pruning"), dataset=DATASETS, event_type=EVENT_TYPES),
-        expand(os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{event_type}","pruned","network.txt"), dataset=DATASETS, event_type=EVENT_TYPES),
-        expand(os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{event_type}","pruned","regulons.tsv.gz"), dataset=DATASETS, event_type=EVENT_TYPES),
+        expand(os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{omic_type}",".done","done_threshold"), dataset=DATASETS, omic_type=OMIC_TYPES),
+        expand(os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{omic_type}",".done","done_bootstrap_{boot_i}"), dataset=DATASETS, omic_type=OMIC_TYPES, boot_i=BOOTSTRAPS),
+        expand(os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{omic_type}",".done","done_pruning"), dataset=DATASETS, omic_type=OMIC_TYPES),
+        expand(os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{omic_type}","pruned","network.txt"), dataset=DATASETS, omic_type=OMIC_TYPES),
+        expand(os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{omic_type}","pruned","regulons.tsv.gz"), dataset=DATASETS, omic_type=OMIC_TYPES),
         # make regulon set
-        expand(os.path.join(RESULTS_DIR,"files","aracne_regulons_development-{event_type}"), event_type=EVENT_TYPES)
+        expand(os.path.join(RESULTS_DIR,"files","aracne_regulons_development-{omic_type}"), omic_type=OMIC_TYPES)
         
                
 # ----- ARACNe RBP-cass network reverse engineering -----
 rule decompress_inputs:
     input:
-        genexpr = lambda wildcards: GENEXPR_FILES[wildcards.dataset],
-        splicing = lambda wildcards: SPLICING_FILES[wildcards.dataset],
+        regulators = lambda wildcards: GENEXPR_FILES[wildcards.dataset],
+        targets = lambda wildcards: SPLICING_FILES[wildcards.dataset] if wildcards.omic_type!="genexpr" else GENEXPR_FILES[wildcards.dataset],
     output:
-        genexpr = os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{event_type}","genexpr.tsv"),
-        splicing = os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{event_type}","splicing.tsv")
+        regulators = os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{omic_type}","regulators.tsv"),
+        targets = os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{omic_type}","targets.tsv")
     shell:
         """
         set -eo pipefail
         
-        zcat {input.genexpr} > {output.genexpr}
-        zcat {input.splicing} > {output.splicing}
+        zcat {input.regulators} > {output.regulators}
+        zcat {input.targets} > {output.targets}
         
         echo "Done!"
         """
 
 rule regulon_inference_aracne_java_threshold:
     input:
-        regulators = os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{event_type}","genexpr.tsv"),
-        targets = os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{event_type}","splicing.tsv"),
+        regulators = os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{omic_type}","regulators.tsv"),
+        targets = os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{omic_type}","targets.tsv"),
         regulators_oi = os.path.join(SUPPORT_DIR,"splicing_factors","splicing_factors-ensembl.txt")
     output:
-        touch(os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{event_type}",".done","done_threshold"))
+        touch(os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{omic_type}",".done","done_threshold"))
     params:
         src = "scripts/aracne/ARACNe-AP",
-        output_dir = os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{event_type}"),
+        output_dir = os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{omic_type}"),
         random_seed = PARAMS["ARACNE_MI_THRESH_SEED"],
         mi_pvalue_thresh = str(PARAMS["ARACNE_MI_THRESH_PVALUE"]).replace("e","E"),
     threads: 12
@@ -100,15 +101,15 @@ rule regulon_inference_aracne_java_threshold:
         
 rule regulon_inference_aracne_java_bootstrap:
     input:
-        os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{event_type}",".done","done_threshold"),
-        regulators = os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{event_type}","genexpr.tsv"),
-        targets = os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{event_type}","splicing.tsv"),
+        os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{omic_type}",".done","done_threshold"),
+        regulators = os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{omic_type}","regulators.tsv"),
+        targets = os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{omic_type}","targets.tsv"),
         regulators_oi = os.path.join(SUPPORT_DIR,"splicing_factors","splicing_factors-ensembl.txt")
     output:
-        touch(os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{event_type}",".done","done_bootstrap_{boot_i}"))
+        touch(os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{omic_type}",".done","done_bootstrap_{boot_i}"))
     params:
         src = "scripts/aracne/ARACNe-AP",
-        output_dir = os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{event_type}"),
+        output_dir = os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{omic_type}"),
         random_seed = "{boot_i}",
         mi_pvalue_thresh = str(PARAMS["ARACNE_MI_THRESH_PVALUE"]).replace("e","E")
     threads: 6
@@ -135,12 +136,12 @@ rule regulon_inference_aracne_java_bootstrap:
         
 rule regulon_inference_aracne_prune_bootstraps:
     input:
-        os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{event_type}",".done","done_threshold"),
-        [os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{event_type}",".done","done_bootstrap_{boot_i}").format(dataset="{dataset}", event_type="{event_type}", boot_i=boot_i) for boot_i in BOOTSTRAPS]
+        os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{omic_type}",".done","done_threshold"),
+        [os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{omic_type}",".done","done_bootstrap_{boot_i}").format(dataset="{dataset}", omic_type="{omic_type}", boot_i=boot_i) for boot_i in BOOTSTRAPS]
     output:
-        touch(os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{event_type}",".done","done_pruning"))
+        touch(os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{omic_type}",".done","done_pruning"))
     params:
-        output_dir = os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{event_type}"),
+        output_dir = os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{omic_type}"),
         max_targets = PARAMS["ARACNE_BOOTSTRAP_MAX_TARGETS"]
     threads: 1
     resources:
@@ -161,14 +162,14 @@ rule regulon_inference_aracne_prune_bootstraps:
 
 rule regulon_inference_aracne_java_consolidation:
     input:
-        os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{event_type}",".done","done_threshold"),
-        [os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{event_type}",".done","done_bootstrap_{boot_i}").format(dataset="{dataset}", event_type="{event_type}", boot_i=boot_i) for boot_i in BOOTSTRAPS],
-        os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{event_type}",".done","done_pruning")
+        os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{omic_type}",".done","done_threshold"),
+        [os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{omic_type}",".done","done_bootstrap_{boot_i}").format(dataset="{dataset}", omic_type="{omic_type}", boot_i=boot_i) for boot_i in BOOTSTRAPS],
+        os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{omic_type}",".done","done_pruning")
     output:
-        os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{event_type}","pruned","network.txt")
+        os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{omic_type}","pruned","network.txt")
     params:
         src = "scripts/aracne/ARACNe-AP",
-        output_dir = os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{event_type}","pruned"),
+        output_dir = os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{omic_type}","pruned"),
         consolidate_pvalue = PARAMS["ARACNE_CONSOLIDATE_PVALUE"]
     threads: 12
     resources:
@@ -190,11 +191,11 @@ rule regulon_inference_aracne_java_consolidation:
 
 rule prepare_regulons:
     input:
-        genexpr = lambda wildcards: GENEXPR_FILES[wildcards.dataset],
-        splicing = lambda wildcards: SPLICING_FILES[wildcards.dataset],
-        aracne_network = os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{event_type}","pruned","network.txt")
+        regulators = lambda wildcards: GENEXPR_FILES[wildcards.dataset],
+        targets = lambda wildcards: SPLICING_FILES[wildcards.dataset] if wildcards.omic_type!="genexpr" else GENEXPR_FILES[wildcards.dataset],
+        aracne_network = os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{omic_type}","pruned","network.txt")
     output:
-        regulons = os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{event_type}","pruned","regulons.tsv.gz")
+        regulons = os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{omic_type}","pruned","regulons.tsv.gz")
     threads: 1
     resources:
         runtime = 3600*1, # 1 h
@@ -204,8 +205,8 @@ rule prepare_regulons:
         set -eo pipefail
         
         Rscript scripts/aracne/estimate_mor.R \
-                    --splicing_file={input.splicing} \
-                    --genexpr_file={input.genexpr} \
+                    --genexpr_file={input.regulators} \
+                    --splicing_file={input.targets} \
                     --aracne_network_file={input.aracne_network} \
                     --output_as_edgelist=TRUE \
                     --output_file={output.regulons}
@@ -216,9 +217,9 @@ rule prepare_regulons:
         
 rule make_regulon_sets:
     input:
-        regulons = [os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{event_type}","pruned","regulons.tsv.gz").format(dataset=d, event_type="{event_type}") for d in DATASETS]
+        regulons = [os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{omic_type}","pruned","regulons.tsv.gz").format(dataset=d, omic_type="{omic_type}") for d in DATASETS]
     output:
-        regulons_dir = directory(os.path.join(RESULTS_DIR,"files","aracne_regulons_development-{event_type}"))
+        regulons_dir = directory(os.path.join(RESULTS_DIR,"files","aracne_regulons_development-{omic_type}"))
     run:
         import os
         import shutil

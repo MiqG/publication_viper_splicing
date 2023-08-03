@@ -1,4 +1,5 @@
 import os
+import pandas as pd
 
 # variables
 ROOT = os.path.dirname(os.path.dirname(os.getcwd()))
@@ -10,13 +11,29 @@ RESULTS_DIR = os.path.join(ROOT,"results","regulon_inference")
 SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
 
 EVENT_TYPES = ["EX"]
+OMIC_TYPES = ["genexpr"] + EVENT_TYPES
+
+PERT_SPLICING_FILES = {
+    "ENCOREKD_HepG2": os.path.join(PREP_DIR,'ground_truth_pert','ENCOREKD',"HepG2",'delta_psi-{omic_type}.tsv.gz'),
+    "ENCOREKD_K562": os.path.join(PREP_DIR,'ground_truth_pert','ENCOREKD',"K562",'delta_psi-{omic_type}.tsv.gz'),
+    "ENCOREKO_HepG2": os.path.join(PREP_DIR,'ground_truth_pert','ENCOREKO',"HepG2",'delta_psi-{omic_type}.tsv.gz'),
+    "ENCOREKO_K562": os.path.join(PREP_DIR,'ground_truth_pert','ENCOREKO',"K562",'delta_psi-{omic_type}.tsv.gz'),
+    "ENASFS": os.path.join(PREP_DIR,'ground_truth_pert','ENASFS','delta_psi-{omic_type}.tsv.gz')
+}
+
+PERT_GENEXPR_FILES = {
+    "ENCOREKD_HepG2": os.path.join(PREP_DIR,'ground_truth_pert','ENCOREKD',"HepG2",'log2_fold_change_tpm.tsv.gz'),
+    "ENCOREKD_K562": os.path.join(PREP_DIR,'ground_truth_pert','ENCOREKD',"K562",'log2_fold_change_tpm.tsv.gz'),
+    "ENCOREKO_HepG2": os.path.join(PREP_DIR,'ground_truth_pert','ENCOREKO',"HepG2",'log2_fold_change_tpm.tsv.gz'),
+    "ENCOREKO_K562": os.path.join(PREP_DIR,'ground_truth_pert','ENCOREKO',"K562",'log2_fold_change_tpm.tsv.gz'),
+    "ENASFS": os.path.join(PREP_DIR,'ground_truth_pert','ENASFS','log2_fold_change_tpm.tsv.gz')
+}
+
+EVAL_DATASETS = PERT_GENEXPR_FILES.keys()
 
 PERT_FILES = {
-    "ENCOREKD_HepG2": os.path.join(PREP_DIR,'ground_truth_pert','ENCOREKD',"HepG2",'delta_psi-{event_type}.tsv.gz'),
-    "ENCOREKD_K562": os.path.join(PREP_DIR,'ground_truth_pert','ENCOREKD',"K562",'delta_psi-{event_type}.tsv.gz'),
-    "ENCOREKO_HepG2": os.path.join(PREP_DIR,'ground_truth_pert','ENCOREKO',"HepG2",'delta_psi-{event_type}.tsv.gz'),
-    "ENCOREKO_K562": os.path.join(PREP_DIR,'ground_truth_pert','ENCOREKO',"K562",'delta_psi-{event_type}.tsv.gz'),
-    "ENASFS": os.path.join(PREP_DIR,'ground_truth_pert','ENASFS','delta_psi-{event_type}.tsv.gz')
+    "EX": PERT_SPLICING_FILES,
+    "genexpr": PERT_GENEXPR_FILES
 }
 
 METADATA_FILES = [
@@ -30,6 +47,7 @@ REGULON_SETS = [
     "experimentally_derived_regulons_pruned"
 ]
 
+
 ##### RULES #####
 rule all:
     input:
@@ -38,12 +56,13 @@ rule all:
         
         # evaluate regulons
         ## run
-        expand(os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{regulon_set}-{dataset}-{event_type}.tsv.gz"), dataset=PERT_FILES.keys(), event_type=EVENT_TYPES, regulon_set=REGULON_SETS),
+        expand(os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{regulon_set}-{dataset}-{omic_type}.tsv.gz"),
+               zip, dataset=EVAL_DATASETS, omic_type=OMIC_TYPES, regulon_set=REGULON_SETS),
         ## merge
-        expand(os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","merged-{event_type}.tsv.gz"), event_type=EVENT_TYPES),
+        expand(os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","merged-{omic_type}.tsv.gz"), omic_type=OMIC_TYPES),
         
         # make figures
-        expand(os.path.join(RESULTS_DIR,"figures","regulon_evaluation-{event_type}"), event_type=EVENT_TYPES)
+        expand(os.path.join(RESULTS_DIR,"figures","regulon_evaluation-{omic_type}"), omic_type=OMIC_TYPES)
         
         
 rule make_evaluation_labels:
@@ -89,11 +108,11 @@ rule make_evaluation_labels:
         
 rule evaluate_regulons:
     input:
-        signature = lambda wildcards: PERT_FILES[wildcards.dataset],
-        regulons = os.path.join(RESULTS_DIR,"files","{regulon_set}-{event_type}"),
+        signature = lambda wildcards: PERT_FILES[wildcards.omic_type][wildcards.dataset],
+        regulons = os.path.join(RESULTS_DIR,"files","{regulon_set}-{omic_type}"),
         eval_labels = os.path.join(RESULTS_DIR,"files","regulon_evaluation_labels","{dataset}.tsv.gz")
     output:
-        os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{regulon_set}-{dataset}-{event_type}.tsv.gz")
+        os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{regulon_set}-{dataset}-{omic_type}.tsv.gz")
     params:
         script_dir = BIN_DIR
     shell:
@@ -108,9 +127,9 @@ rule evaluate_regulons:
         
 rule combine_evaluations:
     input:
-        evaluations = [os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{regulon_set}-{dataset}-{event_type}.tsv.gz").format(regulon_set=r, dataset=d, event_type="{event_type}") for r in REGULON_SETS for d in PERT_FILES.keys()]
+        evaluations = [os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{regulon_set}-{dataset}-{omic_type}.tsv.gz").format(regulon_set=r, dataset=d, omic_type="{omic_type}") for r in REGULON_SETS for d in PERT_FILES.keys()]
     output:
-        os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","merged-{event_type}.tsv.gz")
+        os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","merged-{omic_type}.tsv.gz")
     run:
         import pandas as pd
     
@@ -123,9 +142,9 @@ rule combine_evaluations:
     
 rule figures_regulon_evaluation:
     input:
-        evaluation = os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","merged-{event_type}.tsv.gz")
+        evaluation = os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","merged-{omic_type}.tsv.gz")
     output:
-        directory(os.path.join(RESULTS_DIR,"figures","regulon_evaluation-{event_type}"))
+        directory(os.path.join(RESULTS_DIR,"figures","regulon_evaluation-{omic_type}"))
     shell:
         """
         Rscript scripts/figures_regulon_evaluation.R \
