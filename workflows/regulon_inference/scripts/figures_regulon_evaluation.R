@@ -34,28 +34,57 @@ PAL_EVAL_TYPE = c(
 # SUPPORT_DIR = file.path(ROOT,"support")
 # RESULTS_DIR = file.path(ROOT,"results","regulon_inference")
 # evaluation_file = file.path(RESULTS_DIR,"files","regulon_evaluation_scores","merged-EX.tsv.gz")
+# figs_dir = file.path(RESULTS_DIR,"figures","regulon_evaluation-EX")
 
 ##### FUNCTIONS #####
 plot_evaluation = function(evaluation){
     plts = list()
     
     X = evaluation %>%
-        filter(signature_id!=regulon_id)
+        group_by(eval_direction, eval_type, regulon_set_id, pert_type_lab, regulator) %>%
+        summarize(ranking_perc = median(ranking_perc, na.rm=TRUE)) %>%
+        ungroup()
     
-    plts[["evaluation-ranking_perc_vs_regulon_set-violin"]] = X %>%
-        ggplot(aes(x=regulon_set_id, y=ranking_perc, group=interaction(regulon_set_id, eval_type))) +
-        geom_violin(aes(fill=eval_type), color=NA, trim=TRUE, position=position_dodge(0.9)) +
-        geom_boxplot(fill=NA, width=0.1, outlier.size=0.1, position=position_dodge(0.9)) +
+    plts[["evaluation-ranking_perc_vs_regulon_set_vs_pert_type-violin"]] = X %>%
+        ggplot(aes(x=pert_type_lab, y=ranking_perc, 
+                   group=interaction(pert_type_lab, eval_type))) +
+        geom_boxplot(aes(fill=eval_type), width=0.5, outlier.size=0.1, 
+                     position=position_dodge(0.5)) +
         fill_palette(PAL_EVAL_TYPE) + 
-        facet_wrap(~eval_direction, ncol=1) +
         theme_pubr() +
+        facet_wrap(~eval_direction+regulon_set_id, ncol=2) +
         theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         geom_text(
             aes(y = -0.1, label=label), 
-            . %>% count(regulon_set_id, eval_direction, eval_type) %>% mutate(label=paste0("n=",n)),
+            . %>% 
+            count(pert_type_lab, regulon_set_id, eval_direction, eval_type) %>% 
+            mutate(label=paste0("n=",n)),
+            position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        labs(x="Validation Perturbation", y="Evaluation Score", fill="Inference Type")
+
+    
+    plts[["evaluation-ranking_perc_vs_regulon_set-violin"]] = X %>%
+        group_by(eval_direction, eval_type, regulon_set_id, regulator) %>%
+        summarize(ranking_perc = median(ranking_perc, na.rm=TRUE)) %>%
+        ungroup() %>%
+        ggplot(aes(x=regulon_set_id, y=ranking_perc, 
+                   group=interaction(regulon_set_id, eval_type))) +
+        geom_boxplot(aes(fill=eval_type), width=0.5, outlier.size=0.1, 
+                     position=position_dodge(0.5)) +
+        fill_palette(PAL_EVAL_TYPE) + 
+        theme_pubr() +
+        facet_wrap(~eval_direction, ncol=2) +
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        geom_text(
+            aes(y = -0.1, label=label), 
+            . %>% 
+            count(regulon_set_id, regulon_set_id, eval_direction, eval_type) %>% 
+            mutate(label=paste0("n=",n)),
             position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
         ) +
         labs(x="Regulon Set", y="Evaluation Score", fill="Inference Type")
+
     
     return(plts)
 }
@@ -96,7 +125,8 @@ save_plt = function(plts, plt_name, extension='.pdf',
 
 
 save_plots = function(plts, figs_dir){
-    save_plt(plts, "evaluation-ranking_perc_vs_regulon_set-violin", '.pdf', figs_dir, width=5, height=9)
+    save_plt(plts, "evaluation-ranking_perc_vs_regulon_set_vs_pert_type-violin", '.pdf', figs_dir, width=6.5, height=10)
+    save_plt(plts, "evaluation-ranking_perc_vs_regulon_set-violin", '.pdf', figs_dir, width=5, height=5.5)
 }
 
 
@@ -140,7 +170,19 @@ main = function(){
     
     # prep
     evaluation = evaluation %>%
-        mutate(signature_id = gsub("-","_",signature_id))
+        mutate(regulon_id = gsub("-","_",regulon_id)) %>%
+        filter(signature_id!=regulon_id) %>%
+        filter(!(str_detect(regulon_id,"ENASFS") & (signature_id=="ENASFS"))) %>%
+        # consider only signatures that we know activity 
+        # of the splicing factor was altered
+        filter(PERT_TYPE %in% c("KNOCKDOWN","KNOCKOUT","OVEREXPRESSION")) %>%
+        mutate(
+            pert_type_lab = case_when(
+                PERT_TYPE=="KNOCKDOWN" ~ "KD",
+                PERT_TYPE=="KNOCKOUT" ~ "KO",
+                PERT_TYPE=="OVEREXPRESSION" ~ "OE"
+            )
+        )
     
     # plot
     plts = make_plots(evaluation)
