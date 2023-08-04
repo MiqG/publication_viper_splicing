@@ -33,15 +33,16 @@ PAL_EVAL_TYPE = c(
 # PREP_DIR = file.path(ROOT,'data','prep')
 # SUPPORT_DIR = file.path(ROOT,"support")
 # RESULTS_DIR = file.path(ROOT,"results","regulon_inference")
-# evaluation_file = file.path(RESULTS_DIR,"files","regulon_evaluation_scores","merged-EX.tsv.gz")
-# figs_dir = file.path(RESULTS_DIR,"figures","regulon_evaluation-EX")
+# evaluation_ex_file = file.path(RESULTS_DIR,"files","regulon_evaluation_scores","merged-EX.tsv.gz")
+# evaluation_genexpr_file = file.path(RESULTS_DIR,"files","regulon_evaluation_scores","merged-genexpr.tsv.gz")
+# figs_dir = file.path(RESULTS_DIR,"figures","regulon_evaluation")
 
 ##### FUNCTIONS #####
 plot_evaluation = function(evaluation){
     plts = list()
     
     X = evaluation %>%
-        group_by(eval_direction, eval_type, regulon_set_id, pert_type_lab, regulator) %>%
+        group_by(omic_type, eval_direction, eval_type, regulon_set_id, pert_type_lab, regulator) %>%
         summarize(ranking_perc = median(ranking_perc, na.rm=TRUE)) %>%
         ungroup()
     
@@ -125,8 +126,8 @@ save_plt = function(plts, plt_name, extension='.pdf',
 
 
 save_plots = function(plts, figs_dir){
-    save_plt(plts, "evaluation-ranking_perc_vs_regulon_set_vs_pert_type-violin", '.pdf', figs_dir, width=6.5, height=10)
-    save_plt(plts, "evaluation-ranking_perc_vs_regulon_set-violin", '.pdf', figs_dir, width=5, height=5.5)
+    save_plt(plts, "evaluation-ranking_perc_vs_regulon_set_vs_pert_type-violin", '.pdf', figs_dir, width=6.5, height=16)
+    save_plt(plts, "evaluation-ranking_perc_vs_regulon_set-violin", '.pdf', figs_dir, width=8, height=7)
 }
 
 
@@ -148,7 +149,8 @@ save_figdata = function(figdata, dir){
 parseargs = function(){
     
     option_list = list( 
-        make_option("--evaluation_file", type="character"),
+        make_option("--evaluation_ex_file", type="character"),
+        make_option("--evaluation_genexpr_file", type="character"),
         make_option("--figs_dir", type="character")
     )
 
@@ -160,13 +162,18 @@ parseargs = function(){
 main = function(){
     args = parseargs()
     
-    evaluation_file = args[["evaluation_file"]]
+    evaluation_ex_file = args[["evaluation_ex_file"]]
+    evaluation_genexpr_file = args[["evaluation_genexpr_file"]]
     figs_dir = args[["figs_dir"]]
     
     dir.create(figs_dir, recursive = TRUE)
     
     # load
-    evaluation = read_tsv(evaluation_file)
+    evaluation = list(
+        read_tsv(evaluation_ex_file),
+        read_tsv(evaluation_genexpr_file)
+    ) %>%
+    bind_rows()
     
     # prep
     evaluation = evaluation %>%

@@ -29,7 +29,7 @@ PERT_GENEXPR_FILES = {
     "ENASFS": os.path.join(PREP_DIR,'ground_truth_pert','ENASFS','log2_fold_change_tpm.tsv.gz')
 }
 
-EVAL_DATASETS = PERT_GENEXPR_FILES.keys()
+EVAL_DATASETS = list(PERT_GENEXPR_FILES.keys())
 
 PERT_FILES = {
     "EX": PERT_SPLICING_FILES,
@@ -47,7 +47,6 @@ REGULON_SETS = [
     "experimentally_derived_regulons_pruned"
 ]
 
-
 ##### RULES #####
 rule all:
     input:
@@ -56,13 +55,12 @@ rule all:
         
         # evaluate regulons
         ## run
-        expand(os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{regulon_set}-{dataset}-{omic_type}.tsv.gz"),
-               zip, dataset=EVAL_DATASETS, omic_type=OMIC_TYPES, regulon_set=REGULON_SETS),
+        expand(os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{regulon_set}-{dataset}-{omic_type}.tsv.gz"), regulon_set=REGULON_SETS, dataset=EVAL_DATASETS, omic_type=OMIC_TYPES),
         ## merge
         expand(os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","merged-{omic_type}.tsv.gz"), omic_type=OMIC_TYPES),
         
         # make figures
-        expand(os.path.join(RESULTS_DIR,"figures","regulon_evaluation-{omic_type}"), omic_type=OMIC_TYPES)
+        expand(os.path.join(RESULTS_DIR,"figures","regulon_evaluation"), omic_type=OMIC_TYPES)
         
         
 rule make_evaluation_labels:
@@ -105,7 +103,7 @@ rule make_evaluation_labels:
                 
         print("Done!")
         
-        
+
 rule evaluate_regulons:
     input:
         signature = lambda wildcards: PERT_FILES[wildcards.omic_type][wildcards.dataset],
@@ -127,13 +125,16 @@ rule evaluate_regulons:
         
 rule combine_evaluations:
     input:
-        evaluations = [os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{regulon_set}-{dataset}-{omic_type}.tsv.gz").format(regulon_set=r, dataset=d, omic_type="{omic_type}") for r in REGULON_SETS for d in PERT_FILES.keys()]
+        evaluations = [os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{regulon_set}-{dataset}-{omic_type}.tsv.gz").format(regulon_set=r, dataset=d, omic_type="{omic_type}") for r in REGULON_SETS for d in EVAL_DATASETS]
     output:
         os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","merged-{omic_type}.tsv.gz")
+    params:
+        omic_type = "{omic_type}"
     run:
         import pandas as pd
     
         evaluation = pd.concat([pd.read_table(f) for f in input.evaluations])
+        evaluation["omic_type"] = params.omic_type
         
         evaluation.to_csv(output[0], **SAVE_PARAMS)
         
@@ -142,12 +143,14 @@ rule combine_evaluations:
     
 rule figures_regulon_evaluation:
     input:
-        evaluation = os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","merged-{omic_type}.tsv.gz")
+        evaluation_ex = os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","merged-EX.tsv.gz"),
+        evaluation_genexpr = os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","merged-genexpr.tsv.gz")
     output:
-        directory(os.path.join(RESULTS_DIR,"figures","regulon_evaluation-{omic_type}"))
+        directory(os.path.join(RESULTS_DIR,"figures","regulon_evaluation"))
     shell:
         """
         Rscript scripts/figures_regulon_evaluation.R \
-                    --evaluation_file={input.evaluation} \
+                    --evaluation_ex_file={input.evaluation_ex} \
+                    --evaluation_genexpr_file={input.evaluation_genexpr} \
                     --figs_dir={output}
         """
