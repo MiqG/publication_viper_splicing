@@ -31,7 +31,7 @@ rule all:
         expand(os.path.join(RESULTS_DIR,"files","protein_activity","combinatorial_perturbations-{omic_type}.tsv.gz"), omic_type=OMIC_TYPES),
         
         # figures
-        #os.path.join(RESULTS_DIR,"figures","validation_combinatorial_perturbations")
+        os.path.join(RESULTS_DIR,"figures","validation_combinatorial_perturbations")
         
         
 rule compute_signatures:
@@ -81,7 +81,7 @@ rule compute_signatures:
 rule compute_protein_activity:
     input:
         signature = os.path.join(RESULTS_DIR,"files","signatures","combinatorial_perturbations-{omic_type}.tsv.gz"),
-        regulons_path = os.path.join(REGULONS_DIR,"files","experimentally_derived_regulons_pruned-EX")
+        regulons_path = os.path.join(REGULONS_DIR,"files","experimentally_derived_regulons_pruned-{omic_type}")
     output:
         os.path.join(RESULTS_DIR,"files","protein_activity","combinatorial_perturbations-{omic_type}.tsv.gz")
     params:
@@ -95,20 +95,18 @@ rule compute_protein_activity:
        """
         
         
-# rule make_figures:
-#     input:
-#         genexpr = os.path.join(PREP_DIR,"genexpr_tpm","sf_ptms.tsv.gz"),
-#         protein_activity = os.path.join(RESULTS_DIR,"files","protein_activity","sf_ptms.tsv.gz"),
-#         metadata = os.path.join(PREP_DIR,"metadata","sf_ptms.tsv.gz"),
-#         annotation = os.path.join(RAW_DIR,"HGNC","gene_annotations.tsv.gz")
-#     output:
-#         directory(os.path.join(RESULTS_DIR,"figures","validation_combinatorial_perturbations"))
-#     shell:
-#         """
-#         Rscript scripts/figures_combinatorial_perturbations.R \
-#                     --genexpr_file={input.genexpr} \
-#                     --protein_activity_file={input.protein_activity} \
-#                     --metadata_file={input.metadata} \
-#                     --annotation_file={input.annotation} \
-#                     --figs_dir={output}
-#         """
+rule make_figures:
+    input:
+        protein_activity = os.path.join(RESULTS_DIR,"files","protein_activity","combinatorial_perturbations-EX.tsv.gz"),
+        metadata = os.path.join(PREP_DIR,"metadata","ENASFS.tsv.gz"),
+        splicing_factors = os.path.join(SUPPORT_DIR,"splicing_factors","splicing_factors.tsv")
+    output:
+        directory(os.path.join(RESULTS_DIR,"figures","validation_combinatorial_perturbations"))
+    shell:
+        """
+        Rscript scripts/figures_combinatorial_perturbations.R \
+                    --protein_activity_file={input.protein_activity} \
+                    --metadata_file={input.metadata} \
+                    --splicing_factors_file={input.splicing_factors} \
+                    --figs_dir={output}
+        """

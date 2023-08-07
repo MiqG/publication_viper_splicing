@@ -170,7 +170,7 @@ rule compute_signatures:
 rule compute_protein_activity:
     input:
         signature = os.path.join(RESULTS_DIR,"files","signatures","sf3b_complex-{omic_type}.tsv.gz"),
-        regulons_path = os.path.join(REGULONS_DIR,"files","experimentally_derived_regulons_pruned-EX")
+        regulons_path = os.path.join(REGULONS_DIR,"files","experimentally_derived_regulons_pruned-{omic_type}")
     output:
         os.path.join(RESULTS_DIR,"files","protein_activity","sf3b_complex-{omic_type}.tsv.gz")
     params:
