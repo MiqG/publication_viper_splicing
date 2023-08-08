@@ -31,7 +31,7 @@ rule all:
         expand(os.path.join(RESULTS_DIR,"files","protein_activity","ptms-{omic_type}.tsv.gz"), omic_type=OMIC_TYPES),
         
         # figures
-        #os.path.join(RESULTS_DIR,"figures","validation_ptms")
+        os.path.join(RESULTS_DIR,"figures","validation_ptms")
         
         
 rule compute_signatures:
@@ -263,20 +263,20 @@ rule compute_protein_activity:
        """
         
         
-# rule make_figures:
-#     input:
-#         genexpr = os.path.join(PREP_DIR,"genexpr_tpm","sf_ptms.tsv.gz"),
-#         protein_activity = os.path.join(RESULTS_DIR,"files","protein_activity","sf_ptms.tsv.gz"),
-#         metadata = os.path.join(PREP_DIR,"metadata","sf_ptms.tsv.gz"),
-#         annotation = os.path.join(RAW_DIR,"HGNC","gene_annotations.tsv.gz")
-#     output:
-#         directory(os.path.join(RESULTS_DIR,"figures","validation_ptms"))
-#     shell:
-#         """
-#         Rscript scripts/figures_ptms.R \
-#                     --genexpr_file={input.genexpr} \
-#                     --protein_activity_file={input.protein_activity} \
-#                     --metadata_file={input.metadata} \
-#                     --annotation_file={input.annotation} \
-#                     --figs_dir={output}
-#         """
+rule make_figures:
+    input:
+        genexpr = os.path.join(PREP_DIR,"genexpr_tpm","sf_ptms.tsv.gz"),
+        protein_activity = os.path.join(RESULTS_DIR,"files","protein_activity","sf_ptms.tsv.gz"),
+        metadata = os.path.join(PREP_DIR,"metadata","sf_ptms.tsv.gz"),
+        annotation = os.path.join(RAW_DIR,"HGNC","gene_annotations.tsv.gz")
+    output:
+        directory(os.path.join(RESULTS_DIR,"figures","validation_ptms"))
+    shell:
+        """
+        Rscript scripts/figures_ptms.R \
+                    --genexpr_file={input.genexpr} \
+                    --protein_activity_file={input.protein_activity} \
+                    --metadata_file={input.metadata} \
+                    --annotation_file={input.annotation} \
+                    --figs_dir={output}
+        """
