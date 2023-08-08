@@ -63,12 +63,12 @@ plot_activity = function(protein_activity){
             size=FONT_SIZE, family=FONT_FAMILY, segment.size=0.1, max.overlaps=50
         ) +
         theme_pubr() +
-        facet_wrap(~condition_lab, ncol=4) +
+        facet_wrap(~condition_lab+cell_line_name, ncol=4) +
         theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         labs(x="Ranking", y="Protein Activity", color="Is Perturbed")
     
     plts[["activity-double_perturbation_combined-ranking-scatter"]] = X %>%
-        group_by(GENE, is_regulator_oi, condition) %>%
+        group_by(GENE, is_regulator_oi, condition, cell_line_name) %>%
         summarize(
             activity = median(activity, na.rm=TRUE)
         ) %>%
@@ -81,7 +81,8 @@ plot_activity = function(protein_activity){
         ) %>%
         ungroup() %>%
         ggplot(aes(x=activity_ranking, y=activity)) +
-        geom_scattermore(aes(color=condition), pixels=c(1000,1000), pointsize=4, alpha=0.5) +
+        #geom_scattermore(aes(color=condition, shape=cell_line_name), pixels=c(1000,1000), pointsize=8, alpha=0.5) +
+        geom_point(aes(color=condition, shape=cell_line_name), size=1, alpha=0.5) +
         color_palette(get_palette("npg", 15)) + 
         geom_text_repel(
             aes(label=GENE),
@@ -90,7 +91,7 @@ plot_activity = function(protein_activity){
         ) +
         theme_pubr() +
         theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
-        labs(x="Ranking", y="median(Protein Activity)", color="Perturbation")
+        labs(x="Ranking", y="median(Protein Activity)", color="Perturbation", shape="Cell Line")
     
     return(plts)
 }
@@ -191,7 +192,7 @@ main = function(){
         ) %>%
         
         # summarize replicates, if available (only 'KO_SCAF4_AND_SCAF8')
-        group_by(condition_lab, condition, PERT_ENSEMBL, PERT_GENE, regulator) %>%
+        group_by(cell_line_name, condition_lab, condition, PERT_ENSEMBL, PERT_GENE, regulator) %>%
         summarize(activity = median(activity, na.rm=TRUE)) %>%
         ungroup() %>%
         
