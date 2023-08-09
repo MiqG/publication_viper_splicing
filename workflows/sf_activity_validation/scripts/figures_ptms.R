@@ -260,8 +260,9 @@ plot_activity_phosphorylation = function(protein_activity){
                 size=FONT_SIZE, family=FONT_FAMILY, segment.size=0.1, max.overlaps=50, min.segment.length=0#,
                 #direction = "y", vjust = .5, hjust = -2
             ) +
-            facet_grid(~study_accession+cell_line_name+condition, scales="free_x", space="free_x") +
             theme_pubr() +
+            facet_grid(~study_accession+cell_line_name+condition, scales="free_x", space="free_x") +
+            theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
             labs(x=x_lab, y="Protein Activity", color="SR Protein")
     }
     
@@ -281,8 +282,9 @@ plot_activity_phosphorylation = function(protein_activity){
             ggplot(aes_string(x=x_var, y="GENE")) +
             geom_tile(aes(fill=activity)) +
             scale_fill_gradient2(low="blue", mid="white", high="red") +
-            facet_grid(~study_accession+cell_line_name+condition, scales="free_x", space="free_x") +
             theme_pubr() +
+            facet_grid(~study_accession+cell_line_name+condition, scales="free_x", space="free_x") +
+            theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
             labs(x=x_lab, y="SR protein", fill="Protein Activity")
     }
     
@@ -381,7 +383,7 @@ plot_activity_phosphorylation = function(protein_activity){
     #             #direction = "y", vjust = .5, hjust = -2
     #         ) +
     #         facet_grid(~study_accession+cell_line_name, scales="free_x", space="free_x") +
-    #         theme_pubr(x.text.angle=10) +
+    #         theme_pubr(x.text.angle=70) +
     #         labs(x=x_lab, y="Protein Activity", color="SR Protein")
     
     return(plts)
@@ -436,8 +438,9 @@ plot_activity_methylation = function(protein_activity){
             position = position_nudge(x = (labels_top %>% pull(nudging))),
             size=FONT_SIZE+1, family=FONT_FAMILY, segment.size=0.1, max.overlaps=50, min.segment.length=0
         ) +
+        theme_pubr(x.text.angle=70) +
         facet_grid(~condition+study_accession, scales="free_x", space="free_x") +
-        theme_pubr(x.text.angle=45) +
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         labs(x="Cell Line", y="Protein Activity")
     
     return(plts)

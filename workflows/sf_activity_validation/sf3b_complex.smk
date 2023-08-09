@@ -57,6 +57,7 @@ rule compute_signatures:
         # select perturbations
         perts_oi = ["E7107","MUT_PHF5A_Y36C","MUT_PHF5A_Y36C_AND_E7107","MUT_SUGP1_P636L","MUT_SF3B1_K700E"]
         metadata_enasfs = metadata_enasfs.loc[metadata_enasfs["condition"].isin(perts_oi)]
+        metadata_enasfs = metadata_enasfs.loc[metadata_enasfs["study_accession"]!="PRJNA380104"]
         
         # delta PSI as the difference between conditions and the mean of the conditions
         signatures_enasfs = {}
@@ -184,20 +185,20 @@ rule compute_protein_activity:
        """
         
         
-# rule make_figures:
-#     input:
-#         genexpr = os.path.join(PREP_DIR,"genexpr_tpm","sf_sf3b_complex.tsv.gz"),
-#         protein_activity = os.path.join(RESULTS_DIR,"files","protein_activity","sf_sf3b_complex.tsv.gz"),
-#         metadata = os.path.join(PREP_DIR,"metadata","sf_sf3b_complex.tsv.gz"),
-#         annotation = os.path.join(RAW_DIR,"HGNC","gene_annotations.tsv.gz")
-#     output:
-#         directory(os.path.join(RESULTS_DIR,"figures","validation_sf3b_complex"))
-#     shell:
-#         """
-#         Rscript scripts/figures_sf3b_complex.R \
-#                     --genexpr_file={input.genexpr} \
-#                     --protein_activity_file={input.protein_activity} \
-#                     --metadata_file={input.metadata} \
-#                     --annotation_file={input.annotation} \
-#                     --figs_dir={output}
-#         """
+rule make_figures:
+    input:
+        genexpr = os.path.join(PREP_DIR,"genexpr_tpm","sf_sf3b_complex.tsv.gz"),
+        protein_activity = os.path.join(RESULTS_DIR,"files","protein_activity","sf_sf3b_complex.tsv.gz"),
+        metadata = os.path.join(PREP_DIR,"metadata","sf_sf3b_complex.tsv.gz"),
+        annotation = os.path.join(RAW_DIR,"HGNC","gene_annotations.tsv.gz")
+    output:
+        directory(os.path.join(RESULTS_DIR,"figures","validation_sf3b_complex"))
+    shell:
+        """
+        Rscript scripts/figures_sf3b_complex.R \
+                    --genexpr_file={input.genexpr} \
+                    --protein_activity_file={input.protein_activity} \
+                    --metadata_file={input.metadata} \
+                    --annotation_file={input.annotation} \
+                    --figs_dir={output}
+        """

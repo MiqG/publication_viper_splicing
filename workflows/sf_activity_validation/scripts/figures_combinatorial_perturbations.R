@@ -48,7 +48,7 @@ plot_activity = function(protein_activity){
     plts = list()
     
     X = protein_activity %>%
-        filter(total_avail_sfs==2) %>%
+        filter(total_avail_sfs>1) %>%
         rowwise() %>%
         mutate(is_regulator_oi = regulator %in% unlist(strsplit(PERT_ENSEMBL, ","))) %>%
         ungroup()
@@ -204,7 +204,7 @@ main = function(){
             total_avail_sfs = sum(regulator %in% unlist(strsplit(PERT_ENSEMBL, ",")))
         ) %>%
         ungroup() %>%
-        left_join(splicing_factors, by=c("regulator"="ENSEMBL"), relationship="many-to-many")
+        left_join(splicing_factors, by=c("regulator"="ENSEMBL"))
     
     # plot
     plts = make_plots(protein_activity)

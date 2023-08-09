@@ -60,8 +60,7 @@ rule compute_signatures:
         
         # select perturbations
         idx = (
-            metadata_enasfs["condition"].isin(["T3","KH-CB19"]) | 
-            metadata_enasfs["condition"].str.contains("CLK")
+            metadata_enasfs["condition"].isin(["T3","KH-CB19"])
         )
         metadata_enasfs = metadata_enasfs.loc[idx]
         

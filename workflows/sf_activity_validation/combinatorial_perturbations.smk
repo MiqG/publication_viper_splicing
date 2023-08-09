@@ -48,7 +48,7 @@ rule compute_signatures:
         splicing = pd.read_table(input.splicing, index_col=0)
         
         # select combinatorial perturbations
-        perts_oi = ["KNOCKDOWN_DOUBLE","KNOCKOUT_DOUBLE"]
+        perts_oi = ["KNOCKDOWN_DOUBLE","KNOCKOUT_DOUBLE","KNOCKDOWN_TRIPLE","KNOCKDOWN_QUADRUPLE"]
         metadata = metadata.loc[metadata["PERT_TYPE"].isin(perts_oi)]
         
         # delta PSI as the difference between conditions and the mean of the conditions
