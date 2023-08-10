@@ -149,8 +149,7 @@ plot_activity_acetylation = function(protein_activity){
         arrange(activity) %>%
         mutate(
             activity_ranking = row_number(),
-            GENE = sprintf("%s (%s)", GENE, activity_ranking),
-            GENE = ifelse(is_regulator_oi, sprintf("*%s", GENE), GENE)
+            GENE = sprintf("%s (%s)", GENE, activity_ranking)
         ) %>%
         ungroup() %>%
         ggplot(aes(x=activity_ranking, y=activity)) +
@@ -193,7 +192,11 @@ plot_activity_phosphorylation = function(protein_activity){
     X = protein_activity %>%
         filter(condition %in% PTM_PHOSPHORYLATION) %>%
         rowwise() %>%
-        mutate(is_regulator_oi = GENE %in% SR_PROTEINS) %>%
+        mutate(
+            is_regulator_oi = GENE%in%SR_PROTEINS,
+            is_clk = str_detect(GENE,"CLK"),
+            is_regulator_oi_or_clk = is_regulator_oi | is_clk
+        ) %>%
         ungroup()
     
     # CLKs are known to modulate the activity of SR rich proteins
@@ -206,8 +209,7 @@ plot_activity_phosphorylation = function(protein_activity){
             filter(condition==condition_oi) %>%
             mutate(
                 pert_time = factor(pert_time),
-                pert_concentration = factor(pert_concentration, levels=sort(unique(pert_concentration))),
-                GENE = ifelse(is_regulator_oi, sprintf("*%s", GENE), GENE)
+                pert_concentration = factor(pert_concentration, levels=sort(unique(pert_concentration)))
             ) %>%
             group_by(study_accession, cell_line_name, condition) %>%
             mutate(nudging = 0.25*(activity_ranking - mean(activity_ranking))/sd(activity_ranking)) %>%
@@ -221,11 +223,13 @@ plot_activity_phosphorylation = function(protein_activity){
             filter(is_regulator_oi)
         
         labels_top = x %>% 
+            filter(!is_regulator_oi_or_clk) %>%
             group_by(study_accession, cell_line_name, condition, get(x_var)) %>% 
             slice_max(order_by=activity, n=5) %>%
             ungroup() %>%
             bind_rows(
                 x %>% 
+                filter(!is_regulator_oi_or_clk) %>%
                 group_by(study_accession, cell_line_name, condition, get(x_var)) %>% 
                 slice_min(order_by=activity, n=5) %>%
                 ungroup()
@@ -242,9 +246,9 @@ plot_activity_phosphorylation = function(protein_activity){
             ) +
             geom_point(
                 aes(color=GENE), 
-                . %>% filter(is_regulator_oi) %>% mutate(),
+                . %>% filter(is_regulator_oi_or_clk) %>% mutate(),
                 size=1, 
-                position = position_nudge(x = x %>% filter(is_regulator_oi) %>% pull(nudging))
+                position = position_nudge(x = x %>% filter(is_regulator_oi_or_clk) %>% pull(nudging))
             ) +
             geom_text_repel(
                 aes(label=GENE, color=GENE),
@@ -254,11 +258,17 @@ plot_activity_phosphorylation = function(protein_activity){
                 direction = "y", vjust = .5, hjust = -2
             ) +
             geom_text_repel(
+                aes(label=GENE, color=GENE),
+                x %>% filter(is_clk),
+                position = position_nudge(x = (x %>% filter(is_clk) %>% pull(nudging))),
+                size=FONT_SIZE, family=FONT_FAMILY, segment.size=0.1, max.overlaps=50, min.segment.length=0,
+                direction = "y", vjust = .5, hjust = -2
+            ) +
+            geom_text_repel(
                 aes(label=GENE),
                 labels_top,
                 position = position_nudge(x = (labels_top %>% pull(nudging))),
                 size=FONT_SIZE, family=FONT_FAMILY, segment.size=0.1, max.overlaps=50, min.segment.length=0#,
-                #direction = "y", vjust = .5, hjust = -2
             ) +
             theme_pubr() +
             facet_grid(~study_accession+cell_line_name+condition, scales="free_x", space="free_x") +
@@ -407,10 +417,8 @@ plot_activity_methylation = function(protein_activity){
         mutate(is_regulator_oi = FALSE) %>%
         ungroup()
     
-    # validate with CLK knockdowns
     x = X %>%
         mutate(
-            GENE = ifelse(is_regulator_oi, sprintf("*%s", GENE), GENE),
             condition = factor(condition, levels=PTM_METHYLATION)
         ) %>%
         group_by(study_accession, cell_line_name, condition) %>%
@@ -484,20 +492,20 @@ save_plt = function(plts, plt_name, extension='.pdf',
 
 
 save_plots = function(plts, figs_dir){
-    save_plt(plts, "activity_acetylation-double_perturbation_rep-ranking-scatter", '.pdf', figs_dir, width=10, height=12)
-    save_plt(plts, "activity_acetylation-double_perturbation_combined-ranking-scatter", '.pdf', figs_dir, width=6, height=8)
+    save_plt(plts, "activity_acetylation-double_perturbation_rep-ranking-scatter", '.pdf', figs_dir, width=5, height=6)
+    save_plt(plts, "activity_acetylation-double_perturbation_combined-ranking-scatter", '.pdf', figs_dir, width=5, height=6)
 
-    save_plt(plts, "activity_phosphorylation-sr_proteins-T025-scatter_line", '.pdf', figs_dir, width=6, height=8)
-    save_plt(plts, "activity_phosphorylation-sr_proteins-T3-scatter_line", '.pdf', figs_dir, width=6, height=8)
-    save_plt(plts, "activity_phosphorylation-sr_proteins-PALBOCICLIB-scatter_line", '.pdf', figs_dir, width=6, height=8)
-    save_plt(plts, "activity_phosphorylation-sr_proteins-KH-CB19-scatter_line", '.pdf', figs_dir, width=6, height=8)
+    save_plt(plts, "activity_phosphorylation-sr_proteins-T025-scatter_line", '.pdf', figs_dir, width=20, height=20)
+    save_plt(plts, "activity_phosphorylation-sr_proteins-T3-scatter_line", '.pdf', figs_dir, width=20, height=20)
+    save_plt(plts, "activity_phosphorylation-sr_proteins-PALBOCICLIB-scatter_line", '.pdf', figs_dir, width=20, height=20)
+    save_plt(plts, "activity_phosphorylation-sr_proteins-KH-CB19-scatter_line", '.pdf', figs_dir, width=20, height=20)
     
-    save_plt(plts, "activity_phosphorylation-sr_proteins-T025-heatmap", '.pdf', figs_dir, width=6, height=8)
-    save_plt(plts, "activity_phosphorylation-sr_proteins-T3-heatmap", '.pdf', figs_dir, width=6, height=8)
-    save_plt(plts, "activity_phosphorylation-sr_proteins-PALBOCICLIB-heatmap", '.pdf', figs_dir, width=6, height=8)
-    save_plt(plts, "activity_phosphorylation-sr_proteins-KH-CB19-heatmap", '.pdf', figs_dir, width=6, height=8)
+    save_plt(plts, "activity_phosphorylation-sr_proteins-T025-heatmap", '.pdf', figs_dir, width=7, height=8)
+    save_plt(plts, "activity_phosphorylation-sr_proteins-T3-heatmap", '.pdf', figs_dir, width=7, height=8)
+    save_plt(plts, "activity_phosphorylation-sr_proteins-PALBOCICLIB-heatmap", '.pdf', figs_dir, width=7, height=8)
+    save_plt(plts, "activity_phosphorylation-sr_proteins-KH-CB19-heatmap", '.pdf', figs_dir, width=7, height=8)
     
-    save_plt(plts, "activity_methylation-prmt_inhibitors-scatter_line", '.pdf', figs_dir, width=6, height=8)
+    save_plt(plts, "activity_methylation-prmt_inhibitors-scatter_line", '.pdf', figs_dir, width=20, height=20)
 }
 
 save_figdata = function(figdata, dir){
@@ -545,25 +553,6 @@ main = function(){
     metadata = read_tsv(metadata_file)
     splicing_factors = read_tsv(splicing_factors_file)
     gc()
-    
-    # get protein sequences for each splicing factor
-    #     gene_ids = splicing_factors %>% pull(ENSEMBL)
-    #     sf_proteins = lapply(gene_ids, function(gene_id){
-    #         proteins(edb, filter=GeneIdFilter(gene_id)) %>% as.data.frame()
-    #     }) %>% bind_rows()
-    #     sf_proteins = sf_proteins %>%
-    #         mutate(
-    #             sr_n = str_count(protein_sequence, "S|R"),
-    #             sr_length = str_length(protein_sequence),
-    #             sr_perc = sr_n / sr_length
-    #         ) 
-    #     sr_content = sf_proteins %>%
-    #         group_by(gene_id) %>%
-    #         summarize(sr_perc = median(sr_perc)) %>%
-    #         ungroup()
-
-    #     splicing_factors = splicing_factors %>%
-    #         left_join(sr_content, by=c("ENSEMBL"="gene_id"))
     
     # prep
     metadata = metadata %>% 
