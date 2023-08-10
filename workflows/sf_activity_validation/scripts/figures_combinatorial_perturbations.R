@@ -19,6 +19,21 @@ require(ggrepel)
 # variables
 RANDOM_SEED = 1234
 
+PERTURBATIONS = c(
+    "KD_ESRP1_AND_KHDRBS3",
+    "KD_EXOSC3_AND_SRRT",
+    "KD_ZCCHC8_AND_CBP80",
+    "KD_ZCCHC8_AND_SRRT",
+    "KO_SCAF4_AND_SCAF8",
+    "KD_CLK3_AND_CLK4",
+    "KD_CLK1_AND_CLK2_AND_CLK3",
+    "KD_CLK1_AND_CLK2_AND_CLK4",
+    "KD_CLK1_AND_CLK2_AND_CLK3_AND_CLK4"
+)
+
+STUDIES = c("PRJNA223244","PRJNA498529","PRJNA587741","PRJNA321560")
+
+
 # formatting
 LINE_SIZE = 0.25
 
@@ -67,8 +82,8 @@ plot_activity = function(protein_activity){
         theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         labs(x="Ranking", y="Protein Activity", color="Is Perturbed")
     
-    plts[["activity-double_perturbation_combined-ranking-scatter"]] = X %>%
-        group_by(GENE, is_regulator_oi, condition, cell_line_name) %>%
+    x = X %>%
+        group_by(GENE, is_regulator_oi, condition, cell_line_name, study_accession) %>%
         summarize(
             activity = median(activity, na.rm=TRUE)
         ) %>%
@@ -76,22 +91,47 @@ plot_activity = function(protein_activity){
         group_by(condition) %>%
         arrange(activity) %>%
         mutate(
-            activity_ranking = row_number(),
-            GENE = sprintf("%s (%s)", GENE, activity_ranking)
+            activity_ranking = row_number()
         ) %>%
         ungroup() %>%
-        ggplot(aes(x=activity_ranking, y=activity)) +
-        #geom_scattermore(aes(color=condition, shape=cell_line_name), pixels=c(1000,1000), pointsize=8, alpha=0.5) +
-        geom_point(aes(color=condition, shape=cell_line_name), size=1, alpha=0.5) +
-        color_palette(get_palette("npg", 15)) + 
+        mutate(
+            condition = factor(condition, levels=PERTURBATIONS),
+            study_accession = factor(study_accession, levels=STUDIES)
+        ) %>%
+        group_by(study_accession, cell_line_name, condition) %>%
+        mutate(nudging = 0.25*(activity_ranking - mean(activity_ranking))/sd(activity_ranking)) %>%
+        ungroup() %>%
+        arrange(condition)
+    
+    labels_top = x %>% 
+        filter(!is_regulator_oi) %>%
+        group_by(study_accession, cell_line_name, condition) %>% 
+        slice_min(order_by=activity, n=3) %>%
+        ungroup()
+    
+    plts[["activity-double_perturbation_combined-ranking-scatter"]] = x %>%
+        ggplot(aes(x=condition, y=activity)) +
+        geom_point(color="lightgray", size=1, position=position_nudge(x= x %>% pull(nudging))) +
+        geom_point(data = . %>% filter(is_regulator_oi), color="darkred", 
+                   size=1, position=position_nudge(x= x %>% filter(is_regulator_oi) %>% pull(nudging))) +
         geom_text_repel(
-            aes(label=GENE),
+            aes(label=GENE), 
             . %>% filter(is_regulator_oi),
+            color="darkred",
+            position = position_nudge(x = (x %>% filter(is_regulator_oi) %>% pull(nudging))),
             size=FONT_SIZE, family=FONT_FAMILY, segment.size=0.1, max.overlaps=50, min.segment.length=0
         ) +
-        theme_pubr() +
-        theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
-        labs(x="Ranking", y="median(Protein Activity)", color="Perturbation", shape="Cell Line")
+        geom_text_repel(
+            aes(label=GENE),
+            labels_top,
+            position = position_nudge(x = (labels_top %>% pull(nudging))),
+            size=FONT_SIZE, family=FONT_FAMILY, segment.size=0.1, max.overlaps=50, min.segment.length=0
+        ) +
+        theme_pubr(x.text.angle=70) +
+        facet_grid(~study_accession+cell_line_name, scales="free_x", space="free_x") +
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        guides(color="none") +
+        labs(x="Perturbation", y="Protein Activity")
     
     return(plts)
 }
@@ -133,7 +173,7 @@ save_plt = function(plts, plt_name, extension='.pdf',
 
 save_plots = function(plts, figs_dir){
     save_plt(plts, "activity-double_perturbation_rep-ranking-scatter", '.pdf', figs_dir, width=10, height=12)
-    save_plt(plts, "activity-double_perturbation_combined-ranking-scatter", '.pdf', figs_dir, width=6, height=8)
+    save_plt(plts, "activity-double_perturbation_combined-ranking-scatter", '.pdf', figs_dir, width=15, height=10)
 }
 
 save_figdata = function(figdata, dir){
@@ -192,7 +232,7 @@ main = function(){
         ) %>%
         
         # summarize replicates, if available (only 'KO_SCAF4_AND_SCAF8')
-        group_by(cell_line_name, condition_lab, condition, PERT_ENSEMBL, PERT_GENE, regulator) %>%
+        group_by(cell_line_name, condition_lab, condition, PERT_ENSEMBL, PERT_GENE, regulator, study_accession) %>%
         summarize(activity = median(activity, na.rm=TRUE)) %>%
         ungroup() %>%
         
