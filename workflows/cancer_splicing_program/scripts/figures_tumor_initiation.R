@@ -52,12 +52,12 @@ plot_brain_organoids = function(protein_activity_organoids){
         filter(driver_type!="Non-driver")
     
     plts[["brain_organoids-condition_vs_activity-"]] = X %>%
-        filter(condition!="MUT_COMBINATION_1") %>%
-        ggplot(aes(x=condition, y=activity, group=interaction(condition, pert_time))) +
-        geom_boxplot(aes(fill=pert_time), position=position_dodge(0.9), outlier.shape=NA) +
+        ggplot(aes(x=condition, y=activity)) +
+        geom_boxplot(aes(fill=driver_type), position=position_dodge(0.9), outlier.shape=NA) +
         geom_jitter(position=position_dodge(0.9)) + 
-        facet_wrap(~driver_type, ncol=2) +
-        stat_compare_means(method="t.test", label="p.signif") +
+        facet_wrap(~driver_type+pert_time, ncol=4) +
+        stat_compare_means(ref.group="CONTROL", method="t.test", label="p.signif") +
+        fill_palette(PAL_DRIVER_TYPE) +
         theme_pubr(x.text.angle = 70)
     
     return(plts)
@@ -97,15 +97,14 @@ plot_driver_mutations = function(protein_activity_mutations){
                     names_from = "driver_type", values_from = "activity")
         
     x %>%
-        filter(cell_line_name=="A549_LUNG") %>%
         ggscatter(x="Tumor suppressor", y="Oncogenic", color="cell_line_name") +
         geom_hline(yintercept=0, linetype="dashed", size=LINE_SIZE) +
         geom_vline(xintercept=0, linetype="dashed", size=LINE_SIZE) +
         geom_text_repel(
             aes(label=condition),
-            . %>% filter(abs(`Tumor suppressor`)>0.15 & abs(`Oncogenic`)>0.15)
+            . %>% filter(abs(`Tumor suppressor`)>0.15 | abs(`Oncogenic`)>0.15),
+            size=FONT_SIZE, family=FONT_FAMILY, segment.size=0.1, max.overlaps=50
         ) +
-        facet_wrap(~study_accession+cell_line_name) +
         labs(x="median(Tumor suppressor Activity)", y="median(Oncogenic Activity)", color="Cell Line")
     
     return(plts)

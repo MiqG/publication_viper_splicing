@@ -38,7 +38,7 @@ rule all:
         # figures
         #os.path.join(RESULTS_DIR,"figures","tumor_initiation-{omic_type}")
         
-        
+
 rule compute_signature_within:
     input:
         splicing = os.path.join(PREP_DIR,"event_psi","Bian2018-{omic_type}.tsv.gz"),
