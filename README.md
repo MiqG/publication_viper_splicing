@@ -27,6 +27,27 @@
 3. [ ] tissue specific vs pan-cancer regulatory networks
 
 ## Structure
+1. obtain data
+2. preprocess data
+3. regulon inference
+    - experimentally derived regulons
+    - aracne regulons
+    - regulon evaluation
+    - regulon eda
+4. validation of splicing factor activity estimation
+    - combinatorial perturbations
+    - SF3b complex
+    - PTMs
+5. cancer-driver splicing program
+    - definition from TCGA
+    - hallmarks
+        - proliferation
+        - immune evasion
+        - metastasis
+    - tumor initiation
+        - brain organoids
+        - cancer-driver mutations
+   
 
 ## Requirements
 

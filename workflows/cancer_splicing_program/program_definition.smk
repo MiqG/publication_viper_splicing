@@ -19,7 +19,6 @@ PREP_DIR = os.path.join(ROOT,"data","prep")
 SUPPORT_DIR = os.path.join(ROOT,"support")
 BIN_DIR = os.path.join(ROOT,"bin")
 RESULTS_DIR = os.path.join(ROOT,"results","sf_activity_tcga")
-ACTVAL_DIR = os.path.join(ROOT,"results","validation_activity")
 REGULONS_DIR = os.path.join(ROOT,"results","regulon_inference")
 PACT_CCLE_DIR = os.path.join(ROOT,"results","sf_activity_ccle")
 SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}

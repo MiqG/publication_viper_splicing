@@ -966,7 +966,7 @@ main = function(){
         filter(ID == "ENSG00000148773") %>%
         pivot_longer(-ID, names_to="sampleID", values_to="MKI67")
     
-    protein_activity_stn = driver_activity %>%
+    driver_types = driver_activity %>%
         count(GENE, ENSEMBL, driver_type) %>%
         group_by(GENE, ENSEMBL) %>%
         mutate(
@@ -977,7 +977,9 @@ main = function(){
         filter(abs(n_sum)>THRESH_N_SUM) %>%
         group_by(GENE, ENSEMBL) %>%
         slice_max(n, n=1) %>%
-        ungroup() %>%
+        ungroup()
+    
+    protein_activity_stn = driver_types %>%
         left_join(
             protein_activity_stn %>%
             pivot_longer(-regulator, names_to="sampleID", values_to="activity"),
@@ -1071,6 +1073,7 @@ main = function(){
     )
 
     # save
+    write_tsv(driver_types, "driver_types.tsv")
     save_plots(plts, figs_dir)
     save_figdata(figdata, figs_dir)
 }
