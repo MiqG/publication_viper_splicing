@@ -9,8 +9,6 @@
 #     - no cell growth effect in vitro, but strong suppression of tumor growth in vivo
 
 require(optparse)
-require(ensembldb)
-require(EnsDb.Hsapiens.v86)
 require(tidyverse)
 require(ggpubr)
 require(scales)
@@ -20,7 +18,6 @@ require(extrafont)
 require(ggrepel)
 
 # variables
-edb = EnsDb.Hsapiens.v86
 
 RANDOM_SEED = 1234
 
@@ -101,6 +98,7 @@ PAL_CELL_LINES = "Dark2"
 # protein_activity_file = file.path(RESULTS_DIR,"files","protein_activity","ptms-EX.tsv.gz")
 # metadata_file = file.path(RESULTS_DIR,"files","metadata","ptms-EX.tsv.gz")
 # splicing_factors_file = file.path(SUPPORT_DIR,"splicing_factors","splicing_factors.tsv")
+# phosphoproteomics_file = file.path(PREP_DIR,"phosphoproteomics","Hafner2019-log2_fold_changes.tsv.gz")
 # figs_dir = file.path(RESULTS_DIR,"figures","validation_ptms")
 
 ##### FUNCTIONS #####
@@ -173,7 +171,7 @@ plot_activity_acetylation = function(protein_activity){
 }
 
 
-plot_activity_phosphorylation = function(protein_activity){
+plot_activity_phosphorylation = function(protein_activity, phosphoproteomics){
     # SR proteins are heavily phosphorylated
     #     - SRSF1 by SRPK1
     #     - CLKs and SRSFs
@@ -297,6 +295,32 @@ plot_activity_phosphorylation = function(protein_activity){
             theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
             labs(x=x_lab, y="SR protein", fill="Protein Activity")
     }
+    
+    # phosphorylation of SR-proteins (TODO)
+    X = phosphoproteomics %>%
+        mutate(is_sr_protein = GENE %in% SR_PROTEINS) 
+    sr_order = X %>%
+        filter(is_sr_protein) %>%
+        group_by(GENE) %>%
+        slice_max(abs(log2_fc), n=1) %>%
+        arrange(log2_fc) %>%
+        ungroup() %>%
+        pull(GENE)
+    
+    plts[["activity_phosphorylation-sr_proteins-"]] = X %>%
+        filter(is_sr_protein) %>%
+        mutate(GENE = factor(GENE, levels=sr_order)) %>%
+        ggstripchart(x="GENE", y="log2_fc") +
+        facet_wrap(~condition) +
+        theme_pubr(x.text.angle = 70)
+    
+    x = X %>%
+        group_by(condition) %>%
+        arrange(log2_fc) %>%
+        mutate(ranking=row_number()) %>%
+        ungroup()
+    x %>% ggscatter(x="ranking", y="log2_fc", color="is_sr_protein") + 
+        geom_point(data=.%>%filter(is_sr_protein)) + facet_wrap(~condition)
     
     ## compare changes in activity in SR proteins vs a random set of genes
     #     avail_sr_proteins = X %>% filter(is_regulator_oi) %>% pull(GENE) %>% unique()
@@ -552,6 +576,7 @@ main = function(){
     protein_activity = read_tsv(protein_activity_file)
     metadata = read_tsv(metadata_file)
     splicing_factors = read_tsv(splicing_factors_file)
+    phosphoproteomics = read_tsv(phosphoproteomics_file)
     gc()
     
     # prep
@@ -592,6 +617,11 @@ main = function(){
         ) %>%
         ungroup() %>%
         left_join(splicing_factors, by=c("regulator"="ENSEMBL"))
+    
+    phosphoproteomics = phosphoproteomics %>%
+        separate(GENE_PHOSPHOSITE, into=c("GENE","PHOSPHOSITE"), remove=FALSE) %>%
+        pivot_longer(-c(GENE,PHOSPHOSITE,GENE_PHOSPHOSITE), names_to="condition", values_to="log2_fc") %>%
+        left_join(splicing_factors, by="GENE")
     
     # plot
     plts = make_plots(protein_activity)
