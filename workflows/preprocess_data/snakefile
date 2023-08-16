@@ -206,7 +206,10 @@ rule all:
         os.path.join(PREP_DIR,"genexpr_tpm","Bian2018.tsv.gz"),
         
         # preprocess MetMap
-        os.path.join(PREP_DIR,"metmap","CCLE.tsv.gz"),    
+        os.path.join(PREP_DIR,"metmap","CCLE.tsv.gz"),
+        
+        # preprocess CCLE doubling times
+        os.path.join(PREP_DIR,"doubling_times","CCLE.tsv.gz"),
         
         # discretize data
         #expand(os.path.join(PREP_DIR,"event_psi_imputed_discretized_{method}","{dataset}-EX.tsv.gz"), dataset=DATASETS, method=["qep"]), # "gaussian",
@@ -2103,6 +2106,49 @@ rule discretize_matrix_qep_genexpr:
                     --matrix_file={input.matrix} \
                     --output_file={output.matrix}
         """
+
+        
+rule prep_ccle_doubling_times:
+    input:
+        ghandi = os.path.join(SUPPORT_DIR,"supplementary_tables_literature","Ghandi2019-suptab1-41586_2019_1186_MOESM4_ESM.xlsx"),
+        tsherniak = os.path.join(SUPPORT_DIR,"supplementary_tables_literature","Tsherniak2017-suptab1-mmc1.xlsx"),
+        metadata = os.path.join(PREP_DIR,"metadata","CCLE.tsv.gz")
+    output:
+        doublings = os.path.join(PREP_DIR,"doubling_times","CCLE.tsv.gz")
+    run:
+        import pandas as pd
+        import numpy as np
+        
+        # load
+        tsherniak = pd.read_excel(input.tsherniak, sheet_name=0)
+        ghandi = pd.read_excel(input.ghandi, sheet_name=1)
+        metadata = pd.read_table(input.metadata)
+        
+        # prep
+        ghandi = ghandi[["CCLE_ID","Doubling.Time.Calculated.hrs"]].dropna().copy()
+        ghandi["CCLE_Name"] = ghandi["CCLE_ID"]
+        ghandi["doubling_time_ghandi"] = ghandi["Doubling.Time.Calculated.hrs"]
+        
+        tsherniak = tsherniak[["Name","Doubling time (hrs)"]].dropna().copy()
+        tsherniak["CCLE_Name"] = tsherniak["Name"]
+        tsherniak["doubling_time_tsherniak"] = tsherniak["Doubling time (hrs)"]
+        tsherniak.loc[tsherniak["doubling_time_tsherniak"].isin([">120hrs","> 100"]),"doubling_time_tsherniak"] = np.nan
+        tsherniak["doubling_time_tsherniak"] = tsherniak["doubling_time_tsherniak"].astype(float)
+        
+        doublings = pd.merge(ghandi[["CCLE_Name","doubling_time_ghandi"]], tsherniak[["CCLE_Name","doubling_time_tsherniak"]],
+                             on="CCLE_Name", how="outer")
+        doublings["doubling_time"] = doublings[["doubling_time_tsherniak","doubling_time_ghandi"]].min(axis=1)
+        
+        # subset cell lines
+        avail_cells_names = metadata["CCLE_Name"]
+        doublings = doublings.loc[
+            doublings["CCLE_Name"].isin(avail_cells_names) & ~doublings["doubling_time"].isnull()
+        ].copy()
+        
+        # save
+        doublings.to_csv(output.doublings, **SAVE_PARAMS)
+        
+        print("Done!")        
 
         
 rule figures_eda:

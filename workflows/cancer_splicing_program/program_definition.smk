@@ -18,7 +18,7 @@ RAW_DIR = os.path.join(ROOT,"data","raw")
 PREP_DIR = os.path.join(ROOT,"data","prep")
 SUPPORT_DIR = os.path.join(ROOT,"support")
 BIN_DIR = os.path.join(ROOT,"bin")
-RESULTS_DIR = os.path.join(ROOT,"results","sf_activity_tcga")
+RESULTS_DIR = os.path.join(ROOT,"results","cancer_splicing_program")
 REGULONS_DIR = os.path.join(ROOT,"results","regulon_inference")
 PACT_CCLE_DIR = os.path.join(ROOT,"results","sf_activity_ccle")
 SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
@@ -85,15 +85,12 @@ rule all:
     input:
         # split by cancer type and sample type
         expand(os.path.join(PREP_DIR,"event_psi","{cancer}-{sample}-EX.tsv.gz"), zip, cancer=CANCER_TYPES, sample=SAMPLE_TYPES),
-        expand(os.path.join(PREP_DIR,"event_psi","PANCAN-{sample}-EX.tsv.gz"), zip, sample=["SolidTissueNormal"]),
         expand(os.path.join(PREP_DIR,"genexpr_tpm","{cancer}-{sample}.tsv.gz"), zip, cancer=CANCER_TYPES, sample=SAMPLE_TYPES),
-        expand(os.path.join(PREP_DIR,"genexpr_tpm","PANCAN-{sample}.tsv.gz"), zip, sample=["SolidTissueNormal"]),
         
         # calculate signatures
         expand(os.path.join(RESULTS_DIR,"files","signatures","{cancer}-PrimaryTumor_vs_SolidTissueNormal-EX.tsv.gz"), cancer=CANCER_TYPES_PTSTN),
         expand(os.path.join(RESULTS_DIR,"files","signatures","{cancer}-Metastatic_vs_PrimaryTumor-EX.tsv.gz"), cancer=CANCER_TYPES_METPT),
         expand(os.path.join(RESULTS_DIR,"files","signatures","{cancer}-{sample}-EX.tsv.gz"), zip, cancer=CANCER_TYPES, sample=SAMPLE_TYPES),
-        expand(os.path.join(RESULTS_DIR,"files","signatures","PANCAN-{sample}-EX.tsv.gz"), zip, sample=["SolidTissueNormal"]),
 
         # compute viper SF activities
         ## PT vs STN
@@ -102,7 +99,6 @@ rule all:
         expand(os.path.join(RESULTS_DIR,"files","protein_activity","{cancer}-{sample}-EX.tsv.gz"), cancer=CANCER_TYPES_METPT, sample=["Metastatic_vs_PrimaryTumor"]),
         ## within
         expand(os.path.join(RESULTS_DIR,"files","protein_activity","{cancer}-{sample}-EX.tsv.gz"), zip, cancer=CANCER_TYPES, sample=SAMPLE_TYPES),
-        expand(os.path.join(RESULTS_DIR,"files","protein_activity","PANCAN-{sample}-EX.tsv.gz"), sample=["SolidTissueNormal"]),
 
         # differential analyses
         ## SF activities
@@ -166,20 +162,6 @@ rule split_event_psi_by_cancer_and_sample_type:
         print("Done!")
 
 
-rule merge_event_psi_by_sample_type:
-    input:
-        psi = [os.path.join(PREP_DIR,"event_psi","{cancer}-{sample}.tsv.gz").format(cancer=c, sample="{sample}") for c in CANCER_TYPES_STN]
-    output:
-        psi = os.path.join(PREP_DIR,"event_psi","PANCAN-{sample}.tsv.gz")
-    run:
-        import pandas as pd
-        
-        psi = pd.concat([pd.read_table(f, index_col=0) for f in input.psi], axis=1)
-        psi.reset_index().to_csv(output.psi, **SAVE_PARAMS)
-        
-        print("Done!")
-        
-        
 rule split_genexpr_tpm_by_cancer_and_sample_type:
     input:
         metadata = os.path.join(PREP_DIR,"metadata","{cancer}.tsv.gz"),
@@ -206,20 +188,6 @@ rule split_genexpr_tpm_by_cancer_and_sample_type:
         if genexpr.shape[1]>0:
             print("Saving...")
             genexpr.reset_index().to_csv(output.genexpr, **SAVE_PARAMS)
-        
-        print("Done!")
-
-        
-rule merge_genexpr_tpm_by_sample_type:
-    input:
-        genexpr = [os.path.join(PREP_DIR,"genexpr_tpm","{cancer}-{sample}.tsv.gz").format(cancer=c, sample="{sample}") for c in CANCER_TYPES_STN]
-    output:
-        genexpr = os.path.join(PREP_DIR,"genexpr_tpm","PANCAN-{sample}.tsv.gz")
-    run:
-        import pandas as pd
-        
-        genexpr = pd.concat([pd.read_table(f, index_col=0) for f in input.genexpr], axis=1)
-        genexpr.reset_index().to_csv(output.genexpr, **SAVE_PARAMS)
         
         print("Done!")
 
