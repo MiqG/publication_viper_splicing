@@ -30,6 +30,9 @@ rule all:
         # compute viper SF activities
         expand(os.path.join(RESULTS_DIR,"files","protein_activity","sf3b_complex-{omic_type}.tsv.gz"), omic_type=OMIC_TYPES),
         
+        # shortest paths to SF3B complex
+        os.path.join(RESULTS_DIR,'files','ppi','shortest_path_lengths_to_sf3b_complex.tsv.gz'),
+        
         # figures
         #os.path.join(RESULTS_DIR,"figures","validation_sf3b_complex")
         
@@ -183,6 +186,25 @@ rule compute_protein_activity:
                     --regulons_path={input.regulons_path} \
                     --output_file={output}
        """
+        
+
+rule shortest_paths_stringdb:
+    input:
+        ppi = os.path.join(PREP_DIR,'ppi','STRINGDB.tsv.gz'),
+        sources = os.path.join(SUPPORT_DIR,"splicing_factors","sf3b_complex-symbol.txt"),
+        targets = os.path.join(SUPPORT_DIR,"splicing_factors","splicing_factors-symbol.txt")
+    output:
+        os.path.join(RESULTS_DIR,'files','ppi','shortest_path_lengths_to_sf3b_complex.tsv.gz')
+    threads: 16
+    shell:
+        """
+        nice python scripts/ppi_path_lengths.py \
+                    --ppi_file={input.ppi} \
+                    --sources_file={input.sources} \
+                    --targets_file={input.targets} \
+                    --output_file={output} \
+                    --n_jobs={threads}
+        """ 
         
         
 rule make_figures:

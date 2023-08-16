@@ -211,6 +211,12 @@ rule all:
         # preprocess CCLE doubling times
         os.path.join(PREP_DIR,"doubling_times","CCLE.tsv.gz"),
         
+        # preprocess STRINGDB
+        os.path.join(PREP_DIR,'ppi','STRINGDB.tsv.gz'),
+        
+        # preprocess phosphoproteomics
+        os.path.join(PREP_DIR,"phosphoproteomics","Hafner2019-log2_fold_changes.tsv.gz"),
+        
         # discretize data
         #expand(os.path.join(PREP_DIR,"event_psi_imputed_discretized_{method}","{dataset}-EX.tsv.gz"), dataset=DATASETS, method=["qep"]), # "gaussian",
         #expand(os.path.join(PREP_DIR,"genexpr_tpm_discretized_qep","{dataset}.tsv.gz"), dataset=DATASETS, method=["qep"]),
@@ -2150,6 +2156,38 @@ rule prep_ccle_doubling_times:
         
         print("Done!")        
 
+
+rule preprocess_stringdb:
+    input:
+        ppi = os.path.join(RAW_DIR,'STRINGDB','9606.protein.links.full.v11.5.txt.gz'),
+        aliases = os.path.join(RAW_DIR,'STRINGDB','9606.protein.aliases.v11.5.txt.gz')
+    output:
+        os.path.join(PREP_DIR,'ppi','STRINGDB.tsv.gz')
+    shell:
+        """
+        python scripts/preprocess_stringdb.py \
+                    --raw_ppi_file={input.ppi} \
+                    --raw_aliases_file={input.aliases} \
+                    --prep_ppi_file={output}
+        """
+
+        
+rule preprocess_Hafner2019:
+    input:
+        fcs = os.path.join(SUPPORT_DIR,"supplementary_tables_literature","Hafner2019-suptab2-TableS2_MCF7_pMS_log2FC_mean.csv")
+    output:
+        os.path.join(PREP_DIR,"phosphoproteomics","Hafner2019-log2_fold_changes.tsv.gz")
+    run:
+        import pandas as pd
+        
+        fcs = pd.read_csv(input.fcs)
+        fcs = fcs.rename(columns={"Unnamed: 0":"GENE_PHOSPHOSITE"})
+        fcs["GENE_PHOSPHOSITE"] = fcs["GENE_PHOSPHOSITE"].str.replace("#","")
+        
+        fcs.to_csv(output[0], **SAVE_PARAMS)
+        
+        print("Done!")
+        
         
 rule figures_eda:
     input:

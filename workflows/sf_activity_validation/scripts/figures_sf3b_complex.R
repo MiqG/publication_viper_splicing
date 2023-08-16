@@ -64,6 +64,7 @@ PAL_CELL_LINES = "Dark2"
 # protein_activity_file = file.path(RESULTS_DIR,"files","protein_activity","sf3b_complex-EX.tsv.gz")
 # metadata_file = file.path(RESULTS_DIR,"files","metadata","sf3b_complex-EX.tsv.gz")
 # splicing_factors_file = file.path(SUPPORT_DIR,"splicing_factors","splicing_factors.tsv")
+# shortest_paths_file = file.path(RESULTS_DIR,'files','ppi','shortest_path_lengths_to_sf3b_complex.tsv.gz')
 # figs_dir = file.path(RESULTS_DIR,"figures","validation_sf3b_complex")
 
 ##### FUNCTIONS #####
@@ -137,7 +138,7 @@ plot_activity_mutations = function(protein_activity){
 }
 
 
-plot_activity_drugs = function(protein_activity){
+plot_activity_drugs = function(protein_activity, shortest_paths){
     plts = list()
     
     # How are spliceosome mutations funneled in the transcriptome?
@@ -212,24 +213,45 @@ plot_activity_drugs = function(protein_activity){
         theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         labs(x="Drug", y="Protein Activity", color="SF3b Complex") 
     
+    
+    # Are genes with altered activities closer to the SF3b complex?
+    y = shortest_paths %>%
+        group_by(target) %>%
+        slice_min(shortest_path_length, n=1, with_ties=FALSE) %>%
+        ungroup() %>%
+        left_join(x, by=c("target"="GENE")) %>%
+        drop_na(study_accession, cell_line_name, condition_lab)
+    
+    plts[["activity_drugs-shortest_paths-bar"]] = y %>%
+        distinct(source, target, shortest_path_length) %>%
+        count(shortest_path_length) %>%
+        ggbarplot(x="shortest_path_length", y="n", fill=PAL_DARK, color=NA) +
+        labs(x="Shortest Path Length", y="Counts")
+    
+    plts[["activity_drugs-sf3b_complex_vs_shortest_paths-box"]] = y %>%
+        ggboxplot(x="shortest_path_length", y="activity", color="condition", outlier.size=0.1) +
+        facet_wrap(~study_accession+cell_line_name+condition_lab, scales="free_y") +
+        labs(x="Shortest Path Length", y="Count", color="Drug")
+    
     return(plts)
 }
 
 
-make_plots = function(protein_activity){
+make_plots = function(protein_activity, shortest_paths){
     plts = list(
         plot_activity_mutations(protein_activity),
-        plot_activity_drugs(protein_activity)
+        plot_activity_drugs(protein_activity, shortest_paths)
     )
     plts = do.call(c,plts)
     return(plts)
 }
 
 
-make_figdata = function(protein_activity){
+make_figdata = function(protein_activity, shortest_paths){
     figdata = list(
         "validation_sf3b_complex" = list(
-            "protein_activity" = protein_activity
+            "protein_activity" = protein_activity,
+            "shortest_paths" = shortest_paths
         )
     )
     return(figdata)
@@ -303,6 +325,7 @@ main = function(){
     protein_activity = read_tsv(protein_activity_file)
     metadata = read_tsv(metadata_file)
     splicing_factors = read_tsv(splicing_factors_file)
+    shortest_paths = read_tsv(shortest_paths_file)
     gc()
     
     # prep
@@ -350,6 +373,9 @@ main = function(){
                 condition
             )
         )
+    
+    shortest_paths = shortest_paths %>%
+        drop_na(shortest_path_length)
     
     # plot
     plts = make_plots(protein_activity)
