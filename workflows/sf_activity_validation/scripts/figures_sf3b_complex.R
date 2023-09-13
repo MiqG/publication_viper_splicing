@@ -276,6 +276,8 @@ save_plt = function(plts, plt_name, extension='.pdf',
 save_plots = function(plts, figs_dir){
     save_plt(plts, "activity_mutations-sf3b_complex-scatter_line", '.pdf', figs_dir, width=10, height=12)
     save_plt(plts, "activity_drugs-sf3b_complex-scatter_line", '.pdf', figs_dir, width=15, height=12)
+    save_plt(plts, "activity_drugs-shortest_paths-bar", '.pdf', figs_dir, width=4, height=2)
+    save_plt(plts, "activity_drugs-sf3b_complex_vs_shortest_paths-box", '.pdf', figs_dir, width=10, height=14)
 }
 
 
@@ -378,11 +380,11 @@ main = function(){
         drop_na(shortest_path_length)
     
     # plot
-    plts = make_plots(protein_activity)
+    plts = make_plots(protein_activity, shortest_paths)
     gc()
     
     # make figdata
-    figdata = make_figdata(protein_activity)
+    figdata = make_figdata(protein_activity, shortest_paths)
 
     # save
     save_plots(plts, figs_dir)

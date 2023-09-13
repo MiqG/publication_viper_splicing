@@ -205,6 +205,14 @@ rule all:
         os.path.join(PREP_DIR,"event_psi","Bian2018-INT.tsv.gz"),
         os.path.join(PREP_DIR,"genexpr_tpm","Bian2018.tsv.gz"),
         
+        # preprocess tumorigenesis
+        os.path.join(PREP_DIR,"metadata","tumorigenesis.tsv.gz"),
+        os.path.join(PREP_DIR,"event_psi","tumorigenesis-EX.tsv.gz"),
+        os.path.join(PREP_DIR,"event_psi","tumorigenesis-ALTA.tsv.gz"),
+        os.path.join(PREP_DIR,"event_psi","tumorigenesis-ALTD.tsv.gz"),
+        os.path.join(PREP_DIR,"event_psi","tumorigenesis-INT.tsv.gz"),
+        os.path.join(PREP_DIR,"genexpr_tpm","tumorigenesis.tsv.gz"),
+        
         # preprocess MetMap
         os.path.join(PREP_DIR,"metmap","CCLE.tsv.gz"),
         
@@ -2040,6 +2048,209 @@ rule preprocess_Bian2018:
         genexpr.reset_index().drop(columns='NAME').to_csv(output.genexpr, **SAVE_PARAMS)
         
         print("Done!")
+
+        
+rule preprocess_tumorigenesis:
+    input:
+        metadata = os.path.join(SUPPORT_DIR,'ENA_filereport-tumorigenesis.tsv'),
+        metadata_groups = os.path.join(SUPPORT_DIR,"ENA_filereport-tumorigenesis-low_read_count_groups.tsv"),
+        psi = os.path.join(RAW_DIR,"ENA","tumorigenesis",'vast_out','PSI-minN_1-minSD_0-noVLOW-min_ALT_use25-Tidy.tab.gz'),
+        genexpr = os.path.join(RAW_DIR,"ENA","tumorigenesis",'vast_out','TPM-hg38-55.tab.gz')
+    output:
+        metadata = os.path.join(PREP_DIR,"metadata","tumorigenesis.tsv.gz"),
+        psi_EX = os.path.join(PREP_DIR,'event_psi','tumorigenesis-EX.tsv.gz'),
+        psi_ALTA = os.path.join(PREP_DIR,'event_psi','tumorigenesis-ALTA.tsv.gz'),
+        psi_ALTD = os.path.join(PREP_DIR,'event_psi','tumorigenesis-ALTD.tsv.gz'),
+        psi_INT = os.path.join(PREP_DIR,'event_psi','tumorigenesis-INT.tsv.gz'),
+        genexpr = os.path.join(PREP_DIR,'genexpr_tpm','tumorigenesis.tsv.gz')      
+    run:
+        import gc
+        import pandas as pd
+        import numpy as np
+        
+        # load
+        print("Loading data...")
+        metadata = pd.read_table(input.metadata)
+        metadata_groups = pd.read_table(input.metadata_groups)
+        psi = pd.read_table(input.psi, index_col=0)
+        genexpr = pd.read_table(input.genexpr, index_col=[0,1])
+        
+        gc.collect()
+        
+        # metadata
+        ## not grouped metadata
+        metadata_not_merged = metadata.loc[~metadata["run_accession"].isin(metadata_groups["run_accession"])].copy()
+        metadata_not_merged["sampleID"] = metadata_not_merged["run_accession"]
+        metadata_not_merged["control_samples"] = metadata_not_merged["control_samples"].str.replace(",","||")
+        
+        ## grouped metadata
+        ### subset
+        metadata_merged = metadata.loc[metadata["run_accession"].isin(metadata_groups["run_accession"])].copy()
+        metadata_merged = pd.merge(metadata_merged, metadata_groups[["group_label","run_accession"]], how="left", on="run_accession")
+        ### control_samples at the group level
+        control_samples_group = []
+        for ctls in metadata_merged["control_samples"].dropna().unique():
+            # get run accessions
+            run_accessions = ctls.split(",")
+            
+            # get corresponding group labels
+            group_labs = metadata_merged.loc[metadata_merged["run_accession"].isin(run_accessions),"group_label"].unique()
+            
+            # join group labels
+            ctls_group = "||".join(group_labs)
+            
+            # save
+            control_samples_group.append({
+                "control_samples": ctls,
+                "control_samples_group": ctls_group
+            })
+        control_samples_group = pd.DataFrame(control_samples_group)
+        metadata_merged = pd.merge(metadata_merged, control_samples_group, on="control_samples", how="left")
+        metadata_merged["control_samples"] = metadata_merged["control_samples_group"]
+        
+        ### columns to keep
+        cols_oi = [
+            "study_accession","cell_line_name","condition","pert_time",
+            "pert_time_units","pert_concentration","pert_concentration_units",
+            'group_label',
+            "DepMap_ID","CCLE_Name","PERT_GENE","PERT_ENSEMBL","PERT_TYPE",
+            "control_samples"
+        ]
+        metadata_merged = metadata_merged[cols_oi].drop_duplicates().copy()
+        metadata_merged["sampleID"] = metadata_merged["group_label"]
+        
+        ## combine metadatas
+        metadata = pd.concat([metadata_not_merged, metadata_merged])
+        
+        # PSI
+        print("Processing PSI matrix...")
+        ## drop empty rows
+        is_na = psi.isnull()
+        non_missing = is_na.shape[1] - is_na.sum(1)
+        to_keep = non_missing >= 1
+        psi = psi.loc[to_keep]
+        
+        ## remove vast-tools' suffix
+        psi.columns = [c.replace('_1','') for c in psi.columns]
+        
+        ## split by event type
+        event_types = ["EX","ALTA","ALTD","INT"]
+        psis = {e: psi.loc[psi.index.str.contains(e)] for e in event_types}
+        
+        # TPM
+        print("Processing TPM matrix...")
+        ## remove vast-tools' suffix
+        genexpr.columns = [c.replace('_1','') for c in genexpr.columns]
+        
+        ## log-transform
+        genexpr = np.log2(genexpr + 1)
+        
+        # subset
+        ## find common samples
+        common_samples = set(metadata["sampleID"]).intersection(
+            psis["EX"].columns
+        ).intersection(
+            genexpr.columns
+        )
+        psis = {e: psis[e][common_samples].copy() for e in event_types}
+        genexpr = genexpr[common_samples].copy()
+        metadata = metadata.loc[metadata["sampleID"].isin(common_samples)]
+        
+        # save
+        print("Saving...")
+        ## metadata
+        metadata.to_csv(output.metadata, **SAVE_PARAMS)
+
+        ## PSIs
+        psis["EX"].reset_index().to_csv(output.psi_EX, **SAVE_PARAMS)
+        psis["ALTD"].reset_index().to_csv(output.psi_ALTD, **SAVE_PARAMS)
+        psis["ALTA"].reset_index().to_csv(output.psi_ALTA, **SAVE_PARAMS)
+        psis["INT"].reset_index().to_csv(output.psi_INT, **SAVE_PARAMS)
+        
+        ## TPMs
+        genexpr.reset_index().drop(columns='NAME').to_csv(output.genexpr, **SAVE_PARAMS)
+        
+        print("Done!")
+        
+        
+# rule preprocess_tumorigenesis:
+#     input:
+#         metadata = os.path.join(SUPPORT_DIR,"ENA_filereport-tumorigenesis.tsv"),
+#         psi = os.path.join(RAW_DIR,"ENA","tumorigenesis",'vast_out','PSI-minN_1-minSD_0-noVLOW-min_ALT_use25-Tidy.tab.gz'),
+#         genexpr = os.path.join(RAW_DIR,"ENA","tumorigenesis",'vast_out','TPM-hg38-55.tab.gz')
+#     output:
+#         metadata = os.path.join(PREP_DIR,"metadata","tumorigenesis.tsv.gz"),
+#         psi_EX = os.path.join(PREP_DIR,'event_psi','tumorigenesis-EX.tsv.gz'),
+#         psi_ALTA = os.path.join(PREP_DIR,'event_psi','tumorigenesis-ALTA.tsv.gz'),
+#         psi_ALTD = os.path.join(PREP_DIR,'event_psi','tumorigenesis-ALTD.tsv.gz'),
+#         psi_INT = os.path.join(PREP_DIR,'event_psi','tumorigenesis-INT.tsv.gz'),
+#         genexpr = os.path.join(PREP_DIR,'genexpr_tpm','tumorigenesis.tsv.gz')      
+#     run:
+#         import gc
+#         import pandas as pd
+#         import numpy as np
+        
+#         # load
+#         print("Loading data...")
+#         metadata = pd.read_table(input.metadata)
+#         psi = pd.read_table(input.psi, index_col=0)
+#         genexpr = pd.read_table(input.genexpr, index_col=[0,1])
+        
+#         gc.collect()
+        
+#         # metadata
+#         metadata["sampleID"] = metadata["run_accession"]
+        
+#         # PSI
+#         print("Processing PSI matrix...")
+#         ## drop empty rows
+#         is_na = psi.isnull()
+#         non_missing = is_na.shape[1] - is_na.sum(1)
+#         to_keep = non_missing >= 1
+#         psi = psi.loc[to_keep]
+        
+#         ## remove vast-tools' suffix
+#         psi.columns = [c.replace('_1','') for c in psi.columns]
+        
+#         ## split by event type
+#         event_types = ["EX","ALTA","ALTD","INT"]
+#         psis = {e: psi.loc[psi.index.str.contains(e)] for e in event_types}
+        
+#         # TPM
+#         print("Processing TPM matrix...")
+#         ## remove vast-tools' suffix
+#         genexpr.columns = [c.replace('_1','') for c in genexpr.columns]
+        
+#         ## log-transform
+#         genexpr = np.log2(genexpr + 1)
+        
+#         # subset
+#         ## find common samples
+#         common_samples = set(metadata["run_accession"]).intersection(
+#             psis["EX"].columns
+#         ).intersection(
+#             genexpr.columns
+#         )
+#         psis = {e: psis[e][common_samples].copy() for e in event_types}
+#         genexpr = genexpr[common_samples].copy()
+#         metadata = metadata.loc[metadata["run_accession"].isin(common_samples)]
+        
+#         # save
+#         print("Saving...")
+#         ## metadata
+#         metadata.to_csv(output.metadata, **SAVE_PARAMS)
+
+#         ## PSIs
+#         psis["EX"].reset_index().to_csv(output.psi_EX, **SAVE_PARAMS)
+#         psis["ALTD"].reset_index().to_csv(output.psi_ALTD, **SAVE_PARAMS)
+#         psis["ALTA"].reset_index().to_csv(output.psi_ALTA, **SAVE_PARAMS)
+#         psis["INT"].reset_index().to_csv(output.psi_INT, **SAVE_PARAMS)
+        
+#         ## TPMs
+#         genexpr.reset_index().drop(columns='NAME').to_csv(output.genexpr, **SAVE_PARAMS)
+        
+#         print("Done!")
+        
         
 # rule discretize_matrix_gaussian:
 #     input:

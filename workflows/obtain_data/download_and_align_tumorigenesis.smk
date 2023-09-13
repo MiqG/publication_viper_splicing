@@ -330,7 +330,7 @@ rule vasttools_combine:
     threads: 16
     resources:
         runtime = 3600*72, # 72h
-        memory = 150 # GB
+        memory = 120 # GB
     shell:
         """
         set -eo pipefail

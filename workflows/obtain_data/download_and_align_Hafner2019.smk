@@ -15,6 +15,7 @@ SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
 # load metadata
 metadata = pd.read_table(os.path.join(SUPPORT_DIR,'ENA_filereport-PRJNA387311_PRJNA514039-Hafner2019.tsv'))
 metadata = metadata.loc[metadata["library_source"]=="TRANSCRIPTOMIC"]
+metadata = metadata.loc[~metadata["run_accession"].isin(["SRR5579392","SRR5579391"])].copy() # very few reads
 metadata_paired = metadata.loc[metadata["library_layout"]=="PAIRED"]
 metadata_single = metadata.loc[metadata["library_layout"]=="SINGLE"]
 
@@ -226,7 +227,7 @@ rule vasttools_combine:
     threads: 16
     resources:
         runtime = 86400, # 24h
-        memory = 20
+        memory = 80
     shell:
         """
         # group results
