@@ -27,25 +27,25 @@
 3. [ ] tissue specific vs pan-cancer regulatory networks
 
 ## Structure
-1. obtain data
-2. preprocess data
-3. regulon inference
+1. `obtain_data`
+2. `preprocess_data`
+3. `regulon_inference`
     - experimentally derived regulons
     - aracne regulons
     - regulon evaluation
     - regulon eda
-4. validation of splicing factor activity estimation
+4. `sf_activity_validation`: validation of splicing factor activity estimation
     - combinatorial perturbations
     - SF3b complex
     - PTMs
-5. cancer-driver splicing program
-    - definition from TCGA
+5. `cancer_splicing_program`: cancer-driver splicing program
+    - definition using TCGA
     - hallmarks
         - proliferation
-        - immune evasion
-        - metastasis
+        - (?) immune evasion
+        - (?) metastasis
     - tumor initiation
-        - brain organoids
+        - (?) brain organoids
         - cancer-driver mutations
    
 

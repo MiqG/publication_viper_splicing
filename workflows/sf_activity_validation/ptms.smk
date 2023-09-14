@@ -44,6 +44,8 @@ rule compute_signatures:
         splicing_sfdrugs = os.path.join(PREP_DIR,"event_psi","sf_drugs-{omic_type}.tsv.gz"),
         metadata_sfptms = os.path.join(PREP_DIR,"metadata","sf_ptms.tsv.gz"),
         splicing_sfptms = os.path.join(PREP_DIR,"event_psi","sf_ptms-{omic_type}.tsv.gz"),
+        metadata_Hafner2019 = os.path.join(PREP_DIR,"metadata","Hafner2019.tsv.gz"),
+        splicing_Hafner2019 = os.path.join(PREP_DIR,"event_psi","Hafner2019-{omic_type}.tsv.gz"),
     output:
         metadatas = os.path.join(RESULTS_DIR,"files","metadata","ptms-{omic_type}.tsv.gz"),
         signatures = os.path.join(RESULTS_DIR,"files","signatures","ptms-{omic_type}.tsv.gz")
@@ -238,6 +240,45 @@ rule compute_signatures:
         # delete
         del metadata_sfptms, signatures_sfptms
         
+        # ----- Hafner2019 -----
+        # load
+        metadata_Hafner2019 = pd.read_table(input.metadata_Hafner2019)
+        splicing_Hafner2019 = pd.read_table(input.splicing_Hafner2019, index_col=0)
+        
+        # select perturbations
+        idx = (
+            metadata_Hafner2019["cell_line_name"].isin(["MCF7_BREAST"])
+        )
+        metadata_Hafner2019 = metadata_Hafner2019.loc[idx]
+        
+        # delta PSI as the difference between conditions and the mean of the conditions
+        signatures_Hafner2019 = {}
+        for sample_oi in metadata_Hafner2019["sampleID"]:
+            # get the controls of the sample
+            ctls = metadata_Hafner2019.loc[metadata_Hafner2019["sampleID"]==sample_oi, "control_samples"].values[0]
+            
+            # controls will be np.nan
+            if isinstance(ctls,str):
+                ctls = ctls.split(",")
+                psi_ctls = splicing_Hafner2019[ctls].mean(axis=1)
+                
+                # compute delta PSI
+                dpsi = splicing_Hafner2019[sample_oi] - psi_ctls
+                
+                signatures_Hafner2019[sample_oi] = dpsi
+                
+                del dpsi, psi_ctls, ctls
+
+        signatures_Hafner2019 = pd.DataFrame(signatures_Hafner2019)
+        
+        # store
+        metadata_Hafner2019["dataset"] = "Hafner2019"
+        metadatas.append(metadata_Hafner2019)
+        signatures.append(signatures_Hafner2019)
+        
+        # delete
+        del metadata_Hafner2019, signatures_Hafner2019
+
         # save
         pd.concat(metadatas).to_csv(output.metadatas, **SAVE_PARAMS)
         pd.concat(signatures, axis=1).reset_index().to_csv(output.signatures, **SAVE_PARAMS)

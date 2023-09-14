@@ -296,129 +296,31 @@ plot_activity_phosphorylation = function(protein_activity, phosphoproteomics){
             labs(x=x_lab, y="SR protein", fill="Protein Activity")
     }
     
-    # phosphorylation of SR-proteins (TODO)
+    # phosphorylation of SR-proteins
+    # ABEMACICLIB targets CDK4 and CDK6
+    # PALBOCICLIB targets CDK4 and CDK6
     X = phosphoproteomics %>%
-        mutate(is_sr_protein = GENE %in% SR_PROTEINS) 
-    sr_order = X %>%
-        filter(is_sr_protein) %>%
-        group_by(GENE) %>%
-        slice_max(abs(log2_fc), n=1) %>%
-        arrange(log2_fc) %>%
-        ungroup() %>%
-        pull(GENE)
+        mutate(is_sr_protein = GENE %in% SR_PROTEINS) %>%
+        drop_na(log2_fc,activity) %>%
+        #group_by(GENE, activity,condition,pert_concentration,pert_time,is_sr_protein) %>%
+        #slice_max(abs(log2_fc), n=1) %>%
+        #summarize(log2_fc = median(log2_fc), n=1) %>%
+        #ungroup() %>%
+        mutate(
+            pert_concentration = paste0(pert_concentration,"micromolar"),
+            pert_time = factor(paste0(pert_time,"h"), levels=c("6h","24h"))
+        )
     
-    plts[["activity_phosphorylation-sr_proteins-"]] = X %>%
-        filter(is_sr_protein) %>%
-        mutate(GENE = factor(GENE, levels=sr_order)) %>%
-        ggstripchart(x="GENE", y="log2_fc") +
-        facet_wrap(~condition) +
-        theme_pubr(x.text.angle = 70)
-    
-    x = X %>%
-        group_by(condition) %>%
-        arrange(log2_fc) %>%
-        mutate(ranking=row_number()) %>%
-        ungroup()
-    x %>% ggscatter(x="ranking", y="log2_fc", color="is_sr_protein") + 
-        geom_point(data=.%>%filter(is_sr_protein)) + facet_wrap(~condition)
-    
-    ## compare changes in activity in SR proteins vs a random set of genes
-    #     avail_sr_proteins = X %>% filter(is_regulator_oi) %>% pull(GENE) %>% unique()
-    #     random_genes = sample(X %>% pull(GENE) %>% unique(), length(avail_sr_proteins))
-    #     for (condition_oi in CLK_DRUGS){
-    #         x = X %>%
-    #             filter(condition==condition_oi & is_regulator_oi) %>%
-    #             mutate(gene_set = "real") %>%
-    #             bind_rows(
-    #                 X %>%
-    #                     filter(condition==condition_oi) %>%
-    #                     mutate(
-    #                         is_regulator_oi = GENE %in% random_genes,
-    #                         gene_set = "random"
-    #                     ) %>%
-    #                     filter(is_regulator_oi)
-    #             )
-
-    #         x_var = ifelse(condition_oi=="PALBOCICLIB", "pert_time", "pert_concentration")
-    #         x_lab = ifelse(condition_oi=="PALBOCICLIB", "Time ()", "Concentration ()")
-
-    #         plts[[sprintf("activity_phosphorylation-sr_proteins-%s-box", condition_oi)]] = x %>%
-    #             mutate(
-    #                 GENE = factor(GENE, levels=rev(SR_PROTEINS)),
-    #                 pert_time = factor(pert_time),
-    #                 pert_concentration = factor(pert_concentration, levels=sort(unique(pert_concentration))),
-    #             ) %>%
-    #             ggplot(aes_string(x=x_var, y="activity", group=sprintf("interaction(%s,gene_set)", x_var))) +
-    #             geom_boxplot(aes(fill=gene_set), outlier.size=0.1) +
-    #             facet_grid(~study_accession+cell_line_name+condition+replicate, scales="free_x", space="free_x") +
-    #             theme_pubr() +
-    #             stat_compare_means(method="wilcox.test", label="p.signif", size=FONT_SIZE, family=FONT_FAMILY) +
-    #             labs(x=x_lab, y="|Protein Activity|", fill="Gene Set")
-    #     }
-    
-    # validate with CLK knockdowns
-    #     x = X %>%
-    #         filter(condition%in%CLK_KDS) %>%
-    #         mutate(
-    #             pert_time = factor(pert_time),
-    #             pert_concentration = factor(pert_concentration, levels=sort(unique(pert_concentration))),
-    #             GENE = ifelse(is_regulator_oi, sprintf("*%s", GENE), GENE),
-    #             condition = factor(condition, levels=CLK_KDS)
-    #         ) %>%
-    #         group_by(study_accession, cell_line_name, condition) %>%
-    #         mutate(nudging = 0.25*(activity_ranking - mean(activity_ranking))/sd(activity_ranking)) %>%
-    #         ungroup() %>%
-    #         arrange(condition)
-
-    #     labels_sr = x %>% 
-    #         group_by(study_accession, cell_line_name) %>% 
-    #         slice_max(order_by=condition, n=1) %>%
-    #         ungroup() %>% 
-    #         filter(is_regulator_oi)
-
-    #     labels_top = x %>% 
-    #         group_by(study_accession, cell_line_name, condition) %>% 
-    #         slice_max(order_by=activity, n=5) %>%
-    #         ungroup() %>%
-    #         bind_rows(
-    #             x %>% 
-    #             group_by(study_accession, cell_line_name, condition) %>% 
-    #             slice_min(order_by=activity, n=5) %>%
-    #             ungroup()
-    #         )
-
-    #     plts[[sprintf("activity_phosphorylation-sr_proteins-%s-scatter_line", condition_oi)]] = x %>%
-    #         ggplot(aes_string(x="condition", y="activity", group="GENE")) +
-    #         geom_point(color="lightgray", size=1, position=position_nudge(x= x %>% pull(nudging))) +
-    #         geom_path(
-    #             aes(color=GENE), 
-    #             . %>% filter(is_regulator_oi),
-    #             linetype="dashed", size=LINE_SIZE,
-    #             position = position_nudge(x = x %>% filter(is_regulator_oi) %>% pull(nudging))
-    #         ) +
-    #         geom_point(
-    #             aes(color=GENE), 
-    #             . %>% filter(is_regulator_oi) %>% mutate(),
-    #             size=1, 
-    #             position = position_nudge(x = x %>% filter(is_regulator_oi) %>% pull(nudging))
-    #         ) +
-    #         geom_text_repel(
-    #             aes(label=GENE, color=GENE),
-    #             labels_sr,
-    #             position = position_nudge(x = (labels_sr %>% pull(nudging))),
-    #             size=FONT_SIZE, family=FONT_FAMILY, segment.size=0.1, max.overlaps=50, min.segment.length=0,
-    #             direction = "y", vjust = .5, hjust = -2
-    #         ) +
-    #         geom_text_repel(
-    #             aes(label=GENE),
-    #             labels_top,
-    #             position = position_nudge(x = (labels_top %>% pull(nudging))),
-    #             size=FONT_SIZE, family=FONT_FAMILY, segment.size=0.1, max.overlaps=50, min.segment.length=0#,
-    #             #direction = "y", vjust = .5, hjust = -2
-    #         ) +
-    #         facet_grid(~study_accession+cell_line_name, scales="free_x", space="free_x") +
-    #         theme_pubr(x.text.angle=70) +
-    #         labs(x=x_lab, y="Protein Activity", color="SR Protein")
+    plts[["activity_phosphorylation-sr_proteins-activity_vs_phosphoproteomics-scatter"]] = X %>% 
+        filter(is_sr_protein) %>% 
+        ggplot(aes(x=log2_fc, y=activity)) +
+        geom_smooth(aes(color=pert_time), method="lm", size=LINE_SIZE, linetype="dashed", alpha=0.5, fill="lightgray") +
+        geom_point(aes(color=pert_time), size=1, alpha=0.5) + 
+        stat_cor(aes(color=pert_time), method="pearson", size=FONT_SIZE, family=FONT_FAMILY) +
+        theme_pubr() +
+        facet_wrap(~condition+pert_concentration+pert_time, ncol=4) +
+        theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="log2FC Phosphorylation Site", y="Protein Activity", color="Perturbation Time")
     
     return(plts)
 }
@@ -479,10 +381,10 @@ plot_activity_methylation = function(protein_activity){
 }
 
 
-make_plots = function(protein_activity){
+make_plots = function(protein_activity, phosphoproteomics){
     plts = list(
         plot_activity_acetylation(protein_activity),
-        plot_activity_phosphorylation(protein_activity),
+        plot_activity_phosphorylation(protein_activity, phosphoproteomics),
         plot_activity_methylation(protein_activity)
     )
     plts = do.call(c,plts)
@@ -490,7 +392,7 @@ make_plots = function(protein_activity){
 }
 
 
-make_figdata = function(protein_activity){
+make_figdata = function(protein_activity, phosphoproteomics){
     figdata = list(
         "validation_ptms" = list(
             "protein_activity" = protein_activity
@@ -528,6 +430,7 @@ save_plots = function(plts, figs_dir){
     save_plt(plts, "activity_phosphorylation-sr_proteins-T3-heatmap", '.pdf', figs_dir, width=7, height=8)
     save_plt(plts, "activity_phosphorylation-sr_proteins-PALBOCICLIB-heatmap", '.pdf', figs_dir, width=7, height=8)
     save_plt(plts, "activity_phosphorylation-sr_proteins-KH-CB19-heatmap", '.pdf', figs_dir, width=7, height=8)
+    save_plt(plts, "activity_phosphorylation-sr_proteins-activity_vs_phosphoproteomics-scatter", ".pdf", figs_dir, width=10, height=10)
     
     save_plt(plts, "activity_methylation-prmt_inhibitors-scatter_line", '.pdf', figs_dir, width=20, height=20)
 }
@@ -597,7 +500,7 @@ main = function(){
         # summarize replicates
         group_by(condition_lab, condition, pert_time, pert_time_units, 
                  pert_concentration, pert_concentration_units, cell_line_name, study_accession,
-                 PERT_ENSEMBL, PERT_GENE, regulator) %>%
+                 PERT_ENSEMBL, PERT_GENE, regulator, dataset) %>%
         summarize(
             activity = median(activity, na.rm=TRUE),
             abs_activity = abs(activity),
@@ -609,7 +512,7 @@ main = function(){
         arrange(activity) %>%
         mutate(
             activity_ranking = row_number(),
-            total_avail_sfs = sum(regulator %in% unlist(strsplit(PERT_ENSEMBL, ",")))
+            total_avail_sfs = ifelse(!is.na(PERT_ENSEMBL), sum(regulator %in% unlist(strsplit(PERT_ENSEMBL, ","))), NA)
         ) %>%
         arrange(abs_activity) %>%
         mutate(
@@ -618,17 +521,29 @@ main = function(){
         ungroup() %>%
         left_join(splicing_factors, by=c("regulator"="ENSEMBL"))
     
+    # from Hafner2019
     phosphoproteomics = phosphoproteomics %>%
-        separate(GENE_PHOSPHOSITE, into=c("GENE","PHOSPHOSITE"), remove=FALSE) %>%
-        pivot_longer(-c(GENE,PHOSPHOSITE,GENE_PHOSPHOSITE), names_to="condition", values_to="log2_fc") %>%
-        left_join(splicing_factors, by="GENE")
+        separate(GENE_PHOSPHOSITE, into=c("GENE","PHOSPHOSITE"), remove=FALSE, sep="_") %>%
+        pivot_longer(-c(GENE,PHOSPHOSITE,GENE_PHOSPHOSITE), names_to="condition_lab", values_to="log2_fc") %>%
+        #left_join(splicing_factors, by="GENE") %>%
+        separate(condition_lab, into=c("condition","pert_concentration"), sep="_") %>%
+        mutate(
+            condition = toupper(condition),
+            pert_concentration = as.numeric(pert_concentration)
+        ) %>%
+        left_join(
+            protein_activity %>%
+            filter(dataset=="Hafner2019"),
+            by = c("GENE","condition","pert_concentration"),
+            relationship="many-to-many" # same gene, multiple phosphosites
+        )
     
     # plot
-    plts = make_plots(protein_activity)
+    plts = make_plots(protein_activity, phosphoproteomics)
     gc()
     
     # make figdata
-    figdata = make_figdata(protein_activity)
+    figdata = make_figdata(protein_activity, phosphoproteomics)
 
     # save
     save_plots(plts, figs_dir)

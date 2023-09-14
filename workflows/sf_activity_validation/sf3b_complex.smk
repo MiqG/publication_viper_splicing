@@ -34,7 +34,7 @@ rule all:
         os.path.join(RESULTS_DIR,'files','ppi','shortest_path_lengths_to_sf3b_complex.tsv.gz'),
         
         # figures
-        #os.path.join(RESULTS_DIR,"figures","validation_sf3b_complex")
+        os.path.join(RESULTS_DIR,"figures","validation_sf3b_complex")
         
         
 rule compute_signatures:

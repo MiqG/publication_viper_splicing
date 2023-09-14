@@ -204,9 +204,11 @@ rule compute_signature_pt_vs_stn:
         splicing_pt = pd.read_table(input.splicing_pt, index_col=0)
         splicing_stn = pd.read_table(input.splicing_stn, index_col=0)
         
-        # subtract median STN
-        signature = pd.concat([splicing_pt, splicing_stn], axis=1)
-        signature = signature - splicing_stn.median(axis=1).values.reshape(-1,1)
+        # subtract median from the other group
+        signature = pd.concat([
+            splicing_pt - splicing_stn.median(axis=1).values.reshape(-1,1), 
+            splicing_stn - splicing_pt.median(axis=1).values.reshape(-1,1)
+        ], axis=1)
         
         # save
         signature.reset_index().to_csv(output.signature, **SAVE_PARAMS)
@@ -227,8 +229,10 @@ rule compute_signature_met_vs_pt:
         splicing_met = pd.read_table(input.splicing_met, index_col=0)
         
         # subtract median PT
-        signature = pd.concat([splicing_pt, splicing_met], axis=1)
-        signature = signature - splicing_pt.median(axis=1).values.reshape(-1,1)
+        signature = pd.concat([
+            splicing_pt - splicing_met.median(axis=1).values.reshape(-1,1), 
+            splicing_met - splicing_pt.median(axis=1).values.reshape(-1,1)
+        ], axis=1)
         
         # save
         signature.reset_index().to_csv(output.signature, **SAVE_PARAMS)
@@ -608,10 +612,10 @@ rule figures_cancer_program:
         sf_crossreg_genexpr = os.path.join(RESULTS_DIR,'files','PANCAN',"genexpr_tpm-sf_cross_regulation.tsv.gz"),
         ontology_chea = os.path.join(RAW_DIR,"Harmonizome","CHEA-TranscriptionFactorTargets.gmt.gz"),
         sf_activity_vs_genexpr = os.path.join(RESULTS_DIR,'files','PANCAN',"genexpr_tpm_vs_activity.tsv.gz"),
-        protein_activity_stn = os.path.join(RESULTS_DIR,"files","protein_activity","PANCAN-SolidTissueNormal-EX.tsv.gz")
-        genexpr_tpm_stn = os.path.join(PREP_DIR,"genexpr_tpm","PANCAN-SolidTissueNormal.tsv.gz")
-        metadata = os.path.join(PREP_DIR,"metadata","PANCAN.tsv.gz")
-        regulons_jaccard = os.path.join(REGULONS_DIR,"files","regulons_eda_jaccard","experimentally_derived_regulons_pruned-EX.tsv.gz")
+        protein_activity_stn = os.path.join(RESULTS_DIR,"files","protein_activity","PANCAN-SolidTissueNormal-EX.tsv.gz"),
+        genexpr_tpm_stn = os.path.join(PREP_DIR,"genexpr_tpm","PANCAN-SolidTissueNormal.tsv.gz"),
+        metadata = os.path.join(PREP_DIR,"metadata","PANCAN.tsv.gz"),
+        regulons_jaccard = os.path.join(REGULONS_DIR,"files","regulons_eda_jaccard","experimentally_derived_regulons_pruned-EX.tsv.gz"),
         gene_annotation = os.path.join(RAW_DIR,"HGNC","gene_annotations.tsv.gz")
     output:
         directory(os.path.join(RESULTS_DIR,"figures","cancer_program"))
