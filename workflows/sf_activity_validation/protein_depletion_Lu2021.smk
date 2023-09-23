@@ -17,7 +17,7 @@ RAW_DIR = os.path.join(ROOT,"data","raw")
 PREP_DIR = os.path.join(ROOT,"data","prep")
 SUPPORT_DIR = os.path.join(ROOT,"support")
 BIN_DIR = os.path.join(ROOT,"bin")
-RESULTS_DIR = os.path.join(ROOT,"results","sf_activity_Lu2021")
+RESULTS_DIR = os.path.join(ROOT,"results","sf_activity_validation")
 REGULONS_DIR = os.path.join(ROOT,"results","regulon_inference")
 SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
 
@@ -27,13 +27,13 @@ EVENT_TYPES = ["EX"]
 rule all:
     input:
         # calculate signature
-        expand(os.path.join(RESULTS_DIR,"files","signatures","Lu2021-{event_type}.tsv.gz"), event_type=EVENT_TYPES),
+        expand(os.path.join(RESULTS_DIR,"files","signatures","protein_depletion-Lu2021-{event_type}.tsv.gz"), event_type=EVENT_TYPES),
         
         # compute viper SF activities
-        expand(os.path.join(RESULTS_DIR,"files","protein_activity","Lu2021-{event_type}.tsv.gz"), event_type=EVENT_TYPES),
+        expand(os.path.join(RESULTS_DIR,"files","protein_activity","protein_depletion-Lu2021-{event_type}.tsv.gz"), event_type=EVENT_TYPES),
         
         # figures
-        expand(os.path.join(RESULTS_DIR,"figures","validation_drug_targets-{event_type}"), event_type=EVENT_TYPES)
+        expand(os.path.join(RESULTS_DIR,"figures","protein_depletion-Lu2021-{event_type}"), event_type=EVENT_TYPES)
         
         
 rule compute_signature:
@@ -41,7 +41,7 @@ rule compute_signature:
         splicing = os.path.join(PREP_DIR,"event_psi","Lu2021-{event_type}.tsv.gz"),
         metadata = os.path.join(PREP_DIR,"metadata","Lu2021.tsv.gz")
     output:
-        signature = os.path.join(RESULTS_DIR,"files","signatures","Lu2021-{event_type}.tsv.gz")
+        signature = os.path.join(RESULTS_DIR,"files","signatures","protein_depletion-Lu2021-{event_type}.tsv.gz")
     run:
         import pandas as pd
         
@@ -75,10 +75,10 @@ rule compute_signature:
         
 rule compute_protein_activity:
     input:
-        signature = os.path.join(RESULTS_DIR,"files","signatures","Lu2021-{event_type}.tsv.gz"),
+        signature = os.path.join(RESULTS_DIR,"files","signatures","protein_depletion-Lu2021-{event_type}.tsv.gz"),
         regulons_path = os.path.join(REGULONS_DIR,"files","experimentally_derived_regulons_pruned-{event_type}")
     output:
-        os.path.join(RESULTS_DIR,"files","protein_activity","Lu2021-{event_type}.tsv.gz")
+        os.path.join(RESULTS_DIR,"files","protein_activity","protein_depletion-Lu2021-{event_type}.tsv.gz")
     params:
         script_dir = BIN_DIR
     shell:
@@ -93,13 +93,13 @@ rule compute_protein_activity:
 rule validation_drug_targets:
     input:
         genexpr = os.path.join(PREP_DIR,"genexpr_tpm","Lu2021.tsv.gz"),
-        protein_activity = os.path.join(RESULTS_DIR,"files","protein_activity","Lu2021-{event_type}.tsv.gz"),
+        protein_activity = os.path.join(RESULTS_DIR,"files","protein_activity","protein_depletion-Lu2021-{event_type}.tsv.gz"),
         metadata = os.path.join(PREP_DIR,"metadata","Lu2021.tsv.gz")
     output:
-        directory(os.path.join(RESULTS_DIR,"figures","validation_drug_targets-{event_type}"))
+        directory(os.path.join(RESULTS_DIR,"figures","protein_depletion-Lu2021-{event_type}"))
     shell:
         """
-        Rscript scripts/figures_validation_drug_targets.R \
+        Rscript scripts/figures_protein_depletion_Lu2021.R \
                     --genexpr_file={input.genexpr} \
                     --protein_activity_file={input.protein_activity} \
                     --metadata_file={input.metadata} \
