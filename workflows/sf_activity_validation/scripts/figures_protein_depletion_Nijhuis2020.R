@@ -13,6 +13,7 @@ require(ggpubr)
 require(cowplot)
 require(scattermore)
 require(extrafont)
+require(ggrepel)
 
 # variables
 RANDOM_SEED = 1234
@@ -36,12 +37,13 @@ PAL_TIME = "jco"
 # RAW_DIR = file.path(ROOT,'data','raw')
 # PREP_DIR = file.path(ROOT,'data','prep')
 # SUPPORT_DIR = file.path(ROOT,"support")
-# RESULTS_DIR = file.path(ROOT,"results","sf_activity_Nijhuis2020")
+# RESULTS_DIR = file.path(ROOT,"results","sf_activity_validation")
 # proteomics_file = file.path(RAW_DIR,"articles","Nijhuis2020","supplementary_data","proteomics_lfq_intensity.tsv.gz")
 # genexpr_file = file.path(PREP_DIR,"genexpr_tpm","Nijhuis2020.tsv.gz")
 # protein_activity_file = file.path(RESULTS_DIR,"files","protein_activity","Nijhuis2020-EX.tsv.gz")
 # metadata_file = file.path(PREP_DIR,"metadata","Nijhuis2020.tsv.gz")
-# figs_dir = file.path(RESULTS_DIR,"figures","validation_drug_targets")
+# gene_info_file = file.path(RAW_DIR,"HGNC","gene_annotations.tsv.gz")
+# figs_dir = file.path(RESULTS_DIR,"figures","protein_depletion-Nijhuis2020-EX")
 # gene_oi = "ENSG00000131051" # RBM39
 
 ##### FUNCTIONS #####
@@ -65,6 +67,35 @@ plot_proteomics_gene_oi = function(proteomics, gene_oi){
     names(plts) = sprintf("%s-%s",names(plts),gene_oi)
     
     return(plts)
+}
+
+
+plot_diff_proteomics_gene_oi = function(diff_proteomics, gene_oi){
+    plts = list()
+    
+    X = diff_proteomics %>%
+        mutate(
+            log10_pvalue = -log10(p),
+            is_gene_oi = GENE == gene_oi
+        )
+    
+    plts[["diff_proteomics-indisulam_vs_dmso-volcano"]] = X %>%
+        ggplot(aes(x=diff_lfq, y=log10_pvalue)) +
+        geom_scattermore(data = . %>% filter(!is_gene_oi), pixels=c(1000,1000), pointsize=4, color=PAL_DARK, alpha=0.5) +
+        geom_scattermore(data = . %>% filter(is_gene_oi), pixels=c(1000,1000), pointsize=8, color=PAL_ACCENT) +
+        theme_pubr() +
+        facet_wrap(~pert_time_lab, ncol=2, scales="free_y") +
+        theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        geom_text_repel(
+            aes(label=GENE),
+            . %>% group_by(pert_time_lab) %>% slice_max(abs(diff_lfq) * log10_pvalue, n=10) %>% ungroup(),
+            size=FONT_SIZE, family=FONT_FAMILY, segment.size=0.1, max.overlaps=50
+        ) +
+        labs(x="Log2(Fold Change LFQ)", y="-log10(p-value)", color=sprintf("Is %s", gene_oi))
+    
+    names(plts) = sprintf("%s-%s",names(plts),gene_oi)
+    
+    return()
 }
 
 
@@ -114,6 +145,7 @@ plot_activity_gene_oi = function(protein_activity, gene_oi){
 make_plots = function(proteomics, genexpr, protein_activity){
     plts = list(
         plot_proteomics_gene_oi(proteomics, "RBM39"),
+        plot_diff_proteomics_gene_oi(diff_proteomics, "RBM39"),
         plot_genexpr_gene_oi(genexpr, "ENSG00000131051"),
         plot_activity_gene_oi(protein_activity, "ENSG00000131051")
     )
@@ -122,10 +154,11 @@ make_plots = function(proteomics, genexpr, protein_activity){
 }
 
 
-make_figdata = function(proteomics, genexpr, protein_activity){
+make_figdata = function(proteomics, diff_proteomics, genexpr, protein_activity){
     figdata = list(
         "validation_drug_target_activity" = list(
             "proteomics" = proteomics,
+            "diff_proteomics" = diff_proteomics,
             "genexpr" = genexpr,
             "protein_activity" = protein_activity
         )
@@ -151,6 +184,7 @@ save_plt = function(plts, plt_name, extension='.pdf',
 
 save_plots = function(plts, figs_dir){
     save_plt(plts, "proteomics-indisulam_vs_dmso-box-RBM39", '.pdf', figs_dir, width=6, height=6)
+    save_plt(plts, "diff_proteomics-indisulam_vs_dmso-volcano-RBM39", '.pdf', figs_dir, width=9, height=6)
     save_plt(plts, "genexpr-indisulam_vs_dmso-box-ENSG00000131051", '.pdf', figs_dir, width=5.5, height=6)
     save_plt(plts, "activity-indisulam_vs_dmso-ranking-scatter-ENSG00000131051", '.pdf', figs_dir, width=9, height=15)
 }
@@ -202,10 +236,12 @@ main = function(){
     genexpr = read_tsv(genexpr_file)
     protein_activity = read_tsv(protein_activity_file)
     metadata = read_tsv(metadata_file)
+    gene_info = read_tsv(gene_info_file)
     gc()
     
     # prep
     proteomics = proteomics %>%
+        filter(GENE %in% gene_info[["Approved symbol"]]) %>%
         pivot_longer(-GENE, values_to="lfq", names_to="sampleID_rep") %>%
         mutate(lfq = log2(lfq+1)) %>%
         separate(sampleID_rep, sep="_", into=c("sampleID","technical_replicate")) %>%
@@ -224,6 +260,40 @@ main = function(){
             pert_time_lab = sprintf("%s%s", pert_time, pert_time_units),
             pert_time_lab = factor(pert_time_lab, levels=c("6hours","16hours"))
         )
+    
+    # differential protein levels
+    diff_proteomics = proteomics %>% 
+        filter(cell_line_name=="IMR32_AUTONOMIC_GANGLIA") %>%
+        compare_means(
+            lfq ~ condition_lab, 
+            data=., 
+            group.by=c("pert_time_lab","cell_line_name","GENE"), 
+            method="t.test"
+        )
+    fold_changes = proteomics %>% 
+        group_by(pert_time_lab,cell_line_name,GENE,condition_lab) %>% 
+        summarize(
+            lfq = mean(lfq),
+            lfq = ifelse(condition_lab=="DMSO", -lfq, lfq)
+        ) %>% 
+        ungroup() %>%
+        group_by(pert_time_lab,cell_line_name,GENE) %>%
+        summarize(
+            diff_lfq = sum(lfq),
+            diff_lfq = ifelse(diff_lfq<0, -log2(abs(diff_lfq)+1), log2(diff_lfq+1))
+        ) %>%
+        ungroup() 
+    diff_proteomics = diff_proteomics %>%
+        left_join(
+            fold_changes, 
+            by=c("pert_time_lab","cell_line_name","GENE")
+        ) %>%
+        group_by(pert_time_lab,cell_line_name) %>%
+        mutate(
+            fdr = p.adjust(p, method="fdr"),
+            is_target = GENE=="RBM39"
+        ) %>%
+        ungroup()
     
     genexpr = genexpr %>%
         pivot_longer(-ID, names_to="sampleID", values_to="genexpr_tpm") %>%
@@ -263,11 +333,11 @@ main = function(){
     
     
     # plot
-    plts = make_plots(proteomics, genexpr, protein_activity)
+    plts = make_plots(proteomics, diff_proteomics, genexpr, protein_activity)
     gc()
     
     # make figdata
-    figdata = make_figdata(proteomics, genexpr, protein_activity)
+    figdata = make_figdata(proteomics, diff_proteomics, genexpr, protein_activity)
 
     # save
     save_plots(plts, figs_dir)

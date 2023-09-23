@@ -90,7 +90,7 @@ rule compute_protein_activity:
         """
 
 
-rule validation_drug_targets:
+rule figures_protein_depletion:
     input:
         genexpr = os.path.join(PREP_DIR,"genexpr_tpm","Lu2021.tsv.gz"),
         protein_activity = os.path.join(RESULTS_DIR,"files","protein_activity","protein_depletion-Lu2021-{event_type}.tsv.gz"),
