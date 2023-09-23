@@ -62,7 +62,7 @@ plot_evaluation = function(evaluation){
         geom_text(
             aes(y = -0.1, label=label), 
             . %>% 
-            count(pert_type_lab, regulon_set_id, eval_direction, eval_type) %>% 
+            count(omic_type, pert_type_lab, regulon_set_id, eval_direction, eval_type) %>% 
             mutate(label=paste0("n=",n)),
             position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
         ) +
