@@ -13,7 +13,11 @@ require(scattermore)
 require(extrafont)
 
 # variables
-
+REGULON_SETS = c(
+    'aracne_regulons_development',
+    'mlr_regulons_development',
+    'experimentally_derived_regulons_pruned'
+)
 
 # formatting
 LINE_SIZE = 0.25
@@ -42,11 +46,11 @@ plot_evaluation = function(evaluation){
     plts = list()
     
     X = evaluation %>%
-        group_by(omic_type, eval_direction, eval_type, regulon_set_id, pert_type_lab, regulator) %>%
+        group_by(omic_type, eval_direction, eval_type, regulon_set, regulon_set_id, pert_type_lab, regulator) %>%
         summarize(ranking_perc = median(ranking_perc, na.rm=TRUE)) %>%
         ungroup()
     
-    plts[["evaluation-ranking_perc_vs_regulon_set_vs_pert_type-violin"]] = X %>%
+    plts[["evaluation-ranking_perc_vs_regulon_set_vs_pert_type-box"]] = X %>%
         ggplot(aes(x=pert_type_lab, y=ranking_perc, 
                    group=interaction(pert_type_lab, eval_type))) +
         geom_boxplot(aes(fill=eval_type), width=0.5, outlier.size=0.1, 
@@ -65,22 +69,23 @@ plot_evaluation = function(evaluation){
         labs(x="Validation Perturbation", y="Evaluation Score", fill="Inference Type")
 
     
-    plts[["evaluation-ranking_perc_vs_regulon_set-violin"]] = X %>%
-        group_by(eval_direction, eval_type, regulon_set_id, regulator) %>%
+    plts[["evaluation-ranking_perc_vs_regulon_set-box"]] = X %>%
+        group_by(omic_type, eval_direction, eval_type, regulon_set, regulator) %>%
         summarize(ranking_perc = median(ranking_perc, na.rm=TRUE)) %>%
         ungroup() %>%
-        ggplot(aes(x=regulon_set_id, y=ranking_perc, 
-                   group=interaction(regulon_set_id, eval_type))) +
+        mutate(regulon_set = factor(regulon_set, levels=REGULON_SETS)) %>%
+        ggplot(aes(x=regulon_set, y=ranking_perc, 
+                   group=interaction(regulon_set, eval_type))) +
         geom_boxplot(aes(fill=eval_type), width=0.5, outlier.size=0.1, 
                      position=position_dodge(0.5)) +
         fill_palette(PAL_EVAL_TYPE) + 
         theme_pubr() +
-        facet_wrap(~eval_direction, ncol=2) +
+        facet_wrap(~omic_type+eval_direction, ncol=2) +
         theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         geom_text(
             aes(y = -0.1, label=label), 
             . %>% 
-            count(regulon_set_id, regulon_set_id, eval_direction, eval_type) %>% 
+            count(regulon_set, eval_direction, eval_type, omic_type) %>% 
             mutate(label=paste0("n=",n)),
             position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
         ) +
@@ -126,8 +131,8 @@ save_plt = function(plts, plt_name, extension='.pdf',
 
 
 save_plots = function(plts, figs_dir){
-    save_plt(plts, "evaluation-ranking_perc_vs_regulon_set_vs_pert_type-violin", '.pdf', figs_dir, width=6.5, height=16)
-    save_plt(plts, "evaluation-ranking_perc_vs_regulon_set-violin", '.pdf', figs_dir, width=8, height=7)
+    save_plt(plts, "evaluation-ranking_perc_vs_regulon_set_vs_pert_type-box", '.pdf', figs_dir, width=6.5, height=16)
+    save_plt(plts, "evaluation-ranking_perc_vs_regulon_set-box", '.pdf', figs_dir, width=8, height=10)
 }
 
 
@@ -188,7 +193,8 @@ main = function(){
                 PERT_TYPE=="KNOCKDOWN" ~ "KD",
                 PERT_TYPE=="KNOCKOUT" ~ "KO",
                 PERT_TYPE=="OVEREXPRESSION" ~ "OE"
-            )
+            ),
+            regulon_set = gsub("-.*","",regulon_set_id)
         )
     
     # plot
@@ -197,6 +203,7 @@ main = function(){
     # make figdata
     figdata = make_figdata(evaluation)
     
+    # save
     save_plots(plts, figs_dir)
     save_figdata(figdata, figs_dir)
 }
