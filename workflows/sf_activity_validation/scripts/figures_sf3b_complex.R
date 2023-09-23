@@ -231,7 +231,8 @@ plot_activity_drugs = function(protein_activity, shortest_paths){
     plts[["activity_drugs-sf3b_complex_vs_shortest_paths-box"]] = y %>%
         ggboxplot(x="shortest_path_length", y="activity", color="condition", outlier.size=0.1) +
         facet_wrap(~study_accession+cell_line_name+condition_lab, scales="free_y") +
-        labs(x="Shortest Path Length", y="Count", color="Drug")
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Shortest Path Length", y="Protein Activity", color="Drug")
     
     return(plts)
 }

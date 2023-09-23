@@ -40,7 +40,7 @@ PAL_TIME = "jco"
 # RESULTS_DIR = file.path(ROOT,"results","sf_activity_validation")
 # proteomics_file = file.path(RAW_DIR,"articles","Nijhuis2020","supplementary_data","proteomics_lfq_intensity.tsv.gz")
 # genexpr_file = file.path(PREP_DIR,"genexpr_tpm","Nijhuis2020.tsv.gz")
-# protein_activity_file = file.path(RESULTS_DIR,"files","protein_activity","Nijhuis2020-EX.tsv.gz")
+# protein_activity_file = file.path(RESULTS_DIR,"files","protein_activity","protein_depletion-Nijhuis2020-EX.tsv.gz")
 # metadata_file = file.path(PREP_DIR,"metadata","Nijhuis2020.tsv.gz")
 # gene_info_file = file.path(RAW_DIR,"HGNC","gene_annotations.tsv.gz")
 # figs_dir = file.path(RESULTS_DIR,"figures","protein_depletion-Nijhuis2020-EX")
@@ -95,7 +95,7 @@ plot_diff_proteomics_gene_oi = function(diff_proteomics, gene_oi){
     
     names(plts) = sprintf("%s-%s",names(plts),gene_oi)
     
-    return()
+    return(plts)
 }
 
 
@@ -112,6 +112,19 @@ plot_genexpr_gene_oi = function(genexpr, gene_oi){
         color_palette(PAL_TIME) +
         theme_pubr() +
         facet_wrap(~cell_line_name, nrow=1) +
+        theme(aspect.ratio=NULL, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Condition", y="log2(TPM+1)", color="Pert. Time", subtitle=gene_oi)
+    
+    plts[["genexpr-indisulam_vs_dmso-bar"]] = X %>%
+        filter(condition_lab!="INDISULAM\n(1micromolar)") %>%
+        ggbarplot(x="condition_lab", y="genexpr_tpm", fill=PAL_ACCENT, color=NA) +
+        geom_text(
+            aes(label=round(genexpr_tpm,2)),
+            vjust=0, hjust=0.5, nudge_y=0.1,
+            size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        theme_pubr() +
+        facet_wrap(~cell_line_name+pert_time_lab, nrow=1, scales="free_y") +
         theme(aspect.ratio=NULL, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         labs(x="Condition", y="log2(TPM+1)", color="Pert. Time", subtitle=gene_oi)
     
@@ -142,7 +155,7 @@ plot_activity_gene_oi = function(protein_activity, gene_oi){
 }
 
 
-make_plots = function(proteomics, genexpr, protein_activity){
+make_plots = function(proteomics, diff_proteomics, genexpr, protein_activity){
     plts = list(
         plot_proteomics_gene_oi(proteomics, "RBM39"),
         plot_diff_proteomics_gene_oi(diff_proteomics, "RBM39"),
@@ -184,8 +197,9 @@ save_plt = function(plts, plt_name, extension='.pdf',
 
 save_plots = function(plts, figs_dir){
     save_plt(plts, "proteomics-indisulam_vs_dmso-box-RBM39", '.pdf', figs_dir, width=6, height=6)
-    save_plt(plts, "diff_proteomics-indisulam_vs_dmso-volcano-RBM39", '.pdf', figs_dir, width=9, height=6)
+    save_plt(plts, "diff_proteomics-indisulam_vs_dmso-volcano-RBM39", '.pdf', figs_dir, width=8, height=6)
     save_plt(plts, "genexpr-indisulam_vs_dmso-box-ENSG00000131051", '.pdf', figs_dir, width=5.5, height=6)
+    save_plt(plts, "genexpr-indisulam_vs_dmso-bar-ENSG00000131051", '.pdf', figs_dir, width=4.5, height=6)
     save_plt(plts, "activity-indisulam_vs_dmso-ranking-scatter-ENSG00000131051", '.pdf', figs_dir, width=9, height=15)
 }
 
