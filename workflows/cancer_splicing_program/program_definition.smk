@@ -109,7 +109,9 @@ rule all:
         expand(os.path.join(RESULTS_DIR,'files',"diff_genexpr_tpm",'{cancer}-{comparison}.tsv.gz'), comparison=["Metastatic_vs_PrimaryTumor"], cancer=CANCER_TYPES_METPT),
         ## merge
         expand(os.path.join(RESULTS_DIR,'files','PANCAN','{omic}-mannwhitneyu-{comparison}.tsv.gz'), comparison=DIFF_CANCER_TYPES.keys(), omic=OMICS),
-
+        ## define cancer program
+        os.path.join(RESULTS_DIR,'files','PANCAN','cancer_program.tsv.gz'),
+        
         # survival
         ## SF activity
         expand(os.path.join(RESULTS_DIR,'files',"survival_analysis",'{omic}-{cancer}-{sample_type}-surv.tsv.gz'), zip, cancer=CANCER_TYPES_SURV["cancer_type"].values, sample_type=CANCER_TYPES_SURV["sample_type_clean"].values, omic=["protein_activity"]),
@@ -129,7 +131,7 @@ rule all:
         os.path.join(RESULTS_DIR,'files','PANCAN',"genexpr_tpm_vs_activity.tsv.gz"),
 
         # figures
-        os.path.join(RESULTS_DIR,"figures","cancer_program")
+        #os.path.join(RESULTS_DIR,"figures","cancer_program")
         
 
 rule split_event_psi_by_cancer_and_sample_type:
@@ -381,6 +383,72 @@ rule combine_differential_results:
         
         print("Done!")
         
+
+rule define_cancer_program:
+    input:
+        diff_activity = os.path.join(RESULTS_DIR,'files','PANCAN','protein_activity-mannwhitneyu-PrimaryTumor_vs_SolidTissueNormal.tsv.gz'),
+        gene_annotation = os.path.join(RAW_DIR,"HGNC","gene_annotations.tsv.gz")
+    output:
+        cancer_program = os.path.join(RESULTS_DIR,'files','PANCAN','cancer_program.tsv.gz')
+    params:
+        thresh_fdr = 0.05,
+        thresh_n_sum = 5
+    run:
+        import pandas as pd
+        import numpy as np
+        
+        # load data
+        diff_activity = pd.read_table(input.diff_activity)
+        gene_annotation = pd.read_table(input.gene_annotation)
+        
+        # oncogenic and tumor suppressor splicing factors are those that preferentially
+        # activate or inactivate recurrently across cancer types
+        
+        ## keep significant
+        diff_activity = diff_activity.loc[diff_activity["padj"] < params.thresh_fdr].copy()
+        
+        ## add driver type
+        diff_activity["driver_type"] = diff_activity["condition_a-median"].apply(
+            lambda x: "Oncogenic" if x>0 else "Tumor suppressor"
+        )
+        
+        ## count recurrence
+        cancer_program = diff_activity.groupby(
+            ["regulator","driver_type"]
+        ).size().reset_index().rename(columns={0:"n"})
+        cancer_program["n_sign"] = [
+            n if driver_type=="Oncogenic" else -n 
+            for n, driver_type in cancer_program[["n","driver_type"]].values
+        ]
+        n_sum = cancer_program.groupby("regulator")["n_sign"].sum().reset_index().rename(
+            columns={"n_sign":"n_sum"}
+        )
+        cancer_program = pd.merge(cancer_program, n_sum, on="regulator", how="left")
+        
+        ## classify
+        cancer_program = cancer_program.loc[
+            np.abs(cancer_program["n_sign"]) > params.thresh_n_sum
+        ].copy()
+        cancer_program = cancer_program.loc[
+            cancer_program.groupby("regulator")["n"].idxmax()
+        ].copy()
+        
+        # add gene annotations
+        gene_annotation = gene_annotation.rename(
+            columns={"Approved symbol":"GENE", "Ensembl gene ID":"ENSEMBL"}
+        )
+        cancer_program = cancer_program.rename(
+            columns={"regulator":"ENSEMBL"}
+        )
+        cancer_program = pd.merge(
+            cancer_program, gene_annotation[["GENE","ENSEMBL"]], on="ENSEMBL", how="left"
+        )
+        
+        # save
+        cancer_program.to_csv(output.cancer_program, **SAVE_PARAMS)
+        
+        print("Done!")
+
         
 rule survival_analysis_protein_activity:
     input:
