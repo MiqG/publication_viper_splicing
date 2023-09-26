@@ -2070,7 +2070,7 @@ rule preprocess_tumorigenesis:
         psi_ALTA = os.path.join(PREP_DIR,'event_psi','tumorigenesis-ALTA.tsv.gz'),
         psi_ALTD = os.path.join(PREP_DIR,'event_psi','tumorigenesis-ALTD.tsv.gz'),
         psi_INT = os.path.join(PREP_DIR,'event_psi','tumorigenesis-INT.tsv.gz'),
-        genexpr = os.path.join(PREP_DIR,'genexpr_tpm','tumorigenesis.tsv.gz')      
+        genexpr = os.path.join(PREP_DIR,'genexpr_tpm','tumorigenesis.tsv.gz')
     run:
         import gc
         import pandas as pd
