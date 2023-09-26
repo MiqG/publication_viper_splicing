@@ -48,7 +48,7 @@ PAL_CANCER_TYPES = setNames(
 # RAW_DIR = file.path(ROOT,'data','raw')
 # PREP_DIR = file.path(ROOT,'data','prep')
 # SUPPORT_DIR = file.path(ROOT,"support")
-# RESULTS_DIR = file.path(ROOT,"results","sf_activity_tcga")
+# RESULTS_DIR = file.path(ROOT,"results","cancer_splicing_program")
 # REGINF_DIR = file.path(ROOT,"results","regulon_inference")
 # diff_activity_file = file.path(RESULTS_DIR,'files','PANCAN','protein_activity-mannwhitneyu-PrimaryTumor_vs_SolidTissueNormal.tsv.gz')
 # diff_genexpr_file = file.path(RESULTS_DIR,'files','PANCAN','genexpr_tpm-mannwhitneyu-PrimaryTumor_vs_SolidTissueNormal.tsv.gz')
@@ -61,11 +61,33 @@ PAL_CANCER_TYPES = setNames(
 # sf_crossreg_genexpr_file = file.path(RESULTS_DIR,'files','PANCAN',"genexpr_tpm-sf_cross_regulation.tsv.gz")
 # ontology_chea_file = file.path(RAW_DIR,"Harmonizome","CHEA-TranscriptionFactorTargets.gmt.gz")
 # sf_activity_vs_genexpr_file = file.path(RESULTS_DIR,'files','PANCAN',"genexpr_tpm_vs_activity.tsv.gz")
-# protein_activity_stn_file = file.path(RESULTS_DIR,"files","protein_activity","PANCAN-SolidTissueNormal-EX.tsv.gz")
 # metadata_file = file.path(PREP_DIR,"metadata","PANCAN.tsv.gz")
+# annotation_file = file.path(RAW_DIR,'VastDB','EVENT_INFO-hg38_noseqs.tsv')
+# regulons_path = file.path(REGINF_DIR,"files","experimentally_derived_regulons_pruned-EX")
 # regulons_jaccard_file = file.path(REGINF_DIR,"files","regulons_eda_jaccard","experimentally_derived_regulons_pruned-EX.tsv.gz")
+# msigdb_dir = file.path(RAW_DIR,'MSigDB','msigdb_v7.4','msigdb_v7.4_files_to_download_locally','msigdb_v7.4_GMTs')
 
 ##### FUNCTIONS #####
+load_regulons = function(regulons_path, patt=NULL){
+    if (file.exists(regulons_path) && !dir.exists(regulons_path)){
+        # regulons_path is a file, we load only that regulon (we'll tun regular VIPER)
+        regulon_files = list(regulons_path)
+    }else if (dir.exists(regulons_path)){
+        # regulons_path is a directory, we load all regulons contained (we'll run metaVIPER)
+        regulon_files = list.files(regulons_path, pattern=patt, full.names=TRUE)
+    }else {
+        stop("Invalid regulons_path.")
+    }
+    
+    regulons = sapply(regulon_files, function(regulon_file){
+        regulon = read_tsv(regulon_file)
+        return(regulon)
+    }, simplify=FALSE)
+    
+    return(regulons)
+}
+
+
 plot_comparison = function(diff_activity, diff_genexpr, survival_activity, survival_genexpr, sf_activity_vs_genexpr){
     plts = list()    
     
@@ -624,7 +646,7 @@ plot_sf_crossreg = function(driver_omic, sf_crossreg, regulons_jaccard, patt="")
 }
 
 
-make_enrichments = function(driver_classif, ontology_chea){
+make_enrichments = function(driver_classif, regulons, ontologies){
     
     X = driver_classif %>%
         filter(is_significant) %>%
@@ -640,21 +662,33 @@ make_enrichments = function(driver_classif, ontology_chea){
         slice_max(n, n=1) %>%
         ungroup()
     
-    oncogenics = X %>% filter(driver_type=="Oncogenic") %>% pull(GENE)
-    suppressors = X %>% filter(driver_type=="Tumor suppressor") %>% pull(GENE)
-    tf_enrichments = list(
-        "oncogenics" = enricher(oncogenics, TERM2GENE=ontology_chea),
-        "suppressors" = enricher(suppressors, TERM2GENE=ontology_chea)
+    oncogenics = X %>% filter(driver_type=="Oncogenic") %>% distinct(GENE,ENSEMBL)
+    suppressors = X %>% filter(driver_type=="Tumor suppressor") %>% distinct(GENE,ENSEMBL)
+    enrichments = list(
+        "CHEA" = list(
+            "oncogenics" = enricher(oncogenics[["GENE"]], TERM2GENE=ontologies[["CHEA"]]),
+            "suppressors" = enricher(suppressors[["GENE"]], TERM2GENE=ontologies[["CHEA"]])
+        ),
+        "reactome" = list(
+            "oncogenics" = enricher(
+                regulons %>% filter(regulator %in% oncogenics[["ENSEMBL"]]) %>% pull(GENE),
+                TERM2GENE=ontologies[["reactome"]]
+            ),
+            "suppressors" = enricher(
+                regulons %>% filter(regulator %in% suppressors[["ENSEMBL"]]) %>% pull(GENE),
+                TERM2GENE=ontologies[["reactome"]]
+            )
+        )
     )
     
-    return(tf_enrichments)
+    return(enrichments)
 }
 
 
-plot_tf_enrichments = function(tf_enrichments){
+plot_enrichments = function(enrichments){
     plts = list()
     
-    X = tf_enrichments
+    X = enrichments[["CHEA"]]
     
     plts[["tf_enrichments-oncogenic-cnet"]] = X[["oncogenics"]] %>% 
         cnetplot(cex_label_category=0.5, cex_label_gene=0.5, 
@@ -667,6 +701,38 @@ plot_tf_enrichments = function(tf_enrichments){
                  cex_family_category=FONT_FAMILY, cex_family_category=FONT_FAMILY) +
         guides(size="none") +
         theme(aspect.ratio=1)
+    
+    X = lapply(names(enrichments[["reactome"]]), function(gene_set_oi){
+            x = enrichments[["reactome"]][[gene_set_oi]] %>%
+                as.data.frame() %>%
+                mutate(gene_set = gene_set_oi)
+            return(x)
+        }) %>%
+        bind_rows() %>%
+        filter(p.adjust < THRESH_FDR) %>%
+        rowwise() %>%
+        mutate(GeneRatio = eval(parse(text=GeneRatio))) %>%
+        ungroup() %>%
+        mutate(
+            driver_type = case_when(
+                gene_set=="suppressors" ~ "Tumor suppressor",
+                gene_set=="oncogenics" ~ "Oncogenic"
+            ),
+            GeneRatio = ifelse(driver_type=="Oncogenic", GeneRatio, -GeneRatio)
+        )
+    
+    plts[["reactome_enrichments-bar"]] = X %>%
+        group_by(gene_set) %>%
+        slice_max(abs(GeneRatio), n=10) %>%
+        ungroup() %>%
+        group_by(Description) %>%
+        mutate(ratio_sums = sum(GeneRatio)) %>%
+        ungroup() %>%
+        arrange(ratio_sums) %>%
+        ggbarplot(x="Description", y="GeneRatio", fill="driver_type", color=NA,
+                  palette=PAL_DRIVER_TYPE) +
+        labs(x="Description", y="GeneRatio", fill="Driver Type") +
+        coord_flip()
     
     return(plts)
 }
@@ -689,7 +755,7 @@ make_plots = function(
     survival_activity, survival_genexpr, 
     driver_activity, driver_genexpr, 
     sf_crossreg_activity, sf_crossreg_genexpr, 
-    tf_enrichments, sf_activity_vs_genexpr, regulons_jaccard
+    enrichments, sf_activity_vs_genexpr, regulons_jaccard
 ){
     plts = list(
         plot_driver_selection(driver_activity, driver_genexpr, diff_activity, diff_genexpr),
@@ -700,7 +766,7 @@ make_plots = function(
         plot_survival_analysis(survival_roc_activity_w_genexpr_labs, survival_activity, driver_genexpr, "-activity_w_genexpr_labs"),
         plot_sf_crossreg(driver_activity, sf_crossreg_activity, regulons_jaccard, "-activity"),
         plot_sf_crossreg(driver_genexpr, sf_crossreg_genexpr, regulons_jaccard, "-genexpr"),
-        plot_tf_enrichments(tf_enrichments),
+        plot_enrichments(enrichments),
         plot_comparison(diff_activity, diff_genexpr, survival_activity, survival_genexpr, sf_activity_vs_genexpr)
     )
     plts = do.call(c,plts)
@@ -716,7 +782,7 @@ make_figdata = function(
     survival_activity, survival_genexpr, 
     driver_activity, driver_genexpr, 
     sf_crossreg_activity, sf_crossreg_genexpr, 
-    tf_enrichments, sf_activity_vs_genexpr, regulons_jaccard
+    enrichments, sf_activity_vs_genexpr, regulons_jaccard
 ){
     figdata = list(
         "tcga_tumorigenesis" = list(
@@ -746,8 +812,8 @@ save_plt = function(plts, plt_name, extension='.pdf',
 
 
 save_plots = function(plts, figs_dir){
-    save_plt(plts, "driver_selection-n_signif_vs_driver_type-genexpr-bar", '.pdf', figs_dir, width=12, height=9)
-    save_plt(plts, "driver_selection-n_signif_vs_driver_type-genexpr-bar", '.pdf', figs_dir, width=12, height=9)
+    save_plt(plts, "driver_selection-n_signif_vs_driver_type-activity-bar", '.pdf', figs_dir, width=5, height=7)
+    save_plt(plts, "driver_selection-n_signif_vs_driver_type-genexpr-bar", '.pdf', figs_dir, width=5, height=7)
     save_plt(plts, "driver_selection-drivers_vs_cancer_type-activity_drivers_vs_activity-violin", '.pdf', figs_dir, width=8, height=6)
     save_plt(plts, "driver_selection-drivers_vs_cancer_type-activity_drivers_vs_genexpr-violin", '.pdf', figs_dir, width=8, height=6)
     save_plt(plts, "driver_selection-drivers_vs_cancer_type-genexpr_drivers_vs_genexpr-violin", '.pdf', figs_dir, width=8, height=6)
@@ -776,6 +842,7 @@ save_plots = function(plts, figs_dir){
     save_plt(plts, "sf_cross_regulation-regulon_similarity-violin-genexpr", '.pdf', figs_dir, width=5, height=5)
     save_plt(plts, "tf_enrichments-oncogenic-cnet", '.pdf', figs_dir, width=4, height=4)
     save_plt(plts, "tf_enrichments-suppressor-cnet", '.pdf', figs_dir, width=4, height=4)
+    save_plt(plts, "reactome_enrichments-bar", '.pdf', figs_dir, width=16, height=6)
     
     save_plt(plts, "comparison-diff_analysis-scatter", '.pdf', figs_dir, width=4, height=4)
     save_plt(plts, "comparison-survival-scatter", '.pdf', figs_dir, width=4, height=4)
@@ -812,8 +879,11 @@ parseargs = function(){
         make_option("--ontology_chea_file", type="character"),
         make_option("--sf_activity_vs_genexpr_file", type="character"),
         make_option("--metadata_file", type="character"),
+        make_option("--regulons_path", type="character"),
         make_option("--regulons_jaccard_file", type="character"),
+        make_option("--annotation_file", type="character"),
         make_option("--gene_annotation_file", type="character"),
+        make_option("--msigdb_dir", type="character"),
         make_option("--figs_dir", type="character")
     )
 
@@ -832,11 +902,14 @@ main = function(){
     sf_crossreg_activity_file = args[["sf_crossreg_activity_file"]]
     sf_crossreg_genexpr_file = args[["sf_crossreg_genexpr_file"]]
     assocs_gene_dependency_file = args[["assocs_gene_dependency_file"]]
-    ontology_chea_file = args[["ontology_chea_file"]]
     sf_activity_vs_genexpr_file = args[["sf_activity_vs_genexpr_file"]]
     metadata_file = args[["metadata_file"]]
+    regulons_path = args[["regulons_path"]]
+    annotation_file = args[["annotation_file"]]
     regulons_jaccard_file = args[["regulons_jaccard_file"]]
     gene_annotation_file = args[["gene_annotation_file"]]
+    ontology_chea_file = args[["ontology_chea_file"]]
+    msigdb_dir = args[["msigdb_dir"]]
     figs_dir = args[["figs_dir"]]
     
     dir.create(figs_dir, recursive = TRUE)
@@ -849,15 +922,24 @@ main = function(){
     sf_crossreg_activity = read_tsv(sf_crossreg_activity_file)
     sf_crossreg_genexpr = read_tsv(sf_crossreg_genexpr_file)
     assocs_gene_dependency = read_tsv(assocs_gene_dependency_file)
-    ontology_chea = read.gmt(ontology_chea_file)
     sf_activity_vs_genexpr = read_tsv(sf_activity_vs_genexpr_file)
     metadata = read_tsv(metadata_file)
+    regulons = load_regulons(regulons_path)
+    annot = read_tsv(annotation_file)
     regulons_jaccard = read_tsv(regulons_jaccard_file)
     gene_annotation = read_tsv(gene_annotation_file) %>%
         dplyr::rename(
             GENE = `Approved symbol`,
             ENSEMBL = `Ensembl gene ID`
         )
+    ontologies = list(
+        "reactome" = read.gmt(file.path(msigdb_dir,"c2.cp.reactome.v7.4.symbols.gmt")),
+        "hallmarks" = read.gmt(file.path(msigdb_dir,"h.all.v7.4.symbols.gmt")),
+        "oncogenic_signatures" = read.gmt(file.path(msigdb_dir,"c6.all.v7.4.symbols.gmt")),
+        "GO_BP" = read.gmt(file.path(msigdb_dir,"c5.go.bp.v7.4.symbols.gmt")),
+        "GO_CC" = read.gmt(file.path(msigdb_dir,"c5.go.cc.v7.4.symbols.gmt")),
+        "CHEA" = read.gmt(ontology_chea_file)
+    )
     
     # prep
     diff_activity = diff_activity %>%
@@ -913,7 +995,12 @@ main = function(){
         )
     
     # enrichment
-    tf_enrichments = make_enrichments(driver_activity, ontology_chea)
+    regulons = regulons %>% 
+        bind_rows() %>%
+        distinct(regulator, target) %>%
+        left_join(annot %>% distinct(EVENT, GENE), by=c("target"="EVENT"))
+    
+    enrichments = make_enrichments(driver_activity, regulons, ontologies)
     
     # roc analysis
     survival_roc_activity = make_roc_analysis(driver_activity, survival_activity) %>%
@@ -973,7 +1060,7 @@ main = function(){
         survival_activity, survival_genexpr, 
         driver_activity, driver_genexpr, 
         sf_crossreg_activity, sf_crossreg_genexpr, 
-        tf_enrichments, sf_activity_vs_genexpr, regulons_jaccard
+        enrichments, sf_activity_vs_genexpr, regulons_jaccard
     )
     
     # make figdata
@@ -985,11 +1072,10 @@ main = function(){
         survival_activity, survival_genexpr, 
         driver_activity, driver_genexpr, 
         sf_crossreg_activity, sf_crossreg_genexpr, 
-        tf_enrichments, sf_activity_vs_genexpr, regulons_jaccard
+        enrichments, sf_activity_vs_genexpr, regulons_jaccard
     )
 
     # save
-    write_tsv(driver_types, "driver_types.tsv")
     save_plots(plts, figs_dir)
     save_figdata(figdata, figs_dir)
 }

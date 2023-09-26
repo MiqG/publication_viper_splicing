@@ -131,7 +131,7 @@ rule all:
         os.path.join(RESULTS_DIR,'files','PANCAN',"genexpr_tpm_vs_activity.tsv.gz"),
 
         # figures
-        #os.path.join(RESULTS_DIR,"figures","cancer_program")
+        os.path.join(RESULTS_DIR,"figures","cancer_program")
         
 
 rule split_event_psi_by_cancer_and_sample_type:
@@ -281,24 +281,6 @@ rule compute_protein_activity:
         """
 
         
-# rule combine_protein_activity:
-#     input:
-#         protein_activity = lambda wildcards: [os.path.join(RESULTS_DIR,"files","protein_activity","{cancer}-{sample}-EX.tsv.gz").format(cancer=cancer, sample=wildcards.sample) for cancer in CANCER_TYPES_BY_SAMPLETYPE[wildcards.sample]]
-#     output:
-#         os.path.join(RESULTS_DIR,"files","protein_activity","PANCAN-{sample}-EX.tsv.gz")
-#     run:
-#         import pandas as pd
-        
-#         dfs = pd.concat([
-#             pd.read_table(f).melt(id_vars="regulator", var_name="sampleID", value_name="activity")
-#             for f in input.protein_activity
-#         ])
-        
-#         dfs.to_csv(output[0], **SAVE_PARAMS)
-        
-#         print("Done!")
-        
-        
 rule compute_differential_protein_activity:
     input:
         protein_activity = os.path.join(RESULTS_DIR,"files","protein_activity","{cancer}-{comparison}-EX.tsv.gz"),
@@ -427,7 +409,7 @@ rule define_cancer_program:
         
         ## classify
         cancer_program = cancer_program.loc[
-            np.abs(cancer_program["n_sign"]) > params.thresh_n_sum
+            np.abs(cancer_program["n_sum"]) > params.thresh_n_sum
         ].copy()
         cancer_program = cancer_program.loc[
             cancer_program.groupby("regulator")["n"].idxmax()
@@ -673,18 +655,19 @@ rule figures_cancer_program:
     input:
         diff_activity = os.path.join(RESULTS_DIR,'files','PANCAN','protein_activity-mannwhitneyu-PrimaryTumor_vs_SolidTissueNormal.tsv.gz'),
         diff_genexpr = os.path.join(RESULTS_DIR,'files','PANCAN','genexpr_tpm-mannwhitneyu-PrimaryTumor_vs_SolidTissueNormal.tsv.gz'),
-        assocs_gene_dependency = os.path.join(PACT_CCLE_DIR,"files","protein_activity_vs_demeter2","CCLE.tsv.gz"),
         survival_activity = os.path.join(RESULTS_DIR,'files','PANCAN',"protein_activity-survival_analysis-surv.tsv.gz"),
         survival_genexpr = os.path.join(RESULTS_DIR,'files','PANCAN',"genexpr_tpm-survival_analysis-surv.tsv.gz"),
         sf_crossreg_activity = os.path.join(RESULTS_DIR,'files','PANCAN',"protein_activity-sf_cross_regulation.tsv.gz"),
         sf_crossreg_genexpr = os.path.join(RESULTS_DIR,'files','PANCAN',"genexpr_tpm-sf_cross_regulation.tsv.gz"),
-        ontology_chea = os.path.join(RAW_DIR,"Harmonizome","CHEA-TranscriptionFactorTargets.gmt.gz"),
+        assocs_gene_dependency = os.path.join(PACT_CCLE_DIR,"files","protein_activity_vs_demeter2","CCLE.tsv.gz"),
         sf_activity_vs_genexpr = os.path.join(RESULTS_DIR,'files','PANCAN',"genexpr_tpm_vs_activity.tsv.gz"),
-        protein_activity_stn = os.path.join(RESULTS_DIR,"files","protein_activity","PANCAN-SolidTissueNormal-EX.tsv.gz"),
-        genexpr_tpm_stn = os.path.join(PREP_DIR,"genexpr_tpm","PANCAN-SolidTissueNormal.tsv.gz"),
+        ontology_chea = os.path.join(RAW_DIR,"Harmonizome","CHEA-TranscriptionFactorTargets.gmt.gz"),
         metadata = os.path.join(PREP_DIR,"metadata","PANCAN.tsv.gz"),
+        annotation = os.path.join(RAW_DIR,'VastDB','EVENT_INFO-hg38_noseqs.tsv'),
+        regulons_path = os.path.join(REGULONS_DIR,"files","experimentally_derived_regulons_pruned-EX"),
         regulons_jaccard = os.path.join(REGULONS_DIR,"files","regulons_eda_jaccard","experimentally_derived_regulons_pruned-EX.tsv.gz"),
-        gene_annotation = os.path.join(RAW_DIR,"HGNC","gene_annotations.tsv.gz")
+        gene_annotation = os.path.join(RAW_DIR,"HGNC","gene_annotations.tsv.gz"),
+        msigdb_dir = os.path.join(RAW_DIR,'MSigDB','msigdb_v7.4','msigdb_v7.4_files_to_download_locally','msigdb_v7.4_GMTs')
     output:
         directory(os.path.join(RESULTS_DIR,"figures","cancer_program"))
     shell:
@@ -697,12 +680,13 @@ rule figures_cancer_program:
                     --sf_crossreg_activity_file={input.sf_crossreg_activity} \
                     --sf_crossreg_genexpr_file={input.sf_crossreg_genexpr} \
                     --assocs_gene_dependency_file={input.assocs_gene_dependency} \
-                    --ontology_chea_file={input.ontology_chea} \
                     --sf_activity_vs_genexpr_file={input.sf_activity_vs_genexpr} \
-                    --genexpr_tpm_stn_file={input.genexpr_tpm_stn} \
-                    --protein_activity_stn_file={input.protein_activity_stn} \
                     --metadata_file={input.metadata} \
+                    --regulons_path={input.regulons_path} \
+                    --annotation_file={input.annotation} \
                     --regulons_jaccard_file={input.regulons_jaccard} \
                     --gene_annotation_file={input.gene_annotation} \
+                    --ontology_chea_file={input.ontology_chea} \
+                    --msigdb_dir={input.msigdb_dir} \
                     --figs_dir={output}
         """
