@@ -40,13 +40,14 @@ PAL_DARK = "brown"
 # genexpr_tcga_stn_file = file.path(PREP_DIR,"genexpr_tpm","PANCAN-SolidTissueNormal.tsv.gz")
 # enrichment_scores_tcga_stn_file = file.path(RESULTS_DIR,"files","program_enrichment_scores","PANCAN-SolidTissueNormal-EX.tsv.gz")
 # metadata_tcga_file = file.path(PREP_DIR,"metadata","PANCAN.tsv.gz")
-# driver_types_file = file.path("driver_types.tsv")
+# driver_types_file = file.path(RESULTS_DIR,'files','PANCAN','cancer_program.tsv.gz')
 
 # protein_activity_ccle_file = file.path(RESULTS_DIR,"files","protein_activity","CCLE-EX.tsv.gz")
 # genexpr_ccle_file = file.path(PREP_DIR,"genexpr_tpm","CCLE.tsv.gz")
 # metadata_ccle_file = file.path(PREP_DIR,"metadata","CCLE.tsv.gz")
 # doublings_ccle_file = file.path(PREP_DIR,"doubling_times","CCLE.tsv.gz")
 # enrichment_scores_ccle_file = file.path(RESULTS_DIR,"files","program_enrichment_scores","CCLE-EX.tsv.gz")
+
 # metmap_file = file.path(PREP_DIR,"metmap","CCLE.tsv.gz")
 
 # figs_dir = file.path(RESULTS_DIR,"figures","cancer_hallmarks-EX")
@@ -229,7 +230,7 @@ plot_hallmarks_ccle = function(protein_activity_ccle){
         ggscatter(x="MKI67", y="enrichment_score", color="term", 
                   size=1, alpha=0.5, palette=PAL_DRIVER_TYPE) + 
         geom_smooth(method="lm", size=LINE_SIZE, color="black", linetype="dashed") +
-        stat_cor(method="pearson", size=FONT_SIZE+1, family=FONT_FAMILY) + 
+        stat_cor(method="pearson", size=FONT_SIZE, family=FONT_FAMILY) + 
         facet_wrap(~term) +
         theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         guides(color="none") +
@@ -245,7 +246,7 @@ plot_hallmarks_ccle = function(protein_activity_ccle){
         ggscatter(x="MKI67", y="activity_median", color="driver_type", 
                   size=1, alpha=0.5, palette=PAL_DRIVER_TYPE) + 
         geom_smooth(method="lm", size=LINE_SIZE, color="black", linetype="dashed") +
-        stat_cor(method="pearson", size=FONT_SIZE+1, family=FONT_FAMILY) + 
+        stat_cor(method="pearson", size=FONT_SIZE, family=FONT_FAMILY) + 
         facet_wrap(~driver_type) +
         theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         guides(color="none") +
@@ -258,7 +259,7 @@ plot_hallmarks_ccle = function(protein_activity_ccle){
         ggscatter(x="metastatic_potential", y="enrichment_score", color="term", 
                   size=1, alpha=0.5, palette=PAL_DRIVER_TYPE) + 
         geom_smooth(method="lm", size=LINE_SIZE, color="black", linetype="dashed") +
-        stat_cor(method="pearson", size=FONT_SIZE+1, family=FONT_FAMILY) + 
+        stat_cor(method="pearson", size=FONT_SIZE, family=FONT_FAMILY) + 
         facet_wrap(~term+metastatic_tissue) +
         theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         guides(color="none") +
@@ -273,7 +274,7 @@ plot_hallmarks_ccle = function(protein_activity_ccle){
         ggscatter(x="metastatic_potential", y="activity_median", color="driver_type", 
                   size=1, alpha=0.5, palette=PAL_DRIVER_TYPE) + 
         geom_smooth(method="lm", size=LINE_SIZE, color="black", linetype="dashed") +
-        stat_cor(method="pearson", size=FONT_SIZE+1, family=FONT_FAMILY) + 
+        stat_cor(method="pearson", size=FONT_SIZE, family=FONT_FAMILY) + 
         facet_wrap(~driver_type+metastatic_tissue) +
         theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         guides(color="none") +
@@ -320,8 +321,19 @@ save_plt = function(plts, plt_name, extension='.pdf',
 
 
 save_plots = function(plts, figs_dir){
-    save_plt(plts, "drivers_activity_stn-cancer_vs_MKI67-line", '.pdf', figs_dir, width=6, height=3)
-    save_plt(plts, "drivers_activity_stn-cancer_vs_oncogenic-line", '.pdf', figs_dir, width=6, height=6)
+    save_plt(plts, "proliferation_stn-cancer_vs_MKI67-line", '.pdf', figs_dir, width=6, height=3)
+    save_plt(plts, "proliferation_stn-cancer_vs_program_activity-line", '.pdf', figs_dir, width=6, height=5)
+    save_plt(plts, "proliferation_stn-cancer_vs_program_enrichment-line", '.pdf', figs_dir, width=6, height=5)
+    save_plt(plts, "proliferation_stn-mki67_vs_activity_median-scatter", '.pdf', figs_dir, width=6, height=6)
+    save_plt(plts, "proliferation_stn-corrs_mki67_vs_activity_median-violin", '.pdf', figs_dir, width=4, height=5)
+    save_plt(plts, "proliferation_stn-mki67_vs_program_enrichment-scatter", '.pdf', figs_dir, width=6, height=6)
+    
+    save_plt(plts, "hallmarks_ccle-doublings_vs_mki67-scatter", '.pdf', figs_dir, width=6, height=6)
+    save_plt(plts, "hallmarks_ccle-mki67_vs_enrichment-scatter", '.pdf', figs_dir, width=6, height=6)
+    save_plt(plts, "hallmarks_ccle-mki67_vs_activity_median-scatter", '.pdf', figs_dir, width=6, height=6)
+    save_plt(plts, "hallmarks_ccle-mki67_vs_enrichment-scatter", '.pdf', figs_dir, width=6, height=6)
+    save_plt(plts, "hallmarks_ccle-metpotential_vs_enrichment-scatter", '.pdf', figs_dir, width=12, height=12)
+    save_plt(plts, "hallmarks_ccle-metpotential_vs_activity_median-scatter", '.pdf', figs_dir, width=12, height=12)
 }
 
 
@@ -343,7 +355,17 @@ save_figdata = function(figdata, dir){
 parseargs = function(){
     
     option_list = list( 
-        make_option("--diff_activity_file", type="character"),
+        make_option("--protein_activity_tcga_stn_file", type="character"),
+        make_option("--genexpr_tcga_stn_file", type="character"),
+        make_option("--metadata_tcga_file", type="character"),
+        make_option("--enrichment_scores_tcga_stn_file", type="character"),
+        make_option("--protein_activity_ccle_file", type="character"),
+        make_option("--genexpr_ccle_file", type="character"),
+        make_option("--metadata_ccle_file", type="character"),
+        make_option("--enrichment_scores_ccle_file", type="character"),
+        make_option("--doublings_ccle_file", type="character"),
+        make_option("--metmap_file", type="character"),
+        make_option("--driver_types_file", type="character"),
         make_option("--figs_dir", type="character")
     )
 
@@ -356,7 +378,17 @@ parseargs = function(){
 main = function(){
     args = parseargs()
     
-    diff_activity_file = args[["diff_activity_file"]]
+    protein_activity_tcga_stn_file = args[["protein_activity_tcga_stn_file"]]
+    genexpr_tcga_stn_file = args[["genexpr_tcga_stn_file"]]
+    metadata_tcga_file = args[["metadata_tcga_file"]]
+    enrichment_scores_tcga_stn_file = args[["enrichment_scores_tcga_stn_file"]]
+    protein_activity_ccle_file = args[["protein_activity_ccle_file"]]
+    genexpr_ccle_file = args[["genexpr_ccle_file"]]
+    metadata_ccle_file = args[["metadata_ccle_file"]]
+    enrichment_scores_ccle_file = args[["enrichment_scores_ccle_file"]]
+    doublings_ccle_file = args[["doublings_ccle_file"]]
+    metmap_file = args[["metmap_file"]]
+    driver_types_file = args[["driver_types_file"]]
     figs_dir = args[["figs_dir"]]
     
     dir.create(figs_dir, recursive = TRUE)
@@ -366,14 +398,16 @@ main = function(){
     genexpr_tcga_stn = read_tsv(genexpr_tcga_stn_file)
     enrichment_scores_tcga_stn = read_tsv(enrichment_scores_tcga_stn_file)
     metadata_tcga = read_tsv(metadata_tcga_file)
-    driver_types = read_tsv(driver_types_file)
     
     protein_activity_ccle = read_tsv(protein_activity_ccle_file)
     genexpr_ccle = read_tsv(genexpr_ccle_file)
     enrichment_scores_ccle = read_tsv(enrichment_scores_ccle_file)
     metadata_ccle = read_tsv(metadata_ccle_file)
     doublings_ccle = read_tsv(doublings_ccle_file)
+    
     metmap = read_tsv(metmap_file)
+    
+    driver_types = read_tsv(driver_types_file)
     
     # prep
     ## TCGA STN

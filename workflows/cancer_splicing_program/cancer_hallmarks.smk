@@ -58,7 +58,7 @@ rule all:
         
         
         # figures
-        #expand(os.path.join(RESULTS_DIR,"figures","cancer_hallmarks-{omic_type}"), omic_type=OMIC_TYPES)
+        expand(os.path.join(RESULTS_DIR,"figures","cancer_hallmarks-{omic_type}"), omic_type=OMIC_TYPES)
         
         
 rule merge_event_psi_by_sample_type:
@@ -149,16 +149,29 @@ rule make_figures:
         protein_activity_tcga_stn = os.path.join(RESULTS_DIR,"files","protein_activity","PANCAN-SolidTissueNormal-{omic_type}.tsv.gz"),
         genexpr_tcga_stn = os.path.join(PREP_DIR,"genexpr_tpm","PANCAN-SolidTissueNormal.tsv.gz"),
         metadata_tcga = os.path.join(PREP_DIR,"metadata","PANCAN.tsv.gz"),
+        enrichment_scores_tcga_stn = os.path.join(RESULTS_DIR,"files","program_enrichment_scores","PANCAN-SolidTissueNormal-EX.tsv.gz"),
         protein_activity_ccle = os.path.join(RESULTS_DIR,"files","protein_activity","CCLE-{omic_type}.tsv.gz"),
         genexpr_ccle = os.path.join(PREP_DIR,"genexpr_tpm","CCLE.tsv.gz"),
         metadata_ccle = os.path.join(PREP_DIR,"metadata","CCLE.tsv.gz"),
-        doublings_ccle = os.path.join(PREP_DIR,"doubling_times","CCLE.tsv.gz")
+        enrichment_scores_ccle = os.path.join(RESULTS_DIR,"files","program_enrichment_scores","CCLE-EX.tsv.gz"),
+        doublings_ccle = os.path.join(PREP_DIR,"doubling_times","CCLE.tsv.gz"),
+        metmap = os.path.join(PREP_DIR,"metmap","CCLE.tsv.gz"),
+        driver_types = os.path.join(RESULTS_DIR,'files','PANCAN','cancer_program.tsv.gz')
     output:
         directory(os.path.join(RESULTS_DIR,"figures","cancer_hallmarks-{omic_type}"))
     shell:
         """
-        Rscript scripts/figures_sf3b_complex.R \
-                    --protein_activity_file={input.protein_activity} \
-                    --metadata_file={input.metadata} \
+        Rscript scripts/figures_cancer_hallmarks.R \
+                    --protein_activity_tcga_stn_file={input.protein_activity_tcga_stn} \
+                    --genexpr_tcga_stn_file={input.genexpr_tcga_stn} \
+                    --metadata_tcga_file={input.metadata_tcga} \
+                    --enrichment_scores_tcga_stn_file={input.enrichment_scores_tcga_stn} \
+                    --protein_activity_ccle_file={input.protein_activity_ccle} \
+                    --genexpr_ccle_file={input.genexpr_ccle} \
+                    --metadata_ccle_file={input.metadata_ccle} \
+                    --enrichment_scores_ccle_file={input.enrichment_scores_ccle} \
+                    --doublings_ccle_file={input.doublings_ccle} \
+                    --metmap_file={input.metmap} \
+                    --driver_types_file={input.driver_types} \
                     --figs_dir={output}
         """
