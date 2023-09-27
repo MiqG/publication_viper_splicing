@@ -245,6 +245,7 @@ plot_hallmarks_ccle = function(protein_activity_ccle){
         drop_na(driver_type) %>%
         ggscatter(x="MKI67", y="activity_median", color="driver_type", 
                   size=1, alpha=0.5, palette=PAL_DRIVER_TYPE) + 
+        geom_density_2d(color="black", size=LINE_SIZE) +
         geom_smooth(method="lm", size=LINE_SIZE, color="black", linetype="dashed") +
         stat_cor(method="pearson", size=FONT_SIZE, family=FONT_FAMILY) + 
         facet_wrap(~driver_type) +
