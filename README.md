@@ -44,9 +44,10 @@
         - proliferation
         - (?) immune evasion
         - (?) metastasis
-    - tumor initiation
-        - (?) brain organoids
-        - cancer-driver mutations
+    - tumorigenesis
+        - from fibroblasts to cancer
+    - program regulators
+        - perturbations that reverse oncogenic and tumor suppressor activities
    
 
 ## Requirements
