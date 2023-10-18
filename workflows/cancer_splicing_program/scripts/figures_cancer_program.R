@@ -193,7 +193,7 @@ plot_driver_selection = function(driver_activity, driver_genexpr, diff_activity,
 
     plts[["driver_selection-n_signif_vs_driver_type-activity-bar"]] = x %>%
         mutate(GENE = factor(GENE, levels=sf_order)) %>%
-        ggbarplot(x="GENE", y="n_sign", fill="driver_type", color=NA) +
+        ggbarplot(x="GENE", y="n", fill="driver_type", color=NA) +
         geom_text(
             aes(label=GENE),
             sfs_oi %>% filter(driver_type=="Oncogenic"),
@@ -204,9 +204,9 @@ plot_driver_selection = function(driver_activity, driver_genexpr, diff_activity,
             aes(label=GENE),
             sfs_oi %>% filter(driver_type=="Tumor suppressor"),
             size=FONT_SIZE, family=FONT_FAMILY, 
-            angle=-45, hjust=0, vjust=1, nudge_y=-0.25
+            angle=45, hjust=0, vjust=0.5, nudge_y=0.25
         ) +
-        geom_hline(yintercept=c(-THRESH_N_SUM,THRESH_N_SUM), linetype="dashed", color="black", size=LINE_SIZE) +
+        geom_hline(yintercept=THRESH_N_SUM, linetype="dashed", color="black", size=LINE_SIZE) +
         geom_text(
             aes(x=x, label=label),
             . %>% 
@@ -217,13 +217,15 @@ plot_driver_selection = function(driver_activity, driver_genexpr, diff_activity,
             count(driver_type) %>% 
                 mutate(
                     label=paste0("n=",n),
-                    n_sign=c(10,-10),
+                    n=c(15,15),
                     x=c(120,40)
                 ),
             size=FONT_SIZE, family=FONT_FAMILY
         ) +
         fill_palette(PAL_DRIVER_TYPE) +
         theme_pubr(x.text.angle=70) +
+        facet_wrap(~driver_type, ncol=1) +
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         labs(x="Splicing Factor", y="Count", fill="Driver Type")
     
     # are activities different between groups?
@@ -259,7 +261,6 @@ plot_driver_selection = function(driver_activity, driver_genexpr, diff_activity,
         stat_compare_means(method="wilcox.test", label="p.signif", size=FONT_SIZE, family=FONT_FAMILY) +
         labs(x="Cancer Type", y="median(Protein Activity)", fill="Driver Type")
     
-    
     # SF genexpr
     X = driver_genexpr
     x = X %>%
@@ -273,7 +274,7 @@ plot_driver_selection = function(driver_activity, driver_genexpr, diff_activity,
     
     plts[["driver_selection-n_signif_vs_driver_type-genexpr-bar"]] = x %>%
         mutate(GENE = factor(GENE, levels=sf_order)) %>%
-        ggbarplot(x="GENE", y="n_sign", fill="driver_type", color=NA) +
+        ggbarplot(x="GENE", y="n", fill="driver_type", color=NA) +
         geom_text(
             aes(label=GENE),
             . %>% filter(driver_type=="Oncogenic" & GENE%in%(sfs_oi %>% filter(driver_type=="Oncogenic") %>% pull(GENE))),
@@ -288,6 +289,53 @@ plot_driver_selection = function(driver_activity, driver_genexpr, diff_activity,
         ) +
         fill_palette(PAL_DRIVER_TYPE) +
         theme_pubr(x.text.angle=70) +
+        facet_wrap(~driver_type, ncol=1) +
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Splicing Factor", y="Count", fill="Driver Type")
+
+    sf_order = x %>%
+        pivot_wider(id_cols="GENE", names_from="driver_type", values_from="n_sign", values_fill=0) %>%
+        rowwise() %>%
+        mutate(diff=sum(`Tumor suppressor`,`Oncogenic`)) %>%
+        ungroup() %>%
+        arrange(diff,`Tumor suppressor`,`Oncogenic`) %>%
+        pull(GENE)
+    
+    plts[["driver_selection-n_signif_vs_driver_type_by_genexpr-genexpr-bar"]] = x %>%
+        mutate(GENE = factor(GENE, levels=sf_order)) %>%
+        ggbarplot(x="GENE", y="n", fill="driver_type", color=NA) +
+        geom_text(
+            aes(label=GENE),
+            . %>% filter(driver_type=="Oncogenic" & GENE%in%(sfs_oi %>% filter(driver_type=="Oncogenic") %>% pull(GENE))),
+            size=FONT_SIZE, family=FONT_FAMILY, 
+            angle=-45, hjust=1, vjust=1, nudge_y=0.25
+        ) +
+        geom_text(
+            aes(label=GENE),
+            . %>% filter(driver_type=="Tumor suppressor" & GENE%in%(sfs_oi %>% filter(driver_type=="Tumor suppressor") %>% pull(GENE))),
+            size=FONT_SIZE, family=FONT_FAMILY, 
+            angle=45, hjust=0, vjust=0.5, nudge_y=0.25
+        ) +
+        geom_hline(yintercept=THRESH_N_SUM, linetype="dashed", color="black", size=LINE_SIZE) +
+        geom_text(
+            aes(x=x, label=label),
+            . %>% 
+            filter(abs(n_sum)>THRESH_N_SUM) %>%
+            group_by(GENE) %>%
+            slice_max(n, n=1) %>%
+            ungroup() %>%
+            count(driver_type) %>% 
+                mutate(
+                    label=paste0("n=",n),
+                    n=c(15,15),
+                    x=c(120,40)
+                ),
+            size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        fill_palette(PAL_DRIVER_TYPE) +
+        theme_pubr(x.text.angle=70) +
+        facet_wrap(~driver_type, ncol=1) +
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         labs(x="Splicing Factor", y="Count", fill="Driver Type")
     
     # are expressions different between oncogenic and tumor suppressor selected via gene expression?
