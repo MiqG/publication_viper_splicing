@@ -209,18 +209,19 @@ rule shortest_paths_stringdb:
         
 rule make_figures:
     input:
-        genexpr = os.path.join(PREP_DIR,"genexpr_tpm","sf_sf3b_complex.tsv.gz"),
-        protein_activity = os.path.join(RESULTS_DIR,"files","protein_activity","sf_sf3b_complex.tsv.gz"),
-        metadata = os.path.join(PREP_DIR,"metadata","sf_sf3b_complex.tsv.gz"),
-        annotation = os.path.join(RAW_DIR,"HGNC","gene_annotations.tsv.gz")
+        protein_activity = os.path.join(RESULTS_DIR,"files","protein_activity","sf3b_complex-EX.tsv.gz"),
+        metadata = os.path.join(RESULTS_DIR,"files","metadata","sf3b_complex-EX.tsv.gz"),
+        splicing_factors = os.path.join(SUPPORT_DIR,"splicing_factors","splicing_factors.tsv"),
+        shortest_paths = os.path.join(RESULTS_DIR,'files','ppi','shortest_path_lengths_to_sf3b_complex.tsv.gz')
     output:
         directory(os.path.join(RESULTS_DIR,"figures","validation_sf3b_complex"))
     shell:
         """
+        
         Rscript scripts/figures_sf3b_complex.R \
-                    --genexpr_file={input.genexpr} \
                     --protein_activity_file={input.protein_activity} \
                     --metadata_file={input.metadata} \
-                    --annotation_file={input.annotation} \
+                    --splicing_factors_file={input.splicing_factors} \
+                    --shortest_paths_file={input.shortest_paths} \
                     --figs_dir={output}
         """

@@ -220,16 +220,19 @@ plot_activity_drugs = function(protein_activity, shortest_paths){
         slice_min(shortest_path_length, n=1, with_ties=FALSE) %>%
         ungroup() %>%
         left_join(x, by=c("target"="GENE")) %>%
-        drop_na(study_accession, cell_line_name, condition_lab)
+        drop_na(study_accession, cell_line_name, condition_lab) %>%
+        mutate(shortest_path_length_lab = factor(
+            shortest_path_length_lab, levels=c("0","1","2","3",">=4")
+        ))
     
     plts[["activity_drugs-shortest_paths-bar"]] = y %>%
-        distinct(source, target, shortest_path_length) %>%
-        count(shortest_path_length) %>%
-        ggbarplot(x="shortest_path_length", y="n", fill=PAL_DARK, color=NA) +
+        distinct(source, target, shortest_path_length_lab) %>%
+        count(shortest_path_length_lab) %>%
+        ggbarplot(x="shortest_path_length_lab", y="n", fill=PAL_DARK, color=NA) +
         labs(x="Shortest Path Length", y="Counts")
     
     plts[["activity_drugs-sf3b_complex_vs_shortest_paths-box"]] = y %>%
-        ggboxplot(x="shortest_path_length", y="activity", color="condition", outlier.size=0.1) +
+        ggboxplot(x="shortest_path_length_lab", y="activity", color="condition", outlier.size=0.1) +
         facet_wrap(~study_accession+cell_line_name+condition_lab, scales="free_y") +
         theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         labs(x="Shortest Path Length", y="Protein Activity", color="Drug")
@@ -303,6 +306,7 @@ parseargs = function(){
         make_option("--protein_activity_file", type="character"),
         make_option("--metadata_file", type="character"),
         make_option("--splicing_factors_file", type="character"),
+        make_option("--shortest_paths_file", type="character"),
         make_option("--figs_dir", type="character")
     )
 
@@ -320,6 +324,7 @@ main = function(){
     protein_activity_file = args[["protein_activity_file"]]
     metadata_file = args[["metadata_file"]]
     splicing_factors_file = args[["splicing_factors_file"]]
+    shortest_paths_file = args[["shortest_paths_file"]]
     figs_dir = args[["figs_dir"]]
     
     dir.create(figs_dir, recursive = TRUE)
@@ -378,7 +383,13 @@ main = function(){
         )
     
     shortest_paths = shortest_paths %>%
-        drop_na(shortest_path_length)
+        drop_na(shortest_path_length) %>%
+        mutate(
+            shortest_path_length_lab = case_when(
+                shortest_path_length >= 4 ~ ">=4",
+                shortest_path_length < 4 ~ as.character(shortest_path_length)
+            )
+        )
     
     # plot
     plts = make_plots(protein_activity, shortest_paths)
