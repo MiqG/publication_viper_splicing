@@ -91,7 +91,8 @@ rule figures_protein_depletion:
         proteomics = os.path.join(RAW_DIR,"articles","Nijhuis2020","supplementary_data","proteomics_lfq_intensity.tsv.gz"),
         genexpr = os.path.join(PREP_DIR,"genexpr_tpm","Nijhuis2020.tsv.gz"),
         protein_activity = os.path.join(RESULTS_DIR,"files","protein_activity","protein_depletion-Nijhuis2020-{event_type}.tsv.gz"),
-        metadata = os.path.join(PREP_DIR,"metadata","Nijhuis2020.tsv.gz")
+        metadata = os.path.join(PREP_DIR,"metadata","Nijhuis2020.tsv.gz"),
+        gene_info = os.path.join(RAW_DIR,"HGNC","gene_annotations.tsv.gz")
     output:
         directory(os.path.join(RESULTS_DIR,"figures","protein_depletion-Nijhuis2020-{event_type}"))
     shell:
@@ -101,5 +102,6 @@ rule figures_protein_depletion:
                     --genexpr_file={input.genexpr} \
                     --protein_activity_file={input.protein_activity} \
                     --metadata_file={input.metadata} \
+                    --gene_info_file={input.gene_info} \
                     --figs_dir={output}
         """

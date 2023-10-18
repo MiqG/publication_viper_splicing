@@ -224,6 +224,7 @@ parseargs = function(){
         make_option("--genexpr_file", type="character"),
         make_option("--protein_activity_file", type="character"),
         make_option("--metadata_file", type="character"),
+        make_option("--gene_info_file", type="character"),
         make_option("--figs_dir", type="character")
     )
 
@@ -235,12 +236,11 @@ parseargs = function(){
 main = function(){
     args = parseargs()
     
-    print(args)
-    
     proteomics_file = args[["proteomics_file"]]
     genexpr_file = args[["genexpr_file"]]
     protein_activity_file = args[["protein_activity_file"]]
     metadata_file = args[["metadata_file"]]
+    gene_info_file = args[["gene_info_file"]]
     figs_dir = args[["figs_dir"]]
     
     dir.create(figs_dir, recursive = TRUE)
@@ -345,6 +345,12 @@ main = function(){
         mutate(activity_ranking = row_number()) %>%
         ungroup()
     
+    # consider only splicing factors
+    splicing_factors = gene_info %>% 
+        filter(`Ensembl gene ID` %in% protein_activity[["regulator"]]) %>% 
+        pull(`Approved symbol`)
+    diff_proteomics = diff_proteomics %>%
+        filter(GENE %in% splicing_factors)
     
     # plot
     plts = make_plots(proteomics, diff_proteomics, genexpr, protein_activity)
