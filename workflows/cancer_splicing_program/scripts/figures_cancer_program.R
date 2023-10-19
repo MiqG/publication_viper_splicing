@@ -17,7 +17,8 @@ require(extrafont)
 require(ggrepel)
 require(clusterProfiler)
 require(org.Hs.eg.db)
-library(pROC)
+require(pROC)
+require(readxl)
 
 # variables
 THRESH_FDR = 0.05
@@ -41,6 +42,8 @@ PAL_CANCER_TYPES = setNames(
     c("BLCA","BRCA","COAD","HNSC","KICH","KIRC","KIRP",
       "LIHC","LUAD","LUSC","PRAD","STAD","THCA","UCEC")
 )
+
+PAL_IMMUNE_SCREEN = setNames(c("#EB9486","#7E7F9A"), c(TRUE, FALSE))
 
 # Development
 # -----------
@@ -66,6 +69,8 @@ PAL_CANCER_TYPES = setNames(
 # regulons_path = file.path(REGINF_DIR,"files","experimentally_derived_regulons_pruned-EX")
 # regulons_jaccard_file = file.path(REGINF_DIR,"files","regulons_eda_jaccard","experimentally_derived_regulons_pruned-EX.tsv.gz")
 # msigdb_dir = file.path(RAW_DIR,'MSigDB','msigdb_v7.4','msigdb_v7.4_files_to_download_locally','msigdb_v7.4_GMTs')
+# immune_screen_file = file.path(SUPPORT_DIR,"supplementary_tables_literature","Dubrot2022-suptabs-41590_2022_1315_MOESM2_ESM.xlsx") # Sup. Tab. 13
+# human2mouse_file = file.path(RAW_DIR,"BIOMART","human2mouse.tsv")
 
 ##### FUNCTIONS #####
 load_regulons = function(regulons_path, patt=NULL){
@@ -733,7 +738,7 @@ make_enrichments = function(driver_classif, regulons, ontologies){
 }
 
 
-plot_enrichments = function(enrichments){
+plot_enrichments = function(enrichments, immune_screen){
     plts = list()
     
     X = enrichments[["CHEA"]]
@@ -779,8 +784,50 @@ plot_enrichments = function(enrichments){
         arrange(ratio_sums) %>%
         ggbarplot(x="Description", y="GeneRatio", fill="driver_type", color=NA,
                   palette=PAL_DRIVER_TYPE) +
+        geom_text(aes(label=Count), size=FONT_SIZE, family=FONT_FAMILY) +
         labs(x="Description", y="GeneRatio", fill="Driver Type") +
         coord_flip()
+    
+    # antigen processing related genes found in immunogenesis screen
+    x = immune_screen %>%
+        left_join(
+            X %>%
+                filter(str_detect(ID, "ANTIGEN")) %>%
+                separate_rows(geneID),
+            by=c("human_symbol"="geneID"),
+            relationship="many-to-many"
+        ) %>%
+        mutate(
+            in_reactome = !is.na(ID),
+            score = Sign*`Average Score`
+        ) %>% 
+        distinct(Gene, score, in_reactome, Dataset, Comparison) %>% 
+        group_by(Dataset, Comparison) %>% 
+        arrange(score) %>% 
+        mutate(ranking = row_number()) %>% 
+        ungroup()
+    
+    genes_oi = x %>%
+        group_by(Dataset, Comparison, in_reactome) %>%
+        slice_max(abs(score), n=6) %>%
+        ungroup() %>%
+        left_join(immune_screen %>% distinct(Gene, human_symbol), by="Gene") %>%
+        mutate(gene_lab = sprintf("%s (%s)", Gene, human_symbol))
+    
+    plts[["reactome_enrichments-immune_screen-scatter"]] = x %>% 
+        ggplot(aes(x=ranking, y=score, color=in_reactome)) + 
+        #geom_point(data = . %>% filter(!in_reactome)) + 
+        geom_point(data = . %>% filter(in_reactome)) + 
+        color_palette(PAL_IMMUNE_SCREEN) +
+        geom_text_repel(
+            aes(label=gene_lab),
+            genes_oi %>% filter(in_reactome),
+            color="black",
+            size=FONT_SIZE, family=FONT_FAMILY, segment.size=0.1
+        ) +
+        facet_wrap(~Dataset+Comparison) + 
+        theme_pubr() +
+        labs(x="Ranking", y="Score")
     
     return(plts)
 }
@@ -803,7 +850,7 @@ make_plots = function(
     survival_activity, survival_genexpr, 
     driver_activity, driver_genexpr, 
     sf_crossreg_activity, sf_crossreg_genexpr, 
-    enrichments, sf_activity_vs_genexpr, regulons_jaccard
+    enrichments, immune_screen, sf_activity_vs_genexpr, regulons_jaccard
 ){
     plts = list(
         plot_driver_selection(driver_activity, driver_genexpr, diff_activity, diff_genexpr),
@@ -814,7 +861,7 @@ make_plots = function(
         plot_survival_analysis(survival_roc_activity_w_genexpr_labs, survival_activity, driver_genexpr, "-activity_w_genexpr_labs"),
         plot_sf_crossreg(driver_activity, sf_crossreg_activity, regulons_jaccard, "-activity"),
         plot_sf_crossreg(driver_genexpr, sf_crossreg_genexpr, regulons_jaccard, "-genexpr"),
-        plot_enrichments(enrichments),
+        plot_enrichments(enrichments, immune_screen),
         plot_comparison(diff_activity, diff_genexpr, survival_activity, survival_genexpr, sf_activity_vs_genexpr)
     )
     plts = do.call(c,plts)
@@ -830,7 +877,7 @@ make_figdata = function(
     survival_activity, survival_genexpr, 
     driver_activity, driver_genexpr, 
     sf_crossreg_activity, sf_crossreg_genexpr, 
-    enrichments, sf_activity_vs_genexpr, regulons_jaccard
+    enrichments, immune_screen, sf_activity_vs_genexpr, regulons_jaccard
 ){
     figdata = list(
         "tcga_tumorigenesis" = list(
@@ -862,6 +909,7 @@ save_plt = function(plts, plt_name, extension='.pdf',
 save_plots = function(plts, figs_dir){
     save_plt(plts, "driver_selection-n_signif_vs_driver_type-activity-bar", '.pdf', figs_dir, width=5, height=7)
     save_plt(plts, "driver_selection-n_signif_vs_driver_type-genexpr-bar", '.pdf', figs_dir, width=5, height=7)
+    save_plt(plts, "driver_selection-n_signif_vs_driver_type_by_genexpr-genexpr-bar", '.pdf', figs_dir, width=5, height=7)
     save_plt(plts, "driver_selection-drivers_vs_cancer_type-activity_drivers_vs_activity-violin", '.pdf', figs_dir, width=8, height=6)
     save_plt(plts, "driver_selection-drivers_vs_cancer_type-activity_drivers_vs_genexpr-violin", '.pdf', figs_dir, width=8, height=6)
     save_plt(plts, "driver_selection-drivers_vs_cancer_type-genexpr_drivers_vs_genexpr-violin", '.pdf', figs_dir, width=8, height=6)
@@ -891,6 +939,7 @@ save_plots = function(plts, figs_dir){
     save_plt(plts, "tf_enrichments-oncogenic-cnet", '.pdf', figs_dir, width=4, height=4)
     save_plt(plts, "tf_enrichments-suppressor-cnet", '.pdf', figs_dir, width=4, height=4)
     save_plt(plts, "reactome_enrichments-bar", '.pdf', figs_dir, width=16, height=6)
+    save_plt(plts, "reactome_enrichments-immune_screen-scatter", '.pdf', figs_dir, width=7, height=8)
     
     save_plt(plts, "comparison-diff_analysis-scatter", '.pdf', figs_dir, width=4, height=4)
     save_plt(plts, "comparison-survival-scatter", '.pdf', figs_dir, width=4, height=4)
@@ -932,6 +981,8 @@ parseargs = function(){
         make_option("--annotation_file", type="character"),
         make_option("--gene_annotation_file", type="character"),
         make_option("--msigdb_dir", type="character"),
+        make_option("--immune_screen_file", type="character"),
+        make_option("--human2mouse_file", type="character"),
         make_option("--figs_dir", type="character")
     )
 
@@ -957,6 +1008,8 @@ main = function(){
     regulons_jaccard_file = args[["regulons_jaccard_file"]]
     gene_annotation_file = args[["gene_annotation_file"]]
     ontology_chea_file = args[["ontology_chea_file"]]
+    immune_screen_file = args[["immune_screen_file"]]
+    human2mouse_file = args[["human2mouse_file"]]
     msigdb_dir = args[["msigdb_dir"]]
     figs_dir = args[["figs_dir"]]
     
@@ -987,6 +1040,10 @@ main = function(){
         "GO_BP" = read.gmt(file.path(msigdb_dir,"c5.go.bp.v7.4.symbols.gmt")),
         "GO_CC" = read.gmt(file.path(msigdb_dir,"c5.go.cc.v7.4.symbols.gmt")),
         "CHEA" = read.gmt(ontology_chea_file)
+    )
+    immune_screen = read_excel(immune_screen_file, sheet="Supplementary Table 13")
+    human2mouse = read_tsv(
+        human2mouse_file, col_names=c("human_ensembl","human_symbol","mouse_ensembl","mouse_symbol")
     )
     
     # prep
@@ -1040,6 +1097,13 @@ main = function(){
         left_join(
             gene_annotation[,c("ENSEMBL","GENE")],
             by = c("sf_activity"="ENSEMBL")
+        )
+    
+    immune_screen = immune_screen %>%
+        left_join(
+            human2mouse %>% drop_na(human_symbol, mouse_symbol), 
+            by=c("Gene"="mouse_symbol"),
+            relationship = "many-to-many" # WARNING! There are duplicates!
         )
     
     # enrichment
@@ -1108,7 +1172,7 @@ main = function(){
         survival_activity, survival_genexpr, 
         driver_activity, driver_genexpr, 
         sf_crossreg_activity, sf_crossreg_genexpr, 
-        enrichments, sf_activity_vs_genexpr, regulons_jaccard
+        enrichments, immune_screen, sf_activity_vs_genexpr, regulons_jaccard
     )
     
     # make figdata
@@ -1120,7 +1184,7 @@ main = function(){
         survival_activity, survival_genexpr, 
         driver_activity, driver_genexpr, 
         sf_crossreg_activity, sf_crossreg_genexpr, 
-        enrichments, sf_activity_vs_genexpr, regulons_jaccard
+        enrichments, immune_screen, sf_activity_vs_genexpr, regulons_jaccard
     )
 
     # save

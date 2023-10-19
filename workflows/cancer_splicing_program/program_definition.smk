@@ -667,7 +667,9 @@ rule figures_cancer_program:
         regulons_path = os.path.join(REGULONS_DIR,"files","experimentally_derived_regulons_pruned-EX"),
         regulons_jaccard = os.path.join(REGULONS_DIR,"files","regulons_eda_jaccard","experimentally_derived_regulons_pruned-EX.tsv.gz"),
         gene_annotation = os.path.join(RAW_DIR,"HGNC","gene_annotations.tsv.gz"),
-        msigdb_dir = os.path.join(RAW_DIR,'MSigDB','msigdb_v7.4','msigdb_v7.4_files_to_download_locally','msigdb_v7.4_GMTs')
+        msigdb_dir = os.path.join(RAW_DIR,'MSigDB','msigdb_v7.4','msigdb_v7.4_files_to_download_locally','msigdb_v7.4_GMTs'),
+        immune_screen = os.path.join(SUPPORT_DIR,"supplementary_tables_literature","Dubrot2022-suptabs-41590_2022_1315_MOESM2_ESM.xlsx"),
+        human2mouse = os.path.join(RAW_DIR,"BIOMART","human2mouse.tsv")
     output:
         directory(os.path.join(RESULTS_DIR,"figures","cancer_program"))
     shell:
@@ -688,5 +690,7 @@ rule figures_cancer_program:
                     --gene_annotation_file={input.gene_annotation} \
                     --ontology_chea_file={input.ontology_chea} \
                     --msigdb_dir={input.msigdb_dir} \
+                    --immune_screen_file={input.immune_screen} \
+                    --human2mouse_file={input.human2mouse} \
                     --figs_dir={output}
         """
