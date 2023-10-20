@@ -18,7 +18,8 @@ REGULON_SETS = c(
     'mlr_regulons_development',
     'experimentally_derived_regulons_pruned',
     'aracne_and_experimental_regulons',
-    'mlr_and_experimental_regulons'
+    'mlr_and_experimental_regulons',
+    'aracne_and_mlr_regulons'
 )
 
 # formatting

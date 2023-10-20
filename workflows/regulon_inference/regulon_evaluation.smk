@@ -47,7 +47,8 @@ REGULON_SETS = [
     "mlr_regulons_development",
     "experimentally_derived_regulons_pruned",
     "aracne_and_experimental_regulons",
-    "mlr_and_experimental_regulons"
+    "mlr_and_experimental_regulons",
+    "aracne_and_mlr_regulons"
 ]
 
 ##### RULES #####
@@ -63,7 +64,8 @@ rule all:
         expand(os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","merged-{omic_type}.tsv.gz"), omic_type=OMIC_TYPES),
         
         # make figures
-        expand(os.path.join(RESULTS_DIR,"figures","regulon_evaluation"), omic_type=OMIC_TYPES)
+        os.path.join(RESULTS_DIR,"figures","regulon_evaluation"),
+        os.path.join(RESULTS_DIR,"figures","regulon_inference")
         
         
 rule make_evaluation_labels:
@@ -155,5 +157,22 @@ rule figures_regulon_evaluation:
         Rscript scripts/figures_regulon_evaluation.R \
                     --evaluation_ex_file={input.evaluation_ex} \
                     --evaluation_genexpr_file={input.evaluation_genexpr} \
+                    --figs_dir={output}
+        """
+        
+        
+rule figures_regulon_inference:
+    input:
+        experimental_pruned_path = os.path.join(RESULTS_DIR,"files","experimentally_derived_regulons_pruned-EX"),
+        aracne_and_experimental_path = os.path.join(RESULTS_DIR,"files","aracne_and_experimental_regulons-EX"),
+        mlr_and_experimental_path = os.path.join(RESULTS_DIR,"files","mlr_and_experimental_regulons-EX")
+    output:
+        directory(os.path.join(RESULTS_DIR,"figures","regulon_inference"))
+    shell:
+        """
+        Rscript scripts/figures_regulon_inference.R \
+                    --experimental_pruned_path={input.experimental_pruned_path} \
+                    --aracne_and_experimental_path={input.aracne_and_experimental_path} \
+                    --mlr_and_experimental_path={input.mlr_and_experimental_path} \
                     --figs_dir={output}
         """
