@@ -12,6 +12,7 @@ require(extrafont)
 require(ggrepel)
 
 # variables
+RANDOM_SEED = 1234
 THRESH_FDR = 0.05
 
 # formatting
@@ -25,6 +26,7 @@ PAL_DRIVER_TYPE = c(
     "Tumor suppressor"="#6C98B3",
     "Oncogenic"="#F6AE2D"
 )
+
 
 # Development
 # -----------
@@ -54,6 +56,31 @@ plot_tumorigenesis = function(protein_activity){
         ))
     
     plts[["tumorigenesis-cell_line_vs_activity-violin"]] = X %>%
+        filter(cell_line_name!="BJ_PRIMARY") %>%
+        ggplot(aes(x=cell_line_name, y=activity, group=interaction(cell_line_name,driver_type))) +
+        geom_violin(aes(fill=driver_type), color=NA, position=position_dodge(0.9)) +
+        geom_boxplot(width=0.1, outlier.size=0.1, fill=NA, color="black", position=position_dodge(0.9)) +
+        fill_palette(PAL_DRIVER_TYPE) +
+        stat_compare_means(method="wilcox.test", label="p.signif", size=FONT_SIZE, family=FONT_FAMILY) + 
+        theme_pubr() +
+        labs(x="Cell Line", y="Protein Activity", fill="Driver Type")
+
+    # random control
+    X = protein_activity %>%
+        group_by(cell_line_name, study_accession) %>%
+        mutate(driver_type = sample(driver_type)) %>%
+        ungroup() %>%
+        drop_na(driver_type) %>%
+        group_by(cell_line_name, driver_type, study_accession, GENE) %>%
+        summarize(activity = median(activity)) %>%
+        ungroup() %>%
+        filter(study_accession=="PRJNA193487") %>%
+        mutate(cell_line_name=factor(
+            cell_line_name, levels=c("BJ_PRIMARY","BJ_IMMORTALIZED",
+                                     "BJ_TRANSFORMED","BJ_METASTATIC")
+        ))
+    
+    plts[["tumorigenesis-cell_line_vs_activity-random-violin"]] = X %>%
         filter(cell_line_name!="BJ_PRIMARY") %>%
         ggplot(aes(x=cell_line_name, y=activity, group=interaction(cell_line_name,driver_type))) +
         geom_violin(aes(fill=driver_type), color=NA, position=position_dodge(0.9)) +
@@ -107,6 +134,7 @@ save_plt = function(plts, plt_name, extension='.pdf',
 
 save_plots = function(plts, figs_dir){
     save_plt(plts, "tumorigenesis-cell_line_vs_activity-violin", '.pdf', figs_dir, width=6, height=6)
+    save_plt(plts, "tumorigenesis-cell_line_vs_activity-random-violin", '.pdf', figs_dir, width=6, height=6)
 }
 
 
@@ -148,6 +176,7 @@ main = function(){
     driver_types_file = args[["driver_types_file"]]
     figs_dir = args[["figs_dir"]]
     
+    set.seed(RANDOM_SEED)    
     dir.create(figs_dir, recursive = TRUE)
     
     # load

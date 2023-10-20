@@ -35,7 +35,7 @@ rule all:
         expand(os.path.join(RESULTS_DIR,"files","protein_activity","{dataset}-{omic_type}.tsv.gz"), dataset=DATASETS, omic_type=OMIC_TYPES),
         
         # figures
-        #expand(os.path.join(RESULTS_DIR,"figures","tumorigenesis-{omic_type}"), omic_type=OMIC_TYPES)
+        expand(os.path.join(RESULTS_DIR,"figures","tumorigenesis-{omic_type}"), omic_type=OMIC_TYPES)
         
 
 rule compute_signatures:
@@ -112,7 +112,7 @@ rule compute_protein_activity:
 rule make_figures:
     input:
         protein_activity = os.path.join(RESULTS_DIR,"files","protein_activity","tumorigenesis-{omic_type}.tsv.gz"),
-        metadata = os.path.join(RESULTS_DIR,"files","protein_activity","tumorigenesis-{omic_type}.tsv.gz"),
+        metadata = os.path.join(PREP_DIR,"metadata","tumorigenesis.tsv.gz"),
         driver_types = os.path.join(RESULTS_DIR,'files','PANCAN','cancer_program.tsv.gz')
     output:
         directory(os.path.join(RESULTS_DIR,"figures","tumorigenesis-{omic_type}"))
