@@ -11,17 +11,19 @@ require(viper)
 # ROOT = here::here()
 # PREP_DIR = file.path(ROOT,"data","prep")
 # RESULTS_DIR = file.path(ROOT,"results","regulon_inference")
+# signature_file = file.path(PREP_DIR,'ground_truth_pert','ENCOREKO',"HepG2",'log2_fold_change_tpm.tsv.gz')
 # signature_file = file.path(PREP_DIR,'ground_truth_pert','ENCOREKO',"HepG2",'delta_psi-EX.tsv.gz')
-# regulons_path = file.path(RESULTS_DIR,"files","mlr_regulons_development-EX")
+# regulons_path = file.path(RESULTS_DIR,"files","mlr_and_experimental_regulons-genexpr")
+# regulons_path = file.path(RESULTS_DIR,"files","mlr_and_experimental_regulons-EX")
 # eval_labels_file = file.path(RESULTS_DIR,"files","regulon_evaluation_labels","ENCOREKO_HepG2.tsv.gz")
 
 ##### FUNCTIONS #####
 as_regulon_network = function(regulons){
 
-    uregs = regulons[['regulator']] %>% unique()
-    reg = sapply(uregs, function(ureg){
+    regulators = regulons[['regulator']] %>% unique()
+    regulons = sapply(regulators, function(regulator_oi){
             X = regulons %>%
-                filter(regulator %in% ureg)
+                filter(regulator %in% regulator_oi)
             X = list(
                 tfmode = setNames(X[['tfmode']], X[['target']]),
                 likelihood = X[['likelihood']]
@@ -29,7 +31,7 @@ as_regulon_network = function(regulons){
             return(X)
         }, simplify=FALSE)
     
-    return(reg)
+    return(regulons)
 }
 
 
@@ -50,6 +52,10 @@ load_networks = function(network_path, patt=NULL){
         return(network)
     }, simplify=FALSE)
     
+    # drop networks that cannot be used
+    to_keep = sapply(networks, length)>1
+    networks = networks[to_keep]
+    
     return(networks)
 }
 
@@ -58,11 +64,7 @@ run_viper = function(signature, regulons){
     # runs VIPER or metaVIPER depending on whether there are multiple regulons
     # in `regulons`
     
-    result = viper(
-        signature, 
-        regulons,
-        verbose=FALSE
-    ) 
+    result = viper(signature, regulons, verbose=FALSE) 
     
     return(result)
 }
@@ -151,15 +153,24 @@ run_viper_and_evaluate = function(signature, regulons, eval_labels){
         # compute protein activities
         protein_activities = viper(signature, regulons[[regulons_oi]], verbose=FALSE)
         
-        # evaluate protein activities
-        evaluation = evaluate_protein_activities(protein_activities, eval_labels)
+        if (nrow(protein_activities)>1){
+            # evaluate protein activities
+            evaluation = evaluate_protein_activities(protein_activities, eval_labels)
+
+            # add info
+            evaluation[["regulon_id"]] = basename(regulons_oi) %>% gsub(".tsv.gz","",.)
+            
+        }else{
+            
+            evaluation = data.frame(regulon_id=regulons_oi)
         
-        # add info
-        evaluation[["regulon_id"]] = basename(regulons_oi) %>% gsub(".tsv.gz","",.)
+        }
         
         return(evaluation)
-        
-    }) %>% do.call(rbind, .)
+
+        }) %>% 
+        bind_rows() %>%
+        drop_na(regulator)
     
     return(result)
 }

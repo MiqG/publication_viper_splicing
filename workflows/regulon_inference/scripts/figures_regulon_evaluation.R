@@ -16,7 +16,9 @@ require(extrafont)
 REGULON_SETS = c(
     'aracne_regulons_development',
     'mlr_regulons_development',
-    'experimentally_derived_regulons_pruned'
+    'experimentally_derived_regulons_pruned',
+    'aracne_and_experimental_regulons',
+    'mlr_and_experimental_regulons'
 )
 
 # formatting
@@ -131,7 +133,7 @@ save_plt = function(plts, plt_name, extension='.pdf',
 
 
 save_plots = function(plts, figs_dir){
-    save_plt(plts, "evaluation-ranking_perc_vs_regulon_set_vs_pert_type-box", '.pdf', figs_dir, width=6.5, height=16)
+    save_plt(plts, "evaluation-ranking_perc_vs_regulon_set_vs_pert_type-box", '.pdf', figs_dir, width=6.5, height=24)
     save_plt(plts, "evaluation-ranking_perc_vs_regulon_set-box", '.pdf', figs_dir, width=8, height=10)
 }
 

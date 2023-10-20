@@ -45,7 +45,9 @@ METADATA_FILES = [
 REGULON_SETS = [
     "aracne_regulons_development",
     "mlr_regulons_development",
-    "experimentally_derived_regulons_pruned"
+    "experimentally_derived_regulons_pruned",
+    "aracne_and_experimental_regulons",
+    "mlr_and_experimental_regulons"
 ]
 
 ##### RULES #####
