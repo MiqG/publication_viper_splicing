@@ -21,6 +21,7 @@ require(extrafont)
 require(ggrepel)
 require(proxy)
 require(umap)
+require(ggbeeswarm)
 
 # variables
 
@@ -58,7 +59,9 @@ plot_regulons = function(regulons){
     
     plts[["regulons-n_targets_per_regulator-box"]] = X %>%
         count(regulon_id, regulator) %>%
-        ggboxplot(x="regulon_id", y="n", width=0.5, outlier.size=0.1, fill="orange") +
+        ggplot(aes(x=regulon_id, y=n)) +
+        geom_quasirandom(size=1, color="orange", varwidth=0.5) +
+        geom_boxplot(width=0.5, outlier.shape=NA, color="black", fill=NA) +
         guides(fill="none") +
         theme_pubr(x.text.angle=45) +
         yscale("log10", .format=TRUE) +
@@ -66,7 +69,9 @@ plot_regulons = function(regulons){
     
     plts[["regulons-n_regulators_per_target-box"]] = X %>%
         count(regulon_id, target) %>%
-        ggboxplot(x="regulon_id", y="n", width=0.5, outlier.size=0.1, fill="orange") +
+        ggplot(aes(x=regulon_id, y=n)) +
+        geom_quasirandom(size=1, color="orange", varwidth=0.5) +
+        geom_boxplot(width=0.5, outlier.shape=NA, color="black", fill=NA) +
         guides(fill="none") +
         theme_pubr(x.text.angle=45) +
         labs(x="Regulon ID", y="N. Regulators per Target")
