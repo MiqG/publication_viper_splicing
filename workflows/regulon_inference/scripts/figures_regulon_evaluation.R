@@ -19,7 +19,14 @@ REGULON_SETS = c(
     'experimentally_derived_regulons_pruned',
     'aracne_and_experimental_regulons',
     'mlr_and_experimental_regulons',
-    'aracne_and_mlr_regulons'
+    'aracne_and_mlr_regulons',
+    'top100_experimentally_derived_regulons_pruned',
+    'top90_experimentally_derived_regulons_pruned',
+    'top80_experimentally_derived_regulons_pruned',
+    'top70_experimentally_derived_regulons_pruned',
+    'top60_experimentally_derived_regulons_pruned',
+    'top50_experimentally_derived_regulons_pruned',
+    'top40_experimentally_derived_regulons_pruned'
 )
 
 # formatting

@@ -13,13 +13,6 @@ require(scattermore)
 require(extrafont)
 
 # variables
-REGULON_SETS = c(
-    'aracne_regulons_development',
-    'mlr_regulons_development',
-    'experimentally_derived_regulons_pruned',
-    'aracne_and_experimental_regulons',
-    'mlr_and_experimental_regulons'
-)
 
 # formatting
 LINE_SIZE = 0.25

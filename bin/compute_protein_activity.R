@@ -14,8 +14,9 @@ require(viper)
 # signature_file = file.path(PREP_DIR,'ground_truth_pert','ENCOREKO',"HepG2",'log2_fold_change_tpm.tsv.gz')
 # signature_file = file.path(PREP_DIR,'ground_truth_pert','ENCOREKO',"HepG2",'delta_psi-EX.tsv.gz')
 # regulons_path = file.path(RESULTS_DIR,"files","mlr_and_experimental_regulons-genexpr")
-# regulons_path = file.path(RESULTS_DIR,"files","mlr_and_experimental_regulons-EX")
+# regulons_path = file.path(RESULTS_DIR,"files","top40_experimentally_derived_regulons_pruned-EX")
 # eval_labels_file = file.path(RESULTS_DIR,"files","regulon_evaluation_labels","ENCOREKO_HepG2.tsv.gz")
+# shadow_correction = "yes"
 
 ##### FUNCTIONS #####
 as_regulon_network = function(regulons){
@@ -52,6 +53,13 @@ load_networks = function(network_path, patt=NULL){
         return(network)
     }, simplify=FALSE)
     
+    # drop regulons that cannot be used
+    networks = sapply(networks, function(network){
+        to_keep = sapply(network, function(x){ length(x[[1]]) }) >= 25 # viper's default minsize
+        network = network[to_keep]
+        return(network)
+    }, simplify=FALSE)
+    
     # drop networks that cannot be used
     to_keep = sapply(networks, length)>1
     networks = networks[to_keep]
@@ -60,13 +68,14 @@ load_networks = function(network_path, patt=NULL){
 }
 
 
-run_viper = function(signature, regulons){
+run_viper = function(signature, regulons, shadow_correction="no"){
     # runs VIPER or metaVIPER depending on whether there are multiple regulons
     # in `regulons`
     
-    result = viper(signature, regulons, verbose=FALSE) 
+    pleiotropy = (shadow_correction=="yes")
+    protein_activities = viper(signature, regulons, verbose=FALSE, pleiotropy=pleiotropy)
     
-    return(result)
+    return(protein_activities)
 }
 
 
@@ -147,11 +156,12 @@ evaluate_protein_activities = function(protein_activities, eval_labels){
 }
 
 
-run_viper_and_evaluate = function(signature, regulons, eval_labels){
+run_viper_and_evaluate = function(signature, regulons, eval_labels, shadow_correction="no"){
     # run viper for each regulon set
     result = lapply(names(regulons), function(regulons_oi){
         # compute protein activities
-        protein_activities = viper(signature, regulons[[regulons_oi]], verbose=FALSE)
+        pleiotropy = (shadow_correction=="yes")
+        protein_activities = viper(signature, regulons[[regulons_oi]], verbose=FALSE, pleiotropy=pleiotropy)
         
         if (nrow(protein_activities)>1){
             # evaluate protein activities
@@ -183,7 +193,8 @@ parseargs = function(){
         make_option("--regulons_path", type="character"),
         make_option("--eval_labels_file", type="character", default=NULL),
         make_option("--output_file", type="character"),
-        make_option("--random_seed", type="integer", default=1234)
+        make_option("--random_seed", type="integer", default=1234),
+        make_option("--shadow_correction", type="character", default="no")
     )
 
     args = parse_args(OptionParser(option_list=option_list))
@@ -198,6 +209,8 @@ main = function(){
     signature_file = args[["signature_file"]]
     regulons_path = args[["regulons_path"]]
     eval_labels_file = args[["eval_labels_file"]]
+    random_seed = args[["random_seed"]]
+    shadow_correction = args[["shadow_correction"]]
     output_file = args[["output_file"]]
     
     set.seed(args[["random_seed"]])
@@ -222,16 +235,17 @@ main = function(){
     if (is.null(eval_labels)){
         
         # run regular viper
-        result = run_viper(signature, regulons)
+        result = run_viper(signature, regulons, shadow_correction)
         result = result %>% as.data.frame() %>% rownames_to_column('regulator')
     
     }else{
         print("Evaluation mode...")
         
         # run viper and evaluate predicted protein activities
-        result = run_viper_and_evaluate(signature, regulons, eval_labels)
+        result = run_viper_and_evaluate(signature, regulons, eval_labels, shadow_correction)
         result[["regulon_set_id"]] = basename(regulons_path)
         result[["signature_id"]] = basename(eval_labels_file) %>% gsub(".tsv.gz","",.)
+        result[["shadow_correction"]] = shadow_correction
     }
     
     # save

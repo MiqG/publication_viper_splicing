@@ -8,6 +8,7 @@
     - ARACNe MI + ARACNe MoR (negative) + MLR MoR (positive)
 2. Regulon evaluation
     - within and between recapitulation of perturbations
+    - for the best regulons, evaluate their robustness and shadow effect
 3. Regulon EDA
     - targets per regulator
     - regulators per target
