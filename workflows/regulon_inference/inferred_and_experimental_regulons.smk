@@ -130,9 +130,10 @@ rule make_regulons_aracne_and_mlr:
         regulon = pd.merge(aracne_regulons, mlr_regulons, how="left", on=common_cols)
         
         regulon["likelihood"] = regulon["likelihood_aracne"]
-        regulon["tfmode"] = np.sign(regulon["tfmode_aracne"]) # negative
+        regulon["tfmode"] = np.nan
+        regulon.loc[regulon["tfmode_aracne"]<0, "tfmode"] = -1 # negative
         regulon.loc[regulon["tfmode_mlr"]>0, "tfmode"] = 1 # positive
-        # NOTE: there will be some negatives from aracne
+        regulon = regulon.loc[~regulon["tfmode"].isnull()]
         
         output_file = os.path.join(output.output_dir, os.path.basename(aracne_regulons_files[0]))
         regulon.to_csv(output_file, **SAVE_PARAMS)
