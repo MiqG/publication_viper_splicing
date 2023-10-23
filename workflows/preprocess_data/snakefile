@@ -221,6 +221,14 @@ rule all:
         os.path.join(PREP_DIR,"event_psi","Hafner2019-INT.tsv.gz"),
         os.path.join(PREP_DIR,"genexpr_tpm","Hafner2019.tsv.gz"),
         
+        # preprocess Riaz2017
+        os.path.join(PREP_DIR,"metadata","Riaz2017.tsv.gz"),
+        os.path.join(PREP_DIR,"event_psi","Riaz2017-EX.tsv.gz"),
+        os.path.join(PREP_DIR,"event_psi","Riaz2017-ALTA.tsv.gz"),
+        os.path.join(PREP_DIR,"event_psi","Riaz2017-ALTD.tsv.gz"),
+        os.path.join(PREP_DIR,"event_psi","Riaz2017-INT.tsv.gz"),
+        os.path.join(PREP_DIR,"genexpr_tpm","Riaz2017.tsv.gz"),
+        
         # preprocess MetMap
         os.path.join(PREP_DIR,"metmap","CCLE.tsv.gz"),
         
@@ -2208,6 +2216,127 @@ rule preprocess_Hafner2019:
         
         # metadata
         metadata["sampleID"] = metadata["run_accession"]
+        
+        # PSI
+        print("Processing PSI matrix...")
+        ## drop empty rows
+        is_na = psi.isnull()
+        non_missing = is_na.shape[1] - is_na.sum(1)
+        to_keep = non_missing >= 1
+        psi = psi.loc[to_keep]
+        
+        ## remove vast-tools' suffix
+        psi.columns = [c.replace('_1','') for c in psi.columns]
+        
+        ## split by event type
+        event_types = ["EX","ALTA","ALTD","INT"]
+        psis = {e: psi.loc[psi.index.str.contains(e)] for e in event_types}
+        
+        # TPM
+        print("Processing TPM matrix...")
+        ## remove vast-tools' suffix
+        genexpr.columns = [c.replace('_1','') for c in genexpr.columns]
+        
+        ## log-transform
+        genexpr = np.log2(genexpr + 1)
+        
+        # subset
+        ## find common samples
+        common_samples = set(metadata["run_accession"]).intersection(
+            psis["EX"].columns
+        ).intersection(
+            genexpr.columns
+        )
+        psis = {e: psis[e][common_samples].copy() for e in event_types}
+        genexpr = genexpr[common_samples].copy()
+        metadata = metadata.loc[metadata["run_accession"].isin(common_samples)]
+        
+        # save
+        print("Saving...")
+        ## metadata
+        metadata.to_csv(output.metadata, **SAVE_PARAMS)
+
+        ## PSIs
+        psis["EX"].reset_index().to_csv(output.psi_EX, **SAVE_PARAMS)
+        psis["ALTD"].reset_index().to_csv(output.psi_ALTD, **SAVE_PARAMS)
+        psis["ALTA"].reset_index().to_csv(output.psi_ALTA, **SAVE_PARAMS)
+        psis["INT"].reset_index().to_csv(output.psi_INT, **SAVE_PARAMS)
+        
+        ## TPMs
+        genexpr.reset_index().drop(columns='NAME').to_csv(output.genexpr, **SAVE_PARAMS)
+        
+        print("Done!")
+        
+        
+rule preprocess_Riaz2017:
+    input:
+        metadata = os.path.join(SUPPORT_DIR,"ENA_filereport-PRJNA356761-Riaz2017.tsv"),
+        survival = os.path.join(SUPPORT_DIR,"supplementary_tables_literature","Riaz2017-suptab2-mmc2.xlsx"),
+        psi = os.path.join(RAW_DIR,"articles","Riaz2017",'vast_out','PSI-minN_1-minSD_0-noVLOW-min_ALT_use25-Tidy.tab.gz'),
+        genexpr = os.path.join(RAW_DIR,"articles","Riaz2017",'vast_out','TPM-hg38-109.tab.gz')
+    output:
+        metadata = os.path.join(PREP_DIR,"metadata","Riaz2017.tsv.gz"),
+        psi_EX = os.path.join(PREP_DIR,'event_psi','Riaz2017-EX.tsv.gz'),
+        psi_ALTA = os.path.join(PREP_DIR,'event_psi','Riaz2017-ALTA.tsv.gz'),
+        psi_ALTD = os.path.join(PREP_DIR,'event_psi','Riaz2017-ALTD.tsv.gz'),
+        psi_INT = os.path.join(PREP_DIR,'event_psi','Riaz2017-INT.tsv.gz'),
+        genexpr = os.path.join(PREP_DIR,'genexpr_tpm','Riaz2017.tsv.gz')      
+    run:
+        import gc
+        import pandas as pd
+        import numpy as np
+        
+        # load
+        print("Loading data...")
+        metadata = pd.read_table(input.metadata)
+        survival = pd.read_excel(input.survival, skiprows=2)
+        psi = pd.read_table(input.psi, index_col=0)
+        genexpr = pd.read_table(input.genexpr, index_col=[0,1])
+        
+        gc.collect()
+        
+        # metadata       
+        metadata["sampleID"] = metadata["run_accession"]
+        
+        # survival
+        ## create common column names
+        survival["patientID"] = survival["Patient"]
+        survival["OS_event"] = survival["Dead/Alive\n(Dead = True)"]
+        survival["OS_time"] = survival["Time to Death\n(weeks)"] * 7
+        
+        ## extras
+        ### previous treatments
+        survival["treatment_previous"] = survival["Cohort"]
+        ### RECIST v1.1-defined complete response [CR] or partial response [PR]
+        ### Neither PR nor PD criteria met [SD], 
+        ### ≥ 25% increase, no CR, PR, or SD, new lesion (s), ≥ 25% increase in 1 lesion [PD]
+        survival["treatment_response"] = survival["Response"]
+        ### in the paper, they considered DEGs between responders (CR/PR) 
+        ### compared with non-responders (PD) or patients with SD
+        survival["is_responder"] = np.nan
+        idx_responder = survival["treatment_response"].isin(["CR","PR"])
+        idx_nonresponder = survival["treatment_response"].isin(["PD","SD"])
+        survival.loc[idx_responder,"is_responder"] = True
+        survival.loc[idx_nonresponder,"is_responder"] = False
+        
+        # merge with metadata
+        metadata = pd.merge(metadata, survival, on="patientID", how="left")
+        
+        # correct condition
+        metadata["treatment_status"] = metadata["condition"].copy()
+        metadata["condition"] = np.nan
+        
+        idx = (metadata["treatment_status"]=="PRE") & (metadata["treatment_previous"]=="NIV3-NAIVE")
+        metadata.loc[idx,"condition"] = "PRE_PD1"
+        
+        idx = (metadata["treatment_status"]=="PRE") & (metadata["treatment_previous"]=="NIV3-PROG")
+        metadata.loc[idx,"condition"] = "PRE_CombPD1_CTLA4"
+        
+        idx = (metadata["treatment_status"]=="ON") & (metadata["treatment_previous"]=="NIV3-NAIVE")
+        metadata.loc[idx,"condition"] = "ON_PD1"
+        
+        idx = (metadata["treatment_status"]=="ON") & (metadata["treatment_previous"]=="NIV3-PROG")
+        metadata.loc[idx,"condition"] = "ON_CombPD1_CTLA4"        
         
         # PSI
         print("Processing PSI matrix...")
