@@ -2,6 +2,9 @@
 # Author: Miquel Anglada Girotto
 # Contact: miquel [dot] anglada [at] crg [dot] eu
 #
+# TODO
+# ----
+# - check which exons in the selected genes correlate with patient survival
 
 require(optparse)
 require(tidyverse)
@@ -31,10 +34,16 @@ PAL_DRIVER_TYPE = c(
 
 GENES_CALR = c('ENSG00000084463','ENSG00000021776','ENSG00000189091','ENSG00000215301')
 GENES_TAPBP = c(
-    'ENSG00000100056','ENSG00000125352','ENSG00000112081','ENSG00000139793',
+    'ENSG00000100056','ENSG00000125352',
+    'ENSG00000139793',
     'ENSG00000174231','ENSG00000143368','ENSG00000160201','ENSG00000165119',
-    'ENSG00000183431','ENSG00000197111','ENSG00000115524','ENSG00000104852',
+    'ENSG00000183431','ENSG00000197111','ENSG00000115524',
     'ENSG00000131013','ENSG00000074201','ENSG00000104897','ENSG00000189091','ENSG00000179950'
+)
+
+EXONS_OI = c(
+    "HsaEX0063618", # TAPBP
+    "HsaEX6093277" # CALR
 )
 
 # Development
@@ -44,6 +53,7 @@ GENES_TAPBP = c(
 # PREP_DIR = file.path(ROOT,'data','prep')
 # SUPPORT_DIR = file.path(ROOT,"support")
 # RESULTS_DIR = file.path(ROOT,"results","cancer_splicing_program")
+# splicing_file = file.path(PREP_DIR,"event_psi","Riaz2017-PRE_CombPD1_CTLA4-EX.tsv.gz")
 # protein_activity_file = file.path(RESULTS_DIR,"files","protein_activity","Riaz2017-PRE-EX.tsv.gz")
 # metadata_file = file.path(PREP_DIR,"metadata","Riaz2017.tsv.gz")
 # driver_types_file = file.path(RESULTS_DIR,'files','PANCAN','cancer_program.tsv.gz')
@@ -147,11 +157,18 @@ main = function(){
     dir.create(figs_dir, recursive = TRUE)
     
     # load
+    splicing = read_tsv(splicing_file)
     protein_activity = read_tsv(protein_activity_file)
     metadata = read_tsv(metadata_file)
     driver_types = read_tsv(driver_types_file)
     
     # prep
+    splicing = splicing %>%
+        filter(EVENT %in% EXONS_OI) %>%
+        pivot_longer(-EVENT, names_to="sampleID", values_to="psi") %>%
+        left_join(metadata, by="sampleID") %>%
+        drop_na(condition, psi)        
+    
     protein_activity = protein_activity %>%
         pivot_longer(-regulator, names_to="sampleID", values_to="activity") %>%
         left_join(metadata, by="sampleID") %>%
@@ -176,23 +193,43 @@ main = function(){
         left_join(driver_types, by=c("regulator"="ENSEMBL"))
     
     # survival analysis
-    x = protein_activity %>%
-        filter(regulator %in% GENES_TAPBP) %>%
-        drop_na(driver_type) %>%
-        group_by(driver_type, sampleID, patientID, OS_time, OS_event) %>%
-        summarize(activity = median(activity)) %>%
-        ungroup() %>%
-        filter(driver_type == "Tumor suppressor") %>%
-        surv_cutpoint(time="OS_time", event="OS_event", variables="activity") %>%
-        surv_categorize()
+    for (event_oi in EXONS_OI){
+        x = splicing %>%
+            filter(EVENT %in% event_oi) %>%
+            surv_cutpoint(time="OS_time", event="OS_event", variables="psi", minprop=0.05) %>%
+            surv_categorize()
+
+        fit = survfit(Surv(OS_time, OS_event) ~psi, data=x)
+        plt = x %>%
+            ggsurvplot(
+                fit, data=., risk.table=TRUE, conf.int=TRUE, pval=TRUE, pval.size=FONT_SIZE+2,
+                risk.table.fontsize=FONT_SIZE+2, risk.table.font.family=FONT_FAMILY,
+                palette = get_palette("Dark2", 2)
+            ) + labs(subtitle=event_oi)
+        print(plt)
+    }
     
-    fit = survfit(Surv(OS_time, OS_event) ~activity, data=x)
-    x %>%
-        ggsurvplot(
-            fit, data=., risk.table=TRUE, conf.int=TRUE, pval=TRUE, pval.size=FONT_SIZE+2,
-            risk.table.fontsize=FONT_SIZE+2, risk.table.font.family=FONT_FAMILY,
-            palette = get_palette("Dark2", 2)
-        )
+    
+    for (gene_oi in GENES_TAPBP){
+        x = protein_activity %>%
+            filter(regulator %in% gene_oi) %>%
+            drop_na(driver_type) %>%
+            group_by(driver_type, sampleID, patientID, OS_time, OS_event) %>%
+            summarize(activity = median(activity)) %>%
+            ungroup() %>%
+            filter(driver_type == "Tumor suppressor") %>%
+            surv_cutpoint(time="OS_time", event="OS_event", variables="activity") %>%
+            surv_categorize()
+
+        fit = survfit(Surv(OS_time, OS_event) ~activity, data=x)
+        plt = x %>%
+            ggsurvplot(
+                fit, data=., risk.table=TRUE, conf.int=TRUE, pval=TRUE, pval.size=FONT_SIZE+2,
+                risk.table.fontsize=FONT_SIZE+2, risk.table.font.family=FONT_FAMILY,
+                palette = get_palette("Dark2", 2)
+            ) + labs(subtitle=gene_oi)
+        print(plt)
+    }
     
     
     # plot

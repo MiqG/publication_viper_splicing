@@ -26,6 +26,7 @@ rule all:
         # compute signatures within
         expand(os.path.join(RESULTS_DIR,"files","signatures","Riaz2017-{condition}-{omic_type}.tsv.gz"), condition=CONDITIONS, omic_type=OMIC_TYPES),
         expand(os.path.join(RESULTS_DIR,"files","protein_activity","Riaz2017-{condition}-{omic_type}.tsv.gz"), condition=CONDITIONS, omic_type=OMIC_TYPES),
+        #expand(os.path.join(RESULTS_DIR,"files","protein_activity","Riaz2017-{omic_type}.tsv.gz"), omic_type=OMIC_TYPES),
         
         # figures
         
@@ -87,3 +88,17 @@ rule compute_protein_activity:
                     --regulons_path={input.regulons_path} \
                     --output_file={output}
         """
+        
+        
+# rule combine_protein_activities:
+#     input:
+#         signatures = [os.path.join(RESULTS_DIR,"files","protein_activity","Riaz2017-{condition}-{omic_type}.tsv.gz").format(condition=c, omic_type="{omic_type}") for c in CONDITIONS]
+#     output:
+#         signatures = os.path.join(RESULTS_DIR,"files","protein_activity","Riaz2017-{omic_type}.tsv.gz")
+#     run:
+#         import pandas as pd
+        
+#         signatures = pd.concat([pd.read_table(signature, index_col=0) for signature in input.signatures], axis=1)
+#         signatures.reset_index().to_csv(output.signatures, **SAVE_PARAMS)
+        
+#         print("Done!")
