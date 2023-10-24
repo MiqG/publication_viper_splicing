@@ -212,12 +212,15 @@ main = function(){
     
     for (gene_oi in GENES_TAPBP){
         x = protein_activity %>%
-            filter(regulator %in% gene_oi) %>%
+            #filter(regulator %in% gene_oi) %>%
             drop_na(driver_type) %>%
             group_by(driver_type, sampleID, patientID, OS_time, OS_event) %>%
             summarize(activity = median(activity)) %>%
             ungroup() %>%
-            filter(driver_type == "Tumor suppressor") %>%
+            pivot_wider(id_cols = c("sampleID","patientID","OS_time","OS_event"), names_from="driver_type", values_from="activity") %>%
+            mutate(diff = `Oncogenic` / `Tumor suppressor`) %>%
+            pivot_longer(c(`Oncogenic`, `Tumor suppressor`, diff), names_to="driver_type", values_to="activity") %>%
+            filter(driver_type == "diff") %>%
             surv_cutpoint(time="OS_time", event="OS_event", variables="activity") %>%
             surv_categorize()
 
