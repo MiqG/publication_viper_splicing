@@ -770,21 +770,27 @@ plot_enrichments = function(enrichments, immune_screen){
             driver_type = case_when(
                 gene_set=="suppressors" ~ "Tumor suppressor",
                 gene_set=="oncogenics" ~ "Oncogenic"
-            ),
-            GeneRatio = ifelse(driver_type=="Oncogenic", GeneRatio, -GeneRatio)
+            )#,
+            #GeneRatio = ifelse(driver_type=="Oncogenic", GeneRatio, -GeneRatio)
         )
     
-    plts[["reactome_enrichments-bar"]] = X %>%
+    terms_oi = X %>%
         group_by(gene_set) %>%
         slice_max(abs(GeneRatio), n=10) %>%
         ungroup() %>%
+        pull(Description) %>%
+        unique()
+    
+    plts[["reactome_enrichments-bar"]] = X %>%
+        filter(Description %in% terms_oi) %>%
         group_by(Description) %>%
         mutate(ratio_sums = sum(GeneRatio)) %>%
         ungroup() %>%
-        arrange(ratio_sums) %>%
+        arrange(GeneRatio) %>%
         ggbarplot(x="Description", y="GeneRatio", fill="driver_type", color=NA,
-                  palette=PAL_DRIVER_TYPE) +
-        geom_text(aes(label=Count), size=FONT_SIZE, family=FONT_FAMILY) +
+                  palette=PAL_DRIVER_TYPE, position=position_dodge(0.9)) +
+        geom_text(aes(label=Count, group=driver_type), 
+                  size=FONT_SIZE, family=FONT_FAMILY, position=position_dodge(0.9)) +
         labs(x="Description", y="GeneRatio", fill="Driver Type") +
         coord_flip()
     
