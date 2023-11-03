@@ -46,6 +46,16 @@ EXONS_OI = c(
     "HsaEX6093277" # CALR
 )
 
+GENES_OI = c(
+    "ENSG00000231925", # TAPBP
+    "ENSG00000179218" # CALR
+)
+
+annot = data.frame(
+    ID = GENES_OI,
+    EVENT = EXONS_OI
+)
+
 # Development
 # -----------
 # ROOT = here::here()
@@ -53,7 +63,8 @@ EXONS_OI = c(
 # PREP_DIR = file.path(ROOT,'data','prep')
 # SUPPORT_DIR = file.path(ROOT,"support")
 # RESULTS_DIR = file.path(ROOT,"results","cancer_splicing_program")
-# splicing_file = file.path(PREP_DIR,"event_psi","Riaz2017-PRE_CombPD1_CTLA4-EX.tsv.gz")
+# genexpr_file = file.path(PREP_DIR,"genexpr_tpm","Riaz2017-PRE.tsv.gz")
+# splicing_file = file.path(PREP_DIR,"event_psi","Riaz2017-PRE-EX.tsv.gz")
 # protein_activity_file = file.path(RESULTS_DIR,"files","protein_activity","Riaz2017-PRE-EX.tsv.gz")
 # metadata_file = file.path(PREP_DIR,"metadata","Riaz2017.tsv.gz")
 # driver_types_file = file.path(RESULTS_DIR,'files','PANCAN','cancer_program.tsv.gz')
@@ -157,12 +168,19 @@ main = function(){
     dir.create(figs_dir, recursive = TRUE)
     
     # load
+    genexpr = read_tsv(genexpr_file)
     splicing = read_tsv(splicing_file)
     protein_activity = read_tsv(protein_activity_file)
     metadata = read_tsv(metadata_file)
     driver_types = read_tsv(driver_types_file)
     
     # prep
+    genexpr = genexpr %>%
+        filter(ID %in% GENES_OI) %>%
+        pivot_longer(-ID, names_to="sampleID", values_to="tpm") %>%
+        left_join(metadata, by="sampleID") %>%
+        drop_na(condition, tpm)  
+    
     splicing = splicing %>%
         filter(EVENT %in% EXONS_OI) %>%
         pivot_longer(-EVENT, names_to="sampleID", values_to="psi") %>%
@@ -193,6 +211,36 @@ main = function(){
         left_join(driver_types, by=c("regulator"="ENSEMBL"))
     
     # survival analysis
+    X = splicing %>%
+        left_join(annot, by="EVENT") %>%
+        left_join(genexpr, by=c("sampleID","ID","OS_time","OS_event"))
+        
+    X %>% ggscatter(x="psi", y="tpm")
+
+    for (event_oi in rev(EXONS_OI)){
+        cutpoint = X %>%
+            filter(EVENT %in% event_oi) %>%
+            surv_cutpoint(time="OS_time", event="OS_event", variables=c("psi","tpm"), minprop=0.05)
+        
+        x = cutpoint %>% 
+            surv_categorize() %>% 
+            as.tibble() %>%
+            mutate(
+                cutpoint_psi = cutpoint[["cutpoint"]]["psi","cutpoint"],
+                cutpoint_tpm = cutpoint[["cutpoint"]]["tpm","cutpoint"]
+            )
+
+        fit = survfit(Surv(OS_time, OS_event) ~psi+tpm, data=x)
+        plt = x %>%
+            ggsurvplot(
+                fit, data=., risk.table=TRUE, conf.int=TRUE, pval=TRUE, pval.size=FONT_SIZE+2,
+                risk.table.fontsize=FONT_SIZE+2, risk.table.font.family=FONT_FAMILY,
+                palette = get_palette("Dark2", 4)
+            ) + labs(subtitle=event_oi)
+        print(plt)
+    }
+    
+    
     for (event_oi in EXONS_OI){
         x = splicing %>%
             filter(EVENT %in% event_oi) %>%
@@ -208,6 +256,22 @@ main = function(){
             ) + labs(subtitle=event_oi)
         print(plt)
     }
+    
+    for (gene_oi in GENES_OI){
+        x = genexpr %>%
+            filter(ID %in% gene_oi) %>%
+            surv_cutpoint(time="OS_time", event="OS_event", variables="tpm", minprop=0.05) %>%
+            surv_categorize()
+
+        fit = survfit(Surv(OS_time, OS_event) ~tpm, data=x)
+        plt = x %>%
+            ggsurvplot(
+                fit, data=., risk.table=TRUE, conf.int=TRUE, pval=TRUE, pval.size=FONT_SIZE+2,
+                risk.table.fontsize=FONT_SIZE+2, risk.table.font.family=FONT_FAMILY,
+                palette = get_palette("Dark2", 2)
+            ) + labs(subtitle=gene_oi)
+        print(plt)
+    }    
     
     
     for (gene_oi in GENES_TAPBP){

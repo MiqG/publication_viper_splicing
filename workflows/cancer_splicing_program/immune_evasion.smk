@@ -22,6 +22,7 @@ rule all:
     input:
         # make datasets
         expand(os.path.join(PREP_DIR,'event_psi','Riaz2017-{condition}-{omic_type}.tsv.gz'), condition=CONDITIONS, omic_type=OMIC_TYPES),
+        expand(os.path.join(PREP_DIR,'genexpr_tpm','Riaz2017-{condition}.tsv.gz'), condition=CONDITIONS),
         
         # compute signatures within
         expand(os.path.join(RESULTS_DIR,"files","signatures","Riaz2017-{condition}-{omic_type}.tsv.gz"), condition=CONDITIONS, omic_type=OMIC_TYPES),
@@ -34,7 +35,7 @@ rule all:
 rule split_psi_by_condition:
     input:
         metadata = os.path.join(PREP_DIR,"metadata","Riaz2017.tsv.gz"),
-        psi = os.path.join(PREP_DIR,'event_psi','Riaz2017-{omic_type}.tsv.gz')
+        psi = os.path.join(PREP_DIR,'event_psi','Riaz2017-{omic_type}.tsv.gz'),
     output:
         psi = os.path.join(PREP_DIR,'event_psi','Riaz2017-{condition}-{omic_type}.tsv.gz')
     params:
@@ -46,9 +47,31 @@ rule split_psi_by_condition:
         psi = pd.read_table(input.psi, index_col=0)
         
         idx = metadata["treatment_status"] == params.condition
-        samples_oi = set(metadata.loc[idx,"sampleID"]).intersection(psi.columns)
+        samples_oi = list(set(metadata.loc[idx,"sampleID"]).intersection(psi.columns))
         
         psi[samples_oi].reset_index().to_csv(output.psi, **SAVE_PARAMS)
+        
+        print("Done!")
+        
+
+rule split_genexpr_by_condition:
+    input:
+        metadata = os.path.join(PREP_DIR,"metadata","Riaz2017.tsv.gz"),
+        genexpr = os.path.join(PREP_DIR,'genexpr_tpm','Riaz2017.tsv.gz')
+    output:
+        genexpr = os.path.join(PREP_DIR,'genexpr_tpm','Riaz2017-{condition}.tsv.gz')
+    params:
+        condition = "{condition}"
+    run:
+        import pandas as pd
+        
+        metadata = pd.read_table(input.metadata)
+        genexpr = pd.read_table(input.genexpr, index_col=0)
+        
+        idx = metadata["treatment_status"] == params.condition
+        samples_oi = list(set(metadata.loc[idx,"sampleID"]).intersection(genexpr.columns))
+        
+        genexpr[samples_oi].reset_index().to_csv(output.genexpr, **SAVE_PARAMS)
         
         print("Done!")
         
