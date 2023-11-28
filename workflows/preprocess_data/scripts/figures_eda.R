@@ -213,6 +213,17 @@ main = function(){
             in_ena_sfs = GENE %in% ena_sfs[["PERT_GENE"]]
         )
     
+    # stats
+    ## overview
+    n_total_sfs = splicing_factors %>% nrow()
+    n_sfs_screened = splicing_factors %>% filter(in_encore_kd | in_encore_ko | in_ena_sfs) %>% nrow()
+    print(sprintf("Screened %s SFs out of %s", n_sfs_screened, n_total_sfs))
+    ## features
+    splicing_factors %>% filter(in_encore_kd | in_encore_ko) %>% nrow()
+    splicing_factors %>% filter(in_ena_sfs) %>% nrow()
+    ## ENA
+    ena_sfs %>% distinct(study_accession) %>% nrow()
+    
     # plot
     plts = make_plots(splicing_factors)
     
