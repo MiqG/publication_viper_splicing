@@ -170,7 +170,7 @@ rule figures_regulon_evaluation:
         """
         
         
-rule figures_regulon_inference:
+rule figures_inference_troubleshooting:
     input:
         experimental_pruned_path = os.path.join(RESULTS_DIR,"files","experimentally_derived_regulons_pruned-EX"),
         aracne_and_experimental_path = os.path.join(RESULTS_DIR,"files","aracne_and_experimental_regulons-EX"),
@@ -179,7 +179,7 @@ rule figures_regulon_inference:
         directory(os.path.join(RESULTS_DIR,"figures","regulon_inference"))
     shell:
         """
-        Rscript scripts/figures_regulon_inference.R \
+        Rscript scripts/figures_inference_troubleshooting.R \
                     --experimental_pruned_path={input.experimental_pruned_path} \
                     --aracne_and_experimental_path={input.aracne_and_experimental_path} \
                     --mlr_and_experimental_path={input.mlr_and_experimental_path} \
