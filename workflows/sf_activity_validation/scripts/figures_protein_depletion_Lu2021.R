@@ -36,11 +36,11 @@ PAL_CELL_LINES = "Dark2"
 # RAW_DIR = file.path(ROOT,'data','raw')
 # PREP_DIR = file.path(ROOT,'data','prep')
 # SUPPORT_DIR = file.path(ROOT,"support")
-# RESULTS_DIR = file.path(ROOT,"results","sf_activity_Lu2021")
+# RESULTS_DIR = file.path(ROOT,"results","sf_activity_validation")
 # genexpr_file = file.path(PREP_DIR,"genexpr_tpm","Lu2021.tsv.gz")
-# protein_activity_file = file.path(RESULTS_DIR,"files","protein_activity","Lu2021.tsv.gz")
+# protein_activity_file = file.path(RESULTS_DIR,"files","protein_activity","protein_depletion-Lu2021-EX.tsv.gz")
 # metadata_file = file.path(PREP_DIR,"metadata","Lu2021.tsv.gz")
-# figs_dir = file.path(RESULTS_DIR,"figures","validation_drug_targets")
+# figs_dir = file.path(RESULTS_DIR,"figures","protein_depletion-Lu2021-EX")
 # gene_oi = "ENSG00000131051"
 
 ##### FUNCTIONS #####

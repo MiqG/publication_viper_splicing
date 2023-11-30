@@ -81,8 +81,8 @@ plot_diff_proteomics_gene_oi = function(diff_proteomics, gene_oi){
     
     plts[["diff_proteomics-indisulam_vs_dmso-volcano"]] = X %>%
         ggplot(aes(x=diff_lfq, y=log10_pvalue)) +
-        geom_scattermore(data = . %>% filter(!is_gene_oi), pixels=c(1000,1000), pointsize=4, color=PAL_DARK, alpha=0.5) +
-        geom_scattermore(data = . %>% filter(is_gene_oi), pixels=c(1000,1000), pointsize=8, color=PAL_ACCENT) +
+        geom_scattermore(data = . %>% filter(!is_gene_oi), pixels=c(1000,1000), pointsize=15, color=PAL_DARK, alpha=0.5) +
+        geom_scattermore(data = . %>% filter(is_gene_oi), pixels=c(1000,1000), pointsize=15, color=PAL_ACCENT) +
         theme_pubr() +
         facet_wrap(~pert_time_lab, ncol=2, scales="free_y") +
         theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
@@ -142,9 +142,14 @@ plot_activity_gene_oi = function(protein_activity, gene_oi){
     
     plts[["activity-indisulam_vs_dmso-ranking-scatter"]] = X %>%
         ggplot(aes(x=activity_ranking, y=activity)) +
-        geom_scattermore(data = . %>% filter(!is_regulator_oi), pixels=c(1000,1000), pointsize=4, color=PAL_DARK, alpha=0.5) +
-        geom_scattermore(data = . %>% filter(is_regulator_oi), pixels=c(1000,1000), pointsize=8, color=PAL_ACCENT) +
+        geom_scattermore(data = . %>% filter(!is_regulator_oi), pixels=c(1000,1000), pointsize=15, color=PAL_DARK, alpha=0.5) +
+        geom_scattermore(data = . %>% filter(is_regulator_oi), pixels=c(1000,1000), pointsize=15, color=PAL_ACCENT) +
         theme_pubr() +
+        geom_text_repel(
+            aes(label=GENE),
+            . %>% group_by(condition_lab,pert_time_lab) %>% slice_min(activity, n=3) %>% ungroup(),
+            size=FONT_SIZE, family=FONT_FAMILY, segment.size=0.1, max.overlaps=50
+        ) +
         facet_wrap(~condition_lab+pert_time_lab, ncol=2) +
         theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         labs(x="Ranking", y="Protein Activity", color=sprintf("Is %s", gene_oi))
@@ -200,7 +205,7 @@ save_plots = function(plts, figs_dir){
     save_plt(plts, "diff_proteomics-indisulam_vs_dmso-volcano-RBM39", '.pdf', figs_dir, width=8, height=6)
     save_plt(plts, "genexpr-indisulam_vs_dmso-box-ENSG00000131051", '.pdf', figs_dir, width=5.5, height=6)
     save_plt(plts, "genexpr-indisulam_vs_dmso-bar-ENSG00000131051", '.pdf', figs_dir, width=4.5, height=6)
-    save_plt(plts, "activity-indisulam_vs_dmso-ranking-scatter-ENSG00000131051", '.pdf', figs_dir, width=9, height=15)
+    save_plt(plts, "activity-indisulam_vs_dmso-ranking-scatter-ENSG00000131051", '.pdf', figs_dir, width=9, height=16)
 }
 
 save_figdata = function(figdata, dir){
@@ -351,6 +356,11 @@ main = function(){
         pull(`Approved symbol`)
     diff_proteomics = diff_proteomics %>%
         filter(GENE %in% splicing_factors)
+    protein_activity = protein_activity %>%
+        left_join(
+            gene_info %>% dplyr::rename(GENE=`Approved symbol`) %>% distinct(`Ensembl gene ID`,GENE), 
+            by=c("regulator"="Ensembl gene ID")
+        )
     
     # plot
     plts = make_plots(proteomics, diff_proteomics, genexpr, protein_activity)
