@@ -48,6 +48,7 @@ PAL_DARK = "brown"
 # doublings_ccle_file = file.path(PREP_DIR,"doubling_times","CCLE.tsv.gz")
 # enrichment_scores_ccle_file = file.path(RESULTS_DIR,"files","program_enrichment_scores","CCLE-EX.tsv.gz")
 
+# demeter2_file = file.path(PREP_DIR,"demeter2","CCLE.tsv.gz")
 # metmap_file = file.path(PREP_DIR,"metmap","CCLE.tsv.gz")
 
 # figs_dir = file.path(RESULTS_DIR,"figures","cancer_hallmarks-EX")
@@ -480,6 +481,8 @@ main = function(){
             driver_types,
             by=c("regulator"="ENSEMBL")
         )
+    
+    
     
     # plot
     plts = make_plots(

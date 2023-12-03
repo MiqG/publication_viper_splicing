@@ -738,41 +738,10 @@ make_enrichments = function(driver_classif, regulons, ontologies){
 }
 
 
-plot_enrichments = function(enrichments, immune_screen){
+plot_enrichments = function(enrichments_reactome, immune_screen){
     plts = list()
     
-    X = enrichments[["CHEA"]]
-    
-    plts[["tf_enrichments-oncogenic-cnet"]] = X[["oncogenics"]] %>% 
-        cnetplot(cex_label_category=0.5, cex_label_gene=0.5, 
-                 cex_family_category=FONT_FAMILY, cex_family_category=FONT_FAMILY) +
-        guides(size="none") +
-        theme(aspect.ratio=1)
-    
-    plts[["tf_enrichments-suppressor-cnet"]] = X[["suppressors"]] %>% 
-        cnetplot(cex_label_category=0.5, cex_label_gene=0.5, 
-                 cex_family_category=FONT_FAMILY, cex_family_category=FONT_FAMILY) +
-        guides(size="none") +
-        theme(aspect.ratio=1)
-    
-    X = lapply(names(enrichments[["reactome"]]), function(gene_set_oi){
-            x = enrichments[["reactome"]][[gene_set_oi]] %>%
-                as.data.frame() %>%
-                mutate(gene_set = gene_set_oi)
-            return(x)
-        }) %>%
-        bind_rows() %>%
-        filter(p.adjust < THRESH_FDR) %>%
-        rowwise() %>%
-        mutate(GeneRatio = eval(parse(text=GeneRatio))) %>%
-        ungroup() %>%
-        mutate(
-            driver_type = case_when(
-                gene_set=="suppressors" ~ "Tumor suppressor",
-                gene_set=="oncogenics" ~ "Oncogenic"
-            )#,
-            #GeneRatio = ifelse(driver_type=="Oncogenic", GeneRatio, -GeneRatio)
-        )
+    X = enrichments_reactome
     
     terms_oi = X %>%
         group_by(gene_set) %>%
@@ -856,7 +825,7 @@ make_plots = function(
     survival_activity, survival_genexpr, 
     driver_activity, driver_genexpr, 
     sf_crossreg_activity, sf_crossreg_genexpr, 
-    enrichments, immune_screen, sf_activity_vs_genexpr, regulons_jaccard
+    enrichments_reactome, immune_screen, sf_activity_vs_genexpr, regulons_jaccard
 ){
     plts = list(
         plot_driver_selection(driver_activity, driver_genexpr, diff_activity, diff_genexpr),
@@ -867,7 +836,7 @@ make_plots = function(
         plot_survival_analysis(survival_roc_activity_w_genexpr_labs, survival_activity, driver_genexpr, "-activity_w_genexpr_labs"),
         plot_sf_crossreg(driver_activity, sf_crossreg_activity, regulons_jaccard, "-activity"),
         plot_sf_crossreg(driver_genexpr, sf_crossreg_genexpr, regulons_jaccard, "-genexpr"),
-        plot_enrichments(enrichments, immune_screen),
+        plot_enrichments(enrichments_reactome, immune_screen),
         plot_comparison(diff_activity, diff_genexpr, survival_activity, survival_genexpr, sf_activity_vs_genexpr)
     )
     plts = do.call(c,plts)
@@ -883,14 +852,11 @@ make_figdata = function(
     survival_activity, survival_genexpr, 
     driver_activity, driver_genexpr, 
     sf_crossreg_activity, sf_crossreg_genexpr, 
-    enrichments, immune_screen, sf_activity_vs_genexpr, regulons_jaccard
+    enrichments_reactome, immune_screen, sf_activity_vs_genexpr, regulons_jaccard
 ){
     figdata = list(
-        "tcga_tumorigenesis" = list(
-            "diff_protein_activity" = diff_activity,
-            "assocs_gene_dependency" = assocs_gene_dependency,
-            "survival_roc_activity" = survival_roc_activity,
-            "sf_cross_regulation" = sf_crossreg_activity
+        "cancer_program" = list(
+            "enrichments_reactome" = enrichments_reactome
         )
     )
     return(figdata)
@@ -1120,6 +1086,24 @@ main = function(){
     
     enrichments = make_enrichments(driver_activity, regulons, ontologies)
     
+    enrichments_reactome = lapply(names(enrichments[["reactome"]]), function(gene_set_oi){
+            x = enrichments[["reactome"]][[gene_set_oi]] %>%
+                as.data.frame() %>%
+                mutate(gene_set = gene_set_oi)
+            return(x)
+        }) %>%
+        bind_rows() %>%
+        filter(p.adjust < THRESH_FDR) %>%
+        rowwise() %>%
+        mutate(GeneRatio = eval(parse(text=GeneRatio))) %>%
+        ungroup() %>%
+        mutate(
+            driver_type = case_when(
+                gene_set=="suppressors" ~ "Tumor suppressor",
+                gene_set=="oncogenics" ~ "Oncogenic"
+            )
+        )
+    
     # roc analysis
     survival_roc_activity = make_roc_analysis(driver_activity, survival_activity) %>%
         mutate(cancers_subset="full") %>%
@@ -1190,7 +1174,7 @@ main = function(){
         survival_activity, survival_genexpr, 
         driver_activity, driver_genexpr, 
         sf_crossreg_activity, sf_crossreg_genexpr, 
-        enrichments, immune_screen, sf_activity_vs_genexpr, regulons_jaccard
+        enrichments_reactome, immune_screen, sf_activity_vs_genexpr, regulons_jaccard
     )
 
     # save

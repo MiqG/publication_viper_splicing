@@ -2,9 +2,11 @@
 # Author: Miquel Anglada Girotto
 # Contact: miquel [dot] anglada [at] crg [dot] eu
 #
-# TODO
+# Outline
 # ----
-# - check which exons in the selected genes correlate with patient survival
+# 1. Differential inclusion in responders (CR/PR) vs non-responders (PD)
+# 2. Which differentially included exons affect functionally important genes?
+# 3. Does inclusion of prioritized exon(s) correlate with patient survival?
 
 require(optparse)
 require(tidyverse)
@@ -15,6 +17,7 @@ require(extrafont)
 require(ggrepel)
 require(survival)
 require(survminer)
+require(readxl)
 
 # variables
 RANDOM_SEED = 1234
@@ -25,36 +28,6 @@ LINE_SIZE = 0.25
 
 FONT_SIZE = 2 # for additional labels
 FONT_FAMILY = "Arial"
-
-PAL_DRIVER_TYPE = c(
-    #"Non-driver"="lightgrey",
-    "Tumor suppressor"="#6C98B3",
-    "Oncogenic"="#F6AE2D"
-)
-
-GENES_CALR = c('ENSG00000084463','ENSG00000021776','ENSG00000189091','ENSG00000215301')
-GENES_TAPBP = c(
-    'ENSG00000100056','ENSG00000125352',
-    'ENSG00000139793',
-    'ENSG00000174231','ENSG00000143368','ENSG00000160201','ENSG00000165119',
-    'ENSG00000183431','ENSG00000197111','ENSG00000115524',
-    'ENSG00000131013','ENSG00000074201','ENSG00000104897','ENSG00000189091','ENSG00000179950'
-)
-
-EXONS_OI = c(
-    "HsaEX0063618", # TAPBP
-    "HsaEX6093277" # CALR
-)
-
-GENES_OI = c(
-    "ENSG00000231925", # TAPBP
-    "ENSG00000179218" # CALR
-)
-
-annot = data.frame(
-    ID = GENES_OI,
-    EVENT = EXONS_OI
-)
 
 # Development
 # -----------
@@ -69,24 +42,113 @@ annot = data.frame(
 # metadata_file = file.path(PREP_DIR,"metadata","Riaz2017.tsv.gz")
 # driver_types_file = file.path(RESULTS_DIR,'files','PANCAN','cancer_program.tsv.gz')
 # figs_dir = file.path(RESULTS_DIR,"figures","immune_evasion")
+# enrichments_reactome_file = file.path(RESULTS_DIR,"figures","cancer_program","figdata","cancer_program","enrichments_reactome.tsv.gz")
+# immune_screen_file = file.path(SUPPORT_DIR,"supplementary_tables_literature","Dubrot2022-suptabs-41590_2022_1315_MOESM2_ESM.xlsx") # Sup. Tab. 13
+# human2mouse_file = file.path(RAW_DIR,"BIOMART","human2mouse.tsv")
+# survival_analysis_file = file.path(RESULTS_DIR,'files',"survival_analysis",'splicing-EX-Riaz2017-PRE-surv.tsv.gz')
+# annotation_file = file.path(RAW_DIR,'VastDB','event_annotation-Hs2.tsv.gz')
+# protein_impact_file = file.path(RAW_DIR,'VastDB','PROT_IMPACT-hg38-v3.tab.gz')
+# REGINF_DIR = file.path(ROOT,"results","regulon_inference")
+# regulons_path = file.path(REGINF_DIR,"files","experimentally_derived_regulons_pruned-EX")
+
 
 ##### FUNCTIONS #####
-# plot kaplan meier of median protein activity of tumor suppressor, oncogenic, and regulators of strong immune evasion genes
-plot_survival = function(protein_activity){
+load_regulons = function(regulons_path, patt=NULL){
+    if (file.exists(regulons_path) && !dir.exists(regulons_path)){
+        # regulons_path is a file, we load only that regulon (we'll tun regular VIPER)
+        regulon_files = list(regulons_path)
+    }else if (dir.exists(regulons_path)){
+        # regulons_path is a directory, we load all regulons contained (we'll run metaVIPER)
+        regulon_files = list.files(regulons_path, pattern=patt, full.names=TRUE)
+    }else {
+        stop("Invalid regulons_path.")
+    }
+    
+    regulons = sapply(regulon_files, function(regulon_file){
+        regulon = read_tsv(regulon_file)
+        return(regulon)
+    }, simplify=FALSE)
+    
+    return(regulons)
+}
+
+
+plot_diff_response = function(diff_response, immune_screen, splicing){
     plts = list()
     
-    X = 
+    X = diff_response
     
+    plts[["diff_response-median_diff_vs_pvalue-scatter"]] = X %>%
+        ggplot(aes(x=median_diff, y=-log10(p))) +
+        geom_scattermore(pixels=c(1000,1000), pointsize=15, alpha=0.5) +
+        geom_hline(yintercept=-log10(0.05), size=LINE_SIZE, linetype="dashed", color="black") +
+        theme_pubr() +
+        theme(aspect.ratio=1) +
+        labs(x="Median PSI difference Responder (CR/PR) vs Non-responder (PD)", y="-log10(p-value)")
+        
+    X = diff_response %>%
+        left_join(immune_screen, by=c("GENE"="human_symbol")) %>%
+        mutate(
+            label = sprintf("%s_%s (%s)", EVENT, GENE, Gene),
+            term_clean = replace_na(term_clean,"Unknown")
+        ) %>%
+        filter(Comparison=="ICB vs NSG" & p<0.05)
+    
+    events_oi = X %>% 
+        group_by(Comparison,Dataset) %>% 
+        slice_max(abs(score*median_diff), n=6) %>%
+        ungroup()
+    
+    plts[["diff_response-median_diff_vs_immune_screen_score-scatter"]] = X %>%
+        ggplot(aes(x=median_diff, y=score)) +
+        geom_scattermore(aes(color=term_clean), pixels=c(1000,1000), pointsize=15, alpha=0.8) +
+        geom_hline(yintercept=0, size=LINE_SIZE, linetype="dashed", color="black") +
+        geom_vline(xintercept=0, size=LINE_SIZE, linetype="dashed", color="black") +
+        color_palette("jco") +
+        geom_text_repel(
+            aes(label=label), events_oi ,
+            size=FONT_SIZE, family=FONT_FAMILY, segment.size=0.1
+        ) +
+        theme_pubr() +
+        facet_wrap(~Comparison+Dataset) +
+        theme(aspect.ratio=1) +
+        labs(
+            x="Median PSI difference Responder (CR/PR) vs Non-responder (PD)", 
+            y="Fitness Score Gene KO",
+            color="Exon Impact"
+        )
+        
+    EXONS_OI = events_oi %>% slice_max(abs(score), n=1) %>% pull(EVENT)
+    for (event_oi in EXONS_OI){
+        x = splicing %>%
+            filter(EVENT %in% event_oi) %>%
+            surv_cutpoint(time="OS_time", event="OS_event", variables="psi") 
+        
+        cutpoint = x[["cutpoint"]][["cutpoint"]]
+        x = x %>% surv_categorize()
+
+        fit = survfit(Surv(OS_time, OS_event) ~psi, data=x)
+        
+        gene_oi = splicing %>% filter(EVENT %in% event_oi) %>% pull(GENE) %>% unique()
+        event_gene = sprintf("%s_%s",event_oi,gene_oi)
+        plts[[sprintf("diff_response-psi_vs_survival-km-%s",event_gene)]] = x %>%
+            ggsurvplot(
+                fit, data=., risk.table=TRUE, conf.int=TRUE, pval=TRUE, pval.size=FONT_SIZE+2,
+                risk.table.fontsize=FONT_SIZE+2, risk.table.font.family=FONT_FAMILY,
+                palette = get_palette("Dark2", 2)
+            ) + labs(title=sprintf("Best Cutpoint: PSI=%s",cutpoint), subtitle=event_gene)
+        plts[[sprintf("diff_response-psi_vs_survival-km-%s",event_gene)]] = plts[[sprintf("diff_response-psi_vs_survival-km-%s",event_gene)]][["plot"]]
+    }
     
     return(plts)
 }
 
 
 make_plots = function(
-    protein_activiy
+    diff_response, immune_screen, splicing
 ){
     plts = list(
-        plot_tumorigenesis(protein_activiy)
+        plot_diff_response(diff_response, immune_screen, splicing)
     )
     plts = do.call(c,plts)
     return(plts)
@@ -94,11 +156,13 @@ make_plots = function(
 
 
 make_figdata = function(
-    protein_activity
+    diff_response, immune_screen, splicing
 ){
     figdata = list(
         "tumorigenesis" = list(
-            "protein_activity" = protein_activity
+            "splicing" = splicing,
+            "diff_response" = diff_response, 
+            "immune_screen" = immune_screen
         )
     )
     return(figdata)
@@ -121,8 +185,9 @@ save_plt = function(plts, plt_name, extension='.pdf',
 
 
 save_plots = function(plts, figs_dir){
-    save_plt(plts, "tumorigenesis-cell_line_vs_activity-violin", '.pdf', figs_dir, width=6, height=6)
-    save_plt(plts, "tumorigenesis-cell_line_vs_activity-random-violin", '.pdf', figs_dir, width=6, height=6)
+    save_plt(plts, "diff_response-median_diff_vs_pvalue-scatter", '.pdf', figs_dir, width=4, height=4)
+    save_plt(plts, "diff_response-median_diff_vs_immune_screen_score-scatter", '.pdf', figs_dir, width=5, height=6)
+    save_plt(plts, "diff_response-psi_vs_survival-km-HsaEX1036341_SEC22B", '.pdf', figs_dir, width=5, height=7)
 }
 
 
@@ -168,142 +233,76 @@ main = function(){
     dir.create(figs_dir, recursive = TRUE)
     
     # load
-    genexpr = read_tsv(genexpr_file)
+    annot = read_tsv(annotation_file)
+    regulons = load_regulons(regulons_path)
     splicing = read_tsv(splicing_file)
-    protein_activity = read_tsv(protein_activity_file)
     metadata = read_tsv(metadata_file)
-    driver_types = read_tsv(driver_types_file)
-    
+    enrichments_reactome = read_tsv(enrichments_reactome_file)
+    immune_screen = read_excel(immune_screen_file, sheet="Supplementary Table 13")
+    human2mouse = read_tsv(
+        human2mouse_file, col_names=c("human_ensembl","human_symbol","mouse_ensembl","mouse_symbol")
+    )
+    survival_analysis = read_tsv(survival_analysis_file)
+    protein_impact = read_tsv(protein_impact_file) %>%
+            dplyr::rename(EVENT=EventID, term=ONTO) %>%
+            dplyr::select(term,EVENT) %>%
+            mutate(term_clean=gsub(" \\(.*","",term),
+                   term_clean=gsub("ORF disruption upon sequence exclusion",
+                                   "ORF disruption (exclusion)",term_clean),
+                   term_clean=gsub("ORF disruption upon sequence inclusion",
+                                   "ORF disruption (inclusion)",term_clean),
+                   term_clean=gsub("In the CDS, with uncertain impact",
+                                   "In the CDS (uncertain)",term_clean),
+                   term_clean=replace_na(term_clean, "Unknown")
+            )
     # prep
-    genexpr = genexpr %>%
-        filter(ID %in% GENES_OI) %>%
-        pivot_longer(-ID, names_to="sampleID", values_to="tpm") %>%
-        left_join(metadata, by="sampleID") %>%
-        drop_na(condition, tpm)  
+    regulons = regulons %>% 
+        bind_rows() %>%
+        distinct(regulator, target)
+    
+    enrichments_reactome = enrichments_reactome %>%
+                filter(str_detect(ID, "ANTIGEN")) %>%
+                separate_rows(geneID)
+    
+    annot = annot %>%
+        mutate(
+            in_regulons = EVENT %in% regulons[["target"]],
+            in_enrichment = GENE %in% enrichments_reactome[["geneID"]]
+        ) %>%
+        left_join(protein_impact, by="EVENT")
+    
+    metadata = metadata %>%
+        mutate(
+            is_responder = NA,
+            is_responder = case_when(
+                treatment_response %in% c("PR","CR") ~ "Responder",
+                treatment_response == "PD" ~ "Non-responder"
+            )
+        )
     
     splicing = splicing %>%
-        filter(EVENT %in% EXONS_OI) %>%
         pivot_longer(-EVENT, names_to="sampleID", values_to="psi") %>%
-        left_join(metadata, by="sampleID") %>%
-        drop_na(condition, psi)        
-    
-    protein_activity = protein_activity %>%
-        pivot_longer(-regulator, names_to="sampleID", values_to="activity") %>%
-        left_join(metadata, by="sampleID") %>%
-        drop_na(condition, activity) %>%
-        mutate(
-            condition_lab = sprintf(
-                "%s (%s | %s) | %s", condition, sampleID, patientID, study_accession
-            )
-        ) %>%
-        # add activity
-        group_by(condition_lab) %>%
-        arrange(activity) %>%
-        mutate(
-            abs_activity = abs(activity),
-            activity_ranking = row_number()
-        ) %>%
-        arrange(abs_activity) %>%
-        mutate(
-            abs_activity_ranking = row_number(),
-        ) %>%
-        ungroup() %>%
-        left_join(driver_types, by=c("regulator"="ENSEMBL"))
-    
-    # survival analysis
-    X = splicing %>%
+        drop_na(psi) %>%
         left_join(annot, by="EVENT") %>%
-        left_join(genexpr, by=c("sampleID","ID","OS_time","OS_event"))
-        
-    X %>% ggscatter(x="psi", y="tpm")
-
-    for (event_oi in rev(EXONS_OI)){
-        cutpoint = X %>%
-            filter(EVENT %in% event_oi) %>%
-            surv_cutpoint(time="OS_time", event="OS_event", variables=c("psi","tpm"), minprop=0.05)
-        
-        x = cutpoint %>% 
-            surv_categorize() %>% 
-            as.tibble() %>%
-            mutate(
-                cutpoint_psi = cutpoint[["cutpoint"]]["psi","cutpoint"],
-                cutpoint_tpm = cutpoint[["cutpoint"]]["tpm","cutpoint"]
-            )
-
-        fit = survfit(Surv(OS_time, OS_event) ~psi+tpm, data=x)
-        plt = x %>%
-            ggsurvplot(
-                fit, data=., risk.table=TRUE, conf.int=TRUE, pval=TRUE, pval.size=FONT_SIZE+2,
-                risk.table.fontsize=FONT_SIZE+2, risk.table.font.family=FONT_FAMILY,
-                palette = get_palette("Dark2", 4)
-            ) + labs(subtitle=event_oi)
-        print(plt)
-    }
+        left_join(metadata, by="sampleID") %>%
+        filter(in_enrichment & in_regulons)
     
-    
-    for (event_oi in EXONS_OI){
-        x = splicing %>%
-            filter(EVENT %in% event_oi) %>%
-            surv_cutpoint(time="OS_time", event="OS_event", variables="psi", minprop=0.05) %>%
-            surv_categorize()
-
-        fit = survfit(Surv(OS_time, OS_event) ~psi, data=x)
-        plt = x %>%
-            ggsurvplot(
-                fit, data=., risk.table=TRUE, conf.int=TRUE, pval=TRUE, pval.size=FONT_SIZE+2,
-                risk.table.fontsize=FONT_SIZE+2, risk.table.font.family=FONT_FAMILY,
-                palette = get_palette("Dark2", 2)
-            ) + labs(subtitle=event_oi)
-        print(plt)
-    }
-    
-    for (gene_oi in GENES_OI){
-        x = genexpr %>%
-            filter(ID %in% gene_oi) %>%
-            surv_cutpoint(time="OS_time", event="OS_event", variables="tpm", minprop=0.05) %>%
-            surv_categorize()
-
-        fit = survfit(Surv(OS_time, OS_event) ~tpm, data=x)
-        plt = x %>%
-            ggsurvplot(
-                fit, data=., risk.table=TRUE, conf.int=TRUE, pval=TRUE, pval.size=FONT_SIZE+2,
-                risk.table.fontsize=FONT_SIZE+2, risk.table.font.family=FONT_FAMILY,
-                palette = get_palette("Dark2", 2)
-            ) + labs(subtitle=gene_oi)
-        print(plt)
-    }    
-    
-    
-    for (gene_oi in GENES_TAPBP){
-        x = protein_activity %>%
-            #filter(regulator %in% gene_oi) %>%
-            drop_na(driver_type) %>%
-            group_by(driver_type, sampleID, patientID, OS_time, OS_event) %>%
-            summarize(activity = median(activity)) %>%
-            ungroup() %>%
-            pivot_wider(id_cols = c("sampleID","patientID","OS_time","OS_event"), names_from="driver_type", values_from="activity") %>%
-            mutate(diff = `Oncogenic` / `Tumor suppressor`) %>%
-            pivot_longer(c(`Oncogenic`, `Tumor suppressor`, diff), names_to="driver_type", values_to="activity") %>%
-            filter(driver_type == "diff") %>%
-            surv_cutpoint(time="OS_time", event="OS_event", variables="activity") %>%
-            surv_categorize()
-
-        fit = survfit(Surv(OS_time, OS_event) ~activity, data=x)
-        plt = x %>%
-            ggsurvplot(
-                fit, data=., risk.table=TRUE, conf.int=TRUE, pval=TRUE, pval.size=FONT_SIZE+2,
-                risk.table.fontsize=FONT_SIZE+2, risk.table.font.family=FONT_FAMILY,
-                palette = get_palette("Dark2", 2)
-            ) + labs(subtitle=gene_oi)
-        print(plt)
-    }
-    
+    immune_screen = immune_screen %>%
+        # translate mouse genes to human
+        left_join(
+            human2mouse %>% drop_na(human_symbol, mouse_symbol), 
+            by=c("Gene"="mouse_symbol"),
+            relationship = "many-to-many" # WARNING! There are duplicates!
+        ) %>%
+        mutate(score = Sign*`Average Score`) %>% 
+        distinct(Gene, human_symbol, score, Dataset, Comparison) %>%
+        drop_na(human_symbol)    
     
     # plot
-    plts = make_plots(protein_activity)
+    plts = make_plots(diff_response, immune_screen, splicing)
     
     # make figdata
-    figdata = make_figdata(protein_activity)
+    figdata = make_figdata(diff_response, immune_screen, splicing)
 
     # save
     save_plots(plts, figs_dir)

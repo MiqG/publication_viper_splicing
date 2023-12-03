@@ -24,6 +24,10 @@ rule all:
         expand(os.path.join(PREP_DIR,'event_psi','Riaz2017-{condition}-{omic_type}.tsv.gz'), condition=CONDITIONS, omic_type=OMIC_TYPES),
         expand(os.path.join(PREP_DIR,'genexpr_tpm','Riaz2017-{condition}.tsv.gz'), condition=CONDITIONS),
         
+        # survival analysis
+        expand(os.path.join(RESULTS_DIR,'files',"survival_analysis",'splicing-{omic_type}-Riaz2017-{condition}-surv.tsv.gz'), condition=CONDITIONS, omic_type=OMIC_TYPES),
+        expand(os.path.join(RESULTS_DIR,'files',"survival_analysis",'splicing-{omic_type}-Riaz2017-{condition}-cat.tsv.gz'), condition=CONDITIONS, omic_type=OMIC_TYPES),
+        
         # compute signatures within
         expand(os.path.join(RESULTS_DIR,"files","signatures","Riaz2017-{condition}-{omic_type}.tsv.gz"), condition=CONDITIONS, omic_type=OMIC_TYPES),
         expand(os.path.join(RESULTS_DIR,"files","protein_activity","Riaz2017-{condition}-{omic_type}.tsv.gz"), condition=CONDITIONS, omic_type=OMIC_TYPES),
@@ -110,6 +114,30 @@ rule compute_protein_activity:
                     --signature_file={input.signature} \
                     --regulons_path={input.regulons_path} \
                     --output_file={output}
+        """
+        
+        
+rule survival_analysis_splicing:
+    input:
+        splicing = os.path.join(PREP_DIR,'event_psi','Riaz2017-{condition}-{omic_type}.tsv.gz'),
+        metadata = os.path.join(PREP_DIR,"metadata","Riaz2017.tsv.gz")
+    output:
+        surv = os.path.join(RESULTS_DIR,'files',"survival_analysis",'splicing-{omic_type}-Riaz2017-{condition}-surv.tsv.gz'),
+        cat = os.path.join(RESULTS_DIR,'files',"survival_analysis",'splicing-{omic_type}-Riaz2017-{condition}-cat.tsv.gz')
+    params:
+        sample_col = "sampleID",
+        surv_event_col = "OS_event",
+        surv_time_col = "OS_time"
+    shell:
+        """
+        Rscript scripts/survival_analysis.R \
+                    --data_matrix_file={input.splicing} \
+                    --metadata_file={input.metadata} \
+                    --sample_col={params.sample_col} \
+                    --surv_event_col={params.surv_event_col} \
+                    --surv_time_col={params.surv_time_col} \
+                    --output_surv_file={output.surv} \
+                    --output_cat_file={output.cat}
         """
         
         
