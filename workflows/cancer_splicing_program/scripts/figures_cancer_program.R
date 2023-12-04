@@ -110,7 +110,7 @@ plot_comparison = function(diff_activity, diff_genexpr, survival_activity, survi
     
     # do activities and changes in gene expression correlate?
     plts[["comparison-diff_analysis-scatter"]] = X %>%
-        ggscatter(x="activity", y="genexpr_log2FC", alpha=0.5, size=1) +
+        ggscatter(x="activity", y="genexpr_log2FC", alpha=0.5, size=1, color="brown") +
         stat_cor(method="spearman", size=FONT_SIZE, family=FONT_FAMILY) +
         labs(x="Protein Activity", y="Gene Expression log2FC")
     
@@ -536,6 +536,26 @@ plot_survival_analysis = function(survival_roc, survival_omic, driver_omic, patt
         slice_max(n, n=1) %>%
         ungroup()
     
+    plts[["survival_analysis-cancer_all-examples-bar"]] = X %>%
+        left_join(
+            survival_omic %>%            
+            mutate(surv_type = ifelse(coxph_coef>0, "High Risk", "Low Risk")),
+            by="GENE"
+        ) %>%
+        count(GENE, driver_type, surv_type) %>%
+        drop_na() %>%
+        filter(GENE %in% c("SNRNP200","HNRNPD")) %>%
+        #mutate(GENE = factor(GENE, levels=c("SNRNP200","HNRNPD"))) %>%
+        ggbarplot(
+            x="surv_type", y="n", fill="driver_type", color=NA, 
+            palette=PAL_DRIVER_TYPE, position=position_dodge(0.9), 
+            label=TRUE, lab.family=FONT_FAMILY, lab.size=FONT_SIZE
+        ) +
+        facet_wrap(~GENE) +
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Splicing Factor", y="N. Cancer Types", fill="Driver Type")
+        
+    
     plts[["survival_analysis-cancers_all-violin"]] = X %>%
         left_join(
             survival_omic %>%            
@@ -899,6 +919,7 @@ save_plots = function(plts, figs_dir){
     save_plt(plts, "survival_analysis-cancers_all-violin-genexpr", '.pdf', figs_dir, width=5, height=6)
     save_plt(plts, "survival_analysis-cancers_differential-violin-genexpr", '.pdf', figs_dir, width=5, height=6)
 
+    save_plt(plts, "survival_analysis-cancer_all-examples-bar", '.pdf', figs_dir, width=5.5, height=6)
     save_plt(plts, "survival_analysis-cancers_all-roc_curves-genexpr_w_activity_labs", '.pdf', figs_dir, width=5, height=6)
     save_plt(plts, "survival_analysis-cancers_differential-roc_curves-genexpr_w_activity_labs", '.pdf', figs_dir, width=5, height=6)
     save_plt(plts, "survival_analysis-cancers_all-roc_curves-activity_w_genexpr_labs", '.pdf', figs_dir, width=5, height=6)
@@ -908,8 +929,6 @@ save_plots = function(plts, figs_dir){
     save_plt(plts, "sf_cross_regulation-regulon_similarity-violin-activity", '.pdf', figs_dir, width=5, height=5)
     save_plt(plts, "sf_cross_regulation-correlations-violin-genexpr", '.pdf', figs_dir, width=5, height=5)
     save_plt(plts, "sf_cross_regulation-regulon_similarity-violin-genexpr", '.pdf', figs_dir, width=5, height=5)
-    save_plt(plts, "tf_enrichments-oncogenic-cnet", '.pdf', figs_dir, width=4, height=4)
-    save_plt(plts, "tf_enrichments-suppressor-cnet", '.pdf', figs_dir, width=4, height=4)
     save_plt(plts, "reactome_enrichments-bar", '.pdf', figs_dir, width=16, height=6)
     save_plt(plts, "reactome_enrichments-immune_screen-scatter", '.pdf', figs_dir, width=7, height=8)
     
@@ -1162,7 +1181,7 @@ main = function(){
         survival_activity, survival_genexpr, 
         driver_activity, driver_genexpr, 
         sf_crossreg_activity, sf_crossreg_genexpr, 
-        enrichments, immune_screen, sf_activity_vs_genexpr, regulons_jaccard
+        enrichments_reactome, immune_screen, sf_activity_vs_genexpr, regulons_jaccard
     )
     
     # make figdata

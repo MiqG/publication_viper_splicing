@@ -109,9 +109,9 @@ plot_diff_response = function(diff_response, immune_screen, splicing){
             aes(label=label), events_oi ,
             size=FONT_SIZE, family=FONT_FAMILY, segment.size=0.1
         ) +
-        theme_pubr() +
+        theme_pubr(legend = "right") +
         facet_wrap(~Comparison+Dataset) +
-        theme(aspect.ratio=1) +
+        theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         labs(
             x="Median PSI difference Responder (CR/PR) vs Non-responder (PD)", 
             y="Fitness Score Gene KO",
@@ -297,6 +297,31 @@ main = function(){
         mutate(score = Sign*`Average Score`) %>% 
         distinct(Gene, human_symbol, score, Dataset, Comparison) %>%
         drop_na(human_symbol)    
+    
+    # differential splicing responders vs non-responders
+    diff_response = splicing %>%
+        drop_na(is_responder) %>%
+        group_by(EVENT, is_responder) %>%
+        summarize(
+            median_psi = median(psi)
+        ) %>%
+        ungroup() %>%
+        mutate(
+            median_psi = ifelse(is_responder=="Non-responder", -median_psi, median_psi)
+        ) %>%
+        group_by(EVENT) %>%
+        summarize(
+            median_diff = sum(median_psi)
+        ) %>%
+        ungroup() %>%
+        left_join(
+            splicing %>%
+            drop_na(is_responder) %>%
+            compare_means(psi ~ is_responder, data=., group.by="EVENT", p.adjust.method="fdr"),
+            by="EVENT"
+        ) %>%
+        left_join(annot, by="EVENT")
+        
     
     # plot
     plts = make_plots(diff_response, immune_screen, splicing)
