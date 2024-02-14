@@ -779,7 +779,7 @@ plot_enrichments = function(enrichments_reactome, immune_screen){
         ggbarplot(x="Description", y="GeneRatio", fill="driver_type", color=NA,
                   palette=PAL_DRIVER_TYPE, position=position_dodge(0.9)) +
         geom_text(aes(label=Count, group=driver_type), 
-                  size=FONT_SIZE, family=FONT_FAMILY, position=position_dodge(0.9)) +
+                  size=FONT_SIZE, family=FONT_FAMILY, position=position_dodge(0.9), hjust=-0.1) +
         labs(x="Description", y="GeneRatio", fill="Driver Type") +
         coord_flip()
     
@@ -929,7 +929,7 @@ save_plots = function(plts, figs_dir){
     save_plt(plts, "sf_cross_regulation-regulon_similarity-violin-activity", '.pdf', figs_dir, width=5, height=5)
     save_plt(plts, "sf_cross_regulation-correlations-violin-genexpr", '.pdf', figs_dir, width=5, height=5)
     save_plt(plts, "sf_cross_regulation-regulon_similarity-violin-genexpr", '.pdf', figs_dir, width=5, height=5)
-    save_plt(plts, "reactome_enrichments-bar", '.pdf', figs_dir, width=16, height=6)
+    save_plt(plts, "reactome_enrichments-bar", '.pdf', figs_dir, width=16, height=8.5)
     save_plt(plts, "reactome_enrichments-immune_screen-scatter", '.pdf', figs_dir, width=7, height=8)
     
     save_plt(plts, "comparison-diff_analysis-scatter", '.pdf', figs_dir, width=4, height=4)

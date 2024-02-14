@@ -54,8 +54,8 @@ rule make_regulons_aracne_and_experimental:
             regulon["likelihood"] = regulon["likelihood_aracne"]
             regulon["tfmode"] = regulon["tfmode_experimental"]
             
-            regulon = regulon.dropna()
-            regulon = regulon.loc[np.abs(regulon["tfmode"]) > 0]
+            idx = (np.abs(regulon["tfmode"]) > 0) & (~regulon["likelihood"].isnull())
+            regulon = regulon.loc[idx]
             
             output_file = os.path.join(output.output_dir, os.path.basename(regulon_file))
             regulon.to_csv(output_file, **SAVE_PARAMS)
@@ -94,8 +94,8 @@ rule make_regulons_mlr_and_experimental:
             regulon["likelihood"] = regulon["likelihood_mlr"]
             regulon["tfmode"] = regulon["tfmode_experimental"]
             
-            regulon = regulon.dropna()
-            regulon = regulon.loc[np.abs(regulon["tfmode"]) > 0]
+            idx = (np.abs(regulon["tfmode"]) > 0) & (~regulon["likelihood"].isnull())
+            regulon = regulon.loc[idx]
             
             output_file = os.path.join(output.output_dir, os.path.basename(regulon_file))
             regulon.to_csv(output_file, **SAVE_PARAMS)

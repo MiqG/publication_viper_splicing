@@ -11,12 +11,14 @@ require(viper)
 # ROOT = here::here()
 # PREP_DIR = file.path(ROOT,"data","prep")
 # RESULTS_DIR = file.path(ROOT,"results","regulon_inference")
-# signature_file = file.path(PREP_DIR,'ground_truth_pert','ENCOREKO',"HepG2",'log2_fold_change_tpm.tsv.gz')
 # signature_file = file.path(PREP_DIR,'ground_truth_pert','ENCOREKO',"HepG2",'delta_psi-EX.tsv.gz')
+# signature_file = file.path(PREP_DIR,'ground_truth_pert','ENCOREKO',"HepG2",'log2_fold_change_tpm.tsv.gz')
 # regulons_path = file.path(RESULTS_DIR,"files","mlr_and_experimental_regulons-genexpr")
 # regulons_path = file.path(RESULTS_DIR,"files","top40_experimentally_derived_regulons_pruned-EX")
+# regulons_path = file.path(RESULTS_DIR,"files","aracne_and_experimental_regulons-genexpr")
 # eval_labels_file = file.path(RESULTS_DIR,"files","regulon_evaluation_labels","ENCOREKO_HepG2.tsv.gz")
-# shadow_correction = "yes"
+# shadow_correction = "no"
+# n_tails = "one"
 
 ##### FUNCTIONS #####
 as_regulon_network = function(regulons){
@@ -36,9 +38,9 @@ as_regulon_network = function(regulons){
 }
 
 
-load_networks = function(network_path, patt=NULL){
+load_networks = function(network_path, n_tails="two", patt=NULL){
     if (file.exists(network_path) && !dir.exists(network_path)){
-        # network_path is a file, we load only that network (we'll tun regular VIPER)
+        # network_path is a file, we load only that network (we'll run regular VIPER)
         network_files = list(network_path)
     }else if (dir.exists(network_path)){
         # network_path is a directory, we load all networks contained (we'll run metaVIPER)
@@ -48,7 +50,11 @@ load_networks = function(network_path, patt=NULL){
     }
     
     networks = sapply(network_files, function(network_file){
+        print(network_file)
         network = read_tsv(network_file)
+        if (nrow(network)>1 & n_tails=="one"){
+            network = network %>% mutate(tfmode=abs(tfmode))
+        }
         network = as_regulon_network(network)
         return(network)
     }, simplify=FALSE)
@@ -72,7 +78,7 @@ run_viper = function(signature, regulons, shadow_correction="no"){
     # runs VIPER or metaVIPER depending on whether there are multiple regulons
     # in `regulons`
     
-    pleiotropy = (shadow_correction=="yes")
+    pleiotropy = (shadow_correction=="yes") # TRUE/FALSE
     protein_activities = viper(signature, regulons, verbose=FALSE, pleiotropy=pleiotropy)
     
     return(protein_activities)
@@ -194,7 +200,8 @@ parseargs = function(){
         make_option("--eval_labels_file", type="character", default=NULL),
         make_option("--output_file", type="character"),
         make_option("--random_seed", type="integer", default=1234),
-        make_option("--shadow_correction", type="character", default="no")
+        make_option("--shadow_correction", type="character", default="no"),
+        make_option("--n_tails", type="character", default="two")
     )
 
     args = parse_args(OptionParser(option_list=option_list))
@@ -211,13 +218,14 @@ main = function(){
     eval_labels_file = args[["eval_labels_file"]]
     random_seed = args[["random_seed"]]
     shadow_correction = args[["shadow_correction"]]
+    n_tails = args[["n_tails"]]
     output_file = args[["output_file"]]
     
     set.seed(args[["random_seed"]])
     
     # load
     signature = read_tsv(signature_file)
-    regulons = load_networks(regulons_path)
+    regulons = load_networks(regulons_path, n_tails)
     if (!is.null(eval_labels_file)){
         eval_labels = read_tsv(eval_labels_file)
     }else{
@@ -231,6 +239,10 @@ main = function(){
     signature = signature[,2:ncol(signature)]
     signature = signature %>% 
         dplyr::select(where(is.numeric))
+    
+    if (n_tails=="one"){
+        signature = abs(signature)
+    }
     
     if (is.null(eval_labels)){
         
@@ -246,6 +258,7 @@ main = function(){
         result[["regulon_set_id"]] = basename(regulons_path)
         result[["signature_id"]] = basename(eval_labels_file) %>% gsub(".tsv.gz","",.)
         result[["shadow_correction"]] = shadow_correction
+        result[["n_tails"]] = n_tails
     }
     
     # save

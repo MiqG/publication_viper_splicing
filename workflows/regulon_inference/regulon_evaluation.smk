@@ -56,6 +56,7 @@ ROBUSTNESS_EVAL_SETS = ["top{N}_experimentally_derived_regulons_pruned".format(N
 REGULON_SETS = REGULON_SETS + ROBUSTNESS_EVAL_SETS
 
 SHADOWS = ["no"] # bug in viper does not allow shadow correction
+N_TAILS = ["one","two"]
 
 ##### RULES #####
 rule all:
@@ -65,7 +66,7 @@ rule all:
         
         # evaluate regulons
         ## run
-        expand(os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{regulon_set}-{dataset}-{omic_type}-shadow_{shadow}.tsv.gz"), regulon_set=REGULON_SETS, dataset=EVAL_DATASETS, omic_type=OMIC_TYPES, shadow=SHADOWS),
+        expand(os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{regulon_set}-{dataset}-{omic_type}-shadow_{shadow}-{n_tails}_tailed.tsv.gz"), regulon_set=REGULON_SETS, dataset=EVAL_DATASETS, omic_type=OMIC_TYPES, shadow=SHADOWS, n_tails=N_TAILS),
         ## merge
         expand(os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","merged-{omic_type}.tsv.gz"), omic_type=OMIC_TYPES),
         
@@ -121,24 +122,26 @@ rule evaluate_regulons:
         regulons = os.path.join(RESULTS_DIR,"files","{regulon_set}-{omic_type}"),
         eval_labels = os.path.join(RESULTS_DIR,"files","regulon_evaluation_labels","{dataset}.tsv.gz")
     output:
-        os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{regulon_set}-{dataset}-{omic_type}-shadow_{shadow}.tsv.gz")
+        os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{regulon_set}-{dataset}-{omic_type}-shadow_{shadow}-{n_tails}_tailed.tsv.gz")
     params:
         script_dir = BIN_DIR,
-        shadow = "{shadow}"
+        shadow = "{shadow}",
+        n_tails = "{n_tails}"
     shell:
         """
-        Rscript {params.script_dir}/compute_protein_activity.R \
+        nice Rscript {params.script_dir}/compute_protein_activity.R \
                     --signature_file={input.signature} \
                     --regulons_path={input.regulons} \
                     --eval_labels_file={input.eval_labels} \
                     --output_file={output} \
-                    --shadow_correction={params.shadow}
+                    --shadow_correction={params.shadow} \
+                    --n_tails={params.n_tails}
         """
         
         
 rule combine_evaluations:
     input:
-        evaluations = [os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{regulon_set}-{dataset}-{omic_type}-shadow_{shadow}.tsv.gz").format(regulon_set=r, dataset=d, omic_type="{omic_type}", shadow=s) for r in REGULON_SETS for d in EVAL_DATASETS for s in SHADOWS]
+        evaluations = [os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{regulon_set}-{dataset}-{omic_type}-shadow_{shadow}-{n_tails}_tailed.tsv.gz").format(regulon_set=r, dataset=d, omic_type="{omic_type}", shadow=s, n_tails=n) for r in REGULON_SETS for d in EVAL_DATASETS for s in SHADOWS for n in N_TAILS]
     output:
         os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","merged-{omic_type}.tsv.gz")
     params:
@@ -162,7 +165,6 @@ rule figures_regulon_evaluation:
         directory(os.path.join(RESULTS_DIR,"figures","regulon_evaluation"))
     shell:
         """
-        
         Rscript scripts/figures_regulon_evaluation.R \
                     --evaluation_ex_file={input.evaluation_ex} \
                     --evaluation_genexpr_file={input.evaluation_genexpr} \
