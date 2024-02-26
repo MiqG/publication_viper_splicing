@@ -45,6 +45,11 @@ PAL_CANCER_TYPES = setNames(
 
 PAL_IMMUNE_SCREEN = setNames(c("#EB9486","#7E7F9A"), c(TRUE, FALSE))
 
+PAL_SAMPLE_TYPE = setNames(
+    get_palette(palette = "npg", k=3),
+    c("Primary Tumor","Primary Blood Derived Cancer - Peripheral Blood","Solid Tissue Normal")
+)
+
 # Development
 # -----------
 # ROOT = here::here()
@@ -837,6 +842,23 @@ plot_examples = function(){
 }
 
 
+plot_n_samples = function(n_samples){
+    plts = list()
+    
+    X = n_samples
+    
+    plts[["n_samples-balloon"]] = X %>%
+        arrange(n) %>%
+        ggballoonplot(x="sample_type", y="cancer_type", size="n",
+                      fill="sample_type", color="sample_type", palette=PAL_SAMPLE_TYPE) +
+        coord_radial(theta="y", inner.radius=0.3, rotate_angle=TRUE) +
+        guides(color="none", theta=guide_axis_theta(angle = 90)) +
+        labs(size="N. Samples", fill="Sample Type")
+    
+    return(plts)
+}
+
+
 make_plots = function(
     diff_activity, diff_genexpr,
     assocs_gene_dependency, 
@@ -845,7 +867,8 @@ make_plots = function(
     survival_activity, survival_genexpr, 
     driver_activity, driver_genexpr, 
     sf_crossreg_activity, sf_crossreg_genexpr, 
-    enrichments_reactome, immune_screen, sf_activity_vs_genexpr, regulons_jaccard
+    enrichments_reactome, immune_screen, sf_activity_vs_genexpr, regulons_jaccard,
+    n_samples
 ){
     plts = list(
         plot_driver_selection(driver_activity, driver_genexpr, diff_activity, diff_genexpr),
@@ -857,7 +880,8 @@ make_plots = function(
         plot_sf_crossreg(driver_activity, sf_crossreg_activity, regulons_jaccard, "-activity"),
         plot_sf_crossreg(driver_genexpr, sf_crossreg_genexpr, regulons_jaccard, "-genexpr"),
         plot_enrichments(enrichments_reactome, immune_screen),
-        plot_comparison(diff_activity, diff_genexpr, survival_activity, survival_genexpr, sf_activity_vs_genexpr)
+        plot_comparison(diff_activity, diff_genexpr, survival_activity, survival_genexpr, sf_activity_vs_genexpr),
+        plot_n_samples(n_samples)
     )
     plts = do.call(c,plts)
     return(plts)
@@ -872,7 +896,8 @@ make_figdata = function(
     survival_activity, survival_genexpr, 
     driver_activity, driver_genexpr, 
     sf_crossreg_activity, sf_crossreg_genexpr, 
-    enrichments_reactome, immune_screen, sf_activity_vs_genexpr, regulons_jaccard
+    enrichments_reactome, immune_screen, sf_activity_vs_genexpr, regulons_jaccard,
+    n_samples
 ){
     figdata = list(
         "cancer_program" = list(
@@ -936,6 +961,7 @@ save_plots = function(plts, figs_dir){
     save_plt(plts, "comparison-survival-scatter", '.pdf', figs_dir, width=4, height=4)
     save_plt(plts, "comparison-correlation_by_cancer-violin", '.pdf', figs_dir, width=12, height=5)
     save_plt(plts, "comparison-correlation_median_pancan-violin", '.pdf', figs_dir, width=4, height=4)
+    save_plt(plts, "n_samples-balloon", '.pdf', figs_dir, width=23, height=10, format=FALSE)
 }
 
 
@@ -1038,6 +1064,11 @@ main = function(){
     )
     
     # prep
+    n_samples = metadata %>%
+        filter(sample_type %in% c("Primary Tumor","Primary Blood Derived Cancer - Peripheral Blood","Solid Tissue Normal")) %>%
+        count(cancer_type, sample_type) %>%
+        mutate(sample_type = factor(sample_type, levels=c("Solid Tissue Normal","Primary Blood Derived Cancer - Peripheral Blood","Primary Tumor")))
+    
     diff_activity = diff_activity %>%
         mutate(
             is_significant = padj < THRESH_FDR

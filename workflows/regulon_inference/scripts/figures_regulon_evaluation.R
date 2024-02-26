@@ -83,7 +83,7 @@ plot_evaluation = function(evaluation, omic_type_oi){
     plts = list()
     
     X = evaluation %>%
-        group_by(omic_type, eval_direction, eval_type, regulon_set, regulon_set_id, pert_type_lab, regulator) %>%
+        group_by(omic_type, eval_direction, eval_type, regulon_set, n_tails, regulon_set_id, pert_type_lab, regulator) %>%
         summarize(ranking_perc = median(ranking_perc, na.rm=TRUE)) %>%
         ungroup() %>%
         filter(omic_type==omic_type_oi)
@@ -91,6 +91,7 @@ plot_evaluation = function(evaluation, omic_type_oi){
     # main networks
     plts[["evaluation-ranking_perc_vs_regulon_set_vs_pert_type-main-box"]] = X %>%
         filter(regulon_set %in% SETS_MAIN) %>%
+        filter(n_tails=="two") %>%
         ggplot(aes(x=pert_type_lab, y=ranking_perc, 
                    group=interaction(pert_type_lab, eval_type))) +
         geom_boxplot(aes(fill=eval_type), width=0.5, outlier.size=0.1, 
@@ -111,6 +112,7 @@ plot_evaluation = function(evaluation, omic_type_oi){
     
     plts[["evaluation-ranking_perc_vs_regulon_set-main-box"]] = X %>%
         filter(regulon_set %in% SETS_MAIN) %>%
+        filter(n_tails=="two") %>%
         group_by(omic_type, eval_direction, eval_type, regulon_set, regulator) %>%
         summarize(ranking_perc = median(ranking_perc, na.rm=TRUE)) %>%
         ungroup() %>%
@@ -136,6 +138,7 @@ plot_evaluation = function(evaluation, omic_type_oi){
     # robustness networks
     plts[["evaluation-ranking_perc_vs_regulon_set-robustness-box"]] = X %>%
         filter(regulon_set %in% SETS_ROBUSTNESS) %>%
+        filter(n_tails=="two") %>%
         group_by(omic_type, eval_direction, eval_type, regulon_set, regulator) %>%
         summarize(ranking_perc = median(ranking_perc, na.rm=TRUE)) %>%
         ungroup() %>%
@@ -160,6 +163,7 @@ plot_evaluation = function(evaluation, omic_type_oi){
     # likelihood networks
     plts[["evaluation-ranking_perc_vs_regulon_set-likelihood-box"]] = X %>%
         filter(regulon_set %in% SETS_LIKELIHOOD) %>%
+        filter(n_tails=="two") %>%
         group_by(omic_type, eval_direction, eval_type, regulon_set, regulator) %>%
         summarize(ranking_perc = median(ranking_perc, na.rm=TRUE)) %>%
         ungroup() %>%
@@ -184,6 +188,7 @@ plot_evaluation = function(evaluation, omic_type_oi){
     # mor networks
     plts[["evaluation-ranking_perc_vs_regulon_set-mor-box"]] = X %>%
         filter(regulon_set %in% SETS_MOR) %>%
+        filter(n_tails=="two") %>%
         group_by(omic_type, eval_direction, eval_type, regulon_set, regulator) %>%
         summarize(ranking_perc = median(ranking_perc, na.rm=TRUE)) %>%
         ungroup() %>%
@@ -203,7 +208,32 @@ plot_evaluation = function(evaluation, omic_type_oi){
             mutate(label=paste0("n=",n)),
             position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
         ) +
-        labs(x="Regulon Set", y="Evaluation Score", fill="Inference Type")    
+        labs(x="Regulon Set", y="Evaluation Score", fill="Inference Type")
+    
+    # one-tailed networks
+    plts[["evaluation-ranking_perc_vs_regulon_set-main_one_tailed-box"]] = X %>%
+        filter(regulon_set %in% SETS_MAIN) %>%
+        filter(n_tails=="one") %>%
+        group_by(omic_type, eval_direction, eval_type, regulon_set, regulator) %>%
+        summarize(ranking_perc = median(ranking_perc, na.rm=TRUE)) %>%
+        ungroup() %>%
+        mutate(regulon_set = factor(regulon_set, levels=SETS_MAIN)) %>%
+        ggplot(aes(x=regulon_set, y=ranking_perc, 
+                   group=interaction(regulon_set, eval_type))) +
+        geom_boxplot(aes(fill=eval_type), width=0.5, outlier.size=0.1, 
+                     position=position_dodge(0.5)) +
+        fill_palette(PAL_EVAL_TYPE) + 
+        theme_pubr() +
+        facet_wrap(~omic_type+eval_direction, ncol=2) +
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        geom_text(
+            aes(y = -0.1, label=label), 
+            . %>% 
+            count(regulon_set, eval_direction, eval_type, omic_type) %>% 
+            mutate(label=paste0("n=",n)),
+            position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        labs(x="Regulon Set", y="Evaluation Score", fill="Inference Type")
     
     names(plts) = sprintf("%s-%s", omic_type_oi, names(plts))
     
@@ -258,6 +288,8 @@ save_plots = function(plts, figs_dir){
         save_plt(plts, sprintf("%s-evaluation-ranking_perc_vs_regulon_set-likelihood-box", omic_type_oi), '.pdf', figs_dir, width=7, height=7)
         # mor
         save_plt(plts, sprintf("%s-evaluation-ranking_perc_vs_regulon_set-mor-box", omic_type_oi), '.pdf', figs_dir, width=3.5, height=7)
+        # one-tailed
+        save_plt(plts, sprintf("%s-evaluation-ranking_perc_vs_regulon_set-main_one_tailed-box", omic_type_oi), '.pdf', figs_dir, width=7, height=7)
     }
 }
 

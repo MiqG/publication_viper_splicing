@@ -244,6 +244,7 @@ plot_hallmarks_ccle = function(protein_activity_ccle){
         summarize(activity_median = median(activity, na.rm=TRUE)) %>%
         ungroup() %>%
         drop_na(driver_type) %>%
+        mutate(driver_type = factor(driver_type, levels=names(PAL_DRIVER_TYPE))) %>%
         ggscatter(x="MKI67", y="activity_median", color="driver_type", 
                   size=1, alpha=0.5, palette=PAL_DRIVER_TYPE) + 
         geom_density_2d(color="black", size=LINE_SIZE) +
@@ -253,6 +254,29 @@ plot_hallmarks_ccle = function(protein_activity_ccle){
         theme(aspect.ratio=1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         guides(color="none") +
         labs(x="log2(TPM+1) MKI67", y="median(Protein Activity SFs)")
+    
+    plts[["hallmarks_ccle-mki67_vs_activity_median_correlations-violin"]] = X %>% 
+        distinct(DepMap_ID, MKI67, activity, driver_type, GENE, primary_disease) %>%
+        group_by(DepMap_ID, driver_type, MKI67, primary_disease) %>%
+        summarize(activity_median = median(activity, na.rm=TRUE)) %>%
+        ungroup() %>%
+        drop_na(driver_type) %>%
+        group_by(driver_type, primary_disease) %>%
+        summarize(
+            correlation = cor(MKI67, activity_median),
+            n_obs = n()
+        ) %>%
+        ungroup() %>%
+        drop_na() %>%
+        filter(n_obs > 10) %>%
+        filter(!(primary_disease %in% c("Fibroblast"))) %>%
+        mutate(driver_type = factor(driver_type, levels=names(PAL_DRIVER_TYPE))) %>%
+        ggviolin(x="driver_type", y="correlation", fill="driver_type", palette=PAL_DRIVER_TYPE, color=NA, trim=TRUE) +
+        geom_boxplot(fill=NA, width=0.1, outlier.size=0.1) +
+        stat_compare_means(method="wilcox.test", size=FONT_SIZE, family=FONT_FAMILY) +
+        guides(fill="none") + 
+        theme(aspect.ratio=1) +
+        labs(x="Cancer Splicing Program", y="Pearson correlation\nlog2(TPM+1) MKI67 vs median(Protein Activity SFs)\nby Cell Line Cancer Type")
     
     # How do cancer-driver activities relate to metastasis?
     plts[["hallmarks_ccle-metpotential_vs_enrichment-scatter"]] = X %>% 
@@ -333,6 +357,7 @@ save_plots = function(plts, figs_dir){
     save_plt(plts, "hallmarks_ccle-doublings_vs_mki67-scatter", '.pdf', figs_dir, width=6, height=6)
     save_plt(plts, "hallmarks_ccle-mki67_vs_enrichment-scatter", '.pdf', figs_dir, width=6, height=6)
     save_plt(plts, "hallmarks_ccle-mki67_vs_activity_median-scatter", '.pdf', figs_dir, width=6, height=6)
+    save_plt(plts, "hallmarks_ccle-mki67_vs_activity_median_correlations-violin", '.pdf', figs_dir, width=6, height=5)
     save_plt(plts, "hallmarks_ccle-mki67_vs_enrichment-scatter", '.pdf', figs_dir, width=6, height=6)
     save_plt(plts, "hallmarks_ccle-metpotential_vs_enrichment-scatter", '.pdf', figs_dir, width=12, height=12)
     save_plt(plts, "hallmarks_ccle-metpotential_vs_activity_median-scatter", '.pdf', figs_dir, width=12, height=12)
