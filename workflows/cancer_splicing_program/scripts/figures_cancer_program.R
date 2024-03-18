@@ -19,6 +19,8 @@ require(clusterProfiler)
 require(org.Hs.eg.db)
 require(pROC)
 require(readxl)
+require(ComplexHeatmap)
+require(ggplotify)
 
 # variables
 THRESH_FDR = 0.05
@@ -237,6 +239,29 @@ plot_driver_selection = function(driver_activity, driver_genexpr, diff_activity,
         facet_wrap(~driver_type, ncol=1) +
         theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         labs(x="Splicing Factor", y="Count", fill="Driver Type")
+    
+    mat = X %>%
+        distinct(driver_type, cancer_type, GENE) %>%
+        mutate(detected = ifelse(driver_type=="Oncogenic",1,2)) %>%
+        pivot_wider(id_cols="cancer_type", names_from="GENE", values_from="detected", 
+                    values_fill=NA, values_fn = ~ sum(.x, na.rm=TRUE)) %>%
+        column_to_rownames("cancer_type") %>%
+        as.matrix()
+    
+    colors = structure(c('#6C98B3','#F6AE2D','green','gray'), names = c(2,1,3,NA))
+    plts[["driver_selection-sf_vs_cancer_type-heatmap"]] = mat[,sf_order] %>%
+        Heatmap(
+            col=colors, 
+            name="Is activated",
+            row_names_gp = gpar(fontsize=6, fontfamily=FONT_FAMILY),
+            column_names_gp = gpar(fontsize=6, fontfamily=FONT_FAMILY),
+            heatmap_legend_param = list(legend_gp = gpar(fontsize=6, fontfamily=FONT_FAMILY)),
+            cluster_rows=TRUE,
+            cluster_columns=FALSE
+        ) %>% 
+        draw() %>%
+        grid.grabExpr() %>%
+        as.ggplot()
     
     # are activities different between groups?
     Y = x %>% 
@@ -582,6 +607,39 @@ plot_survival_analysis = function(survival_roc, survival_omic, driver_omic, patt
         stat_compare_means(method="wilcox.test", label="p.signif", size=FONT_SIZE, family=FONT_FAMILY) +
         theme_pubr() +
         labs(x="Risk with High Protein Activity", y="N. Cancers", fill="Driver Type")
+    
+    # different n_sum thresholds
+    thresholds = c(8,10,12)
+    plts[["survival_analysis-cancers_all_vs_thresh-violin"]] = lapply(thresholds, function(thresh){
+            X %>%
+                filter(abs(n_sum)>=thresh) %>%
+                left_join(
+                    survival_omic %>%            
+                    mutate(surv_type = ifelse(coxph_coef>0, "High Risk", "Low Risk")),
+                    by="GENE"
+                ) %>%
+                count(GENE, driver_type, surv_type) %>%
+                drop_na() %>%
+                mutate(n_sum_threshold = sprintf("thresh=%s",thresh))
+        }) %>% 
+        bind_rows() %>%
+        mutate(n_sum_threshold = factor(n_sum_threshold, levels=sprintf("thresh=%s",thresholds))) %>%
+        ggplot(aes(x=surv_type, y=n, group=interaction(surv_type,driver_type))) +
+        geom_violin(aes(fill=driver_type), color=NA, position=position_dodge(0.9)) +
+        geom_boxplot(fill=NA, width=0.1, outlier.size=0.1, position=position_dodge(0.9)) +
+        fill_palette(PAL_DRIVER_TYPE) +
+        geom_text(
+            aes(label=label, y=3), 
+            . %>% count(n_sum_threshold,surv_type,driver_type) %>% mutate(label=paste0("n=",n)),
+            position=position_dodge(0.9),
+            size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        stat_compare_means(method="wilcox.test", label="p.signif", size=FONT_SIZE, family=FONT_FAMILY) +
+        theme_pubr() +
+        facet_wrap(~n_sum_threshold) +
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Risk with High Protein Activity", y="N. Cancers", fill="Driver Type")
+    
     
     plts[["survival_analysis-cancers_differential-violin"]] = X %>%
         left_join(
@@ -931,17 +989,20 @@ save_plots = function(plts, figs_dir){
     save_plt(plts, "driver_selection-drivers_vs_cancer_type-activity_drivers_vs_genexpr-violin", '.pdf', figs_dir, width=8, height=6)
     save_plt(plts, "driver_selection-drivers_vs_cancer_type-genexpr_drivers_vs_genexpr-violin", '.pdf', figs_dir, width=8, height=6)
     save_plt(plts, "driver_selection-drivers_vs_cancer_type-genexpr_drivers_vs_activity-violin", '.pdf', figs_dir, width=8, height=6)
+    save_plt(plts, "driver_selection-sf_vs_cancer_type-heatmap", '.pdf', figs_dir, width=8, height=5, format=FALSE)
     
     save_plt(plts, "prolif_driver-driver_type_vs_demeter2-violin", '.pdf', figs_dir, width=5, height=5)
     
     save_plt(plts, "survival_analysis-cancers_all-roc_curves-activity", '.pdf', figs_dir, width=5, height=6)
     save_plt(plts, "survival_analysis-cancers_differential-roc_curves-activity", '.pdf', figs_dir, width=5, height=6)
     save_plt(plts, "survival_analysis-cancers_all-violin-activity", '.pdf', figs_dir, width=5, height=6)
+    save_plt(plts, "survival_analysis-cancers_all_vs_thresh-violin-activity", '.pdf', figs_dir, width=9, height=6)
     save_plt(plts, "survival_analysis-cancers_differential-violin-activity", '.pdf', figs_dir, width=5, height=6)
     
     save_plt(plts, "survival_analysis-cancers_all-roc_curves-genexpr", '.pdf', figs_dir, width=5, height=6)
     save_plt(plts, "survival_analysis-cancers_differential-roc_curves-genexpr", '.pdf', figs_dir, width=5, height=6)
     save_plt(plts, "survival_analysis-cancers_all-violin-genexpr", '.pdf', figs_dir, width=5, height=6)
+    save_plt(plts, "survival_analysis-cancers_all_vs_thresh-violin-genexpr", '.pdf', figs_dir, width=9, height=6)
     save_plt(plts, "survival_analysis-cancers_differential-violin-genexpr", '.pdf', figs_dir, width=5, height=6)
 
     save_plt(plts, "survival_analysis-cancer_all-examples-bar", '.pdf', figs_dir, width=5.5, height=6)
