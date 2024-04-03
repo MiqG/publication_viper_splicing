@@ -22,7 +22,7 @@ RANDOM_SEED = 1234
 PERTURBATIONS = c(
     "KD_ESRP1_AND_KHDRBS3",
     "KD_EXOSC3_AND_SRRT",
-    "KD_ZCCHC8_AND_CBP80",
+    "KD_ZCCHC8_AND_NCBP1", # NCBP1==CBP80 officially
     "KD_ZCCHC8_AND_SRRT",
     "KO_SCAF4_AND_SCAF8",
     "KD_CLK3_AND_CLK4",
@@ -65,7 +65,7 @@ plot_activity = function(protein_activity){
     X = protein_activity %>%
         filter(total_avail_sfs>1) %>%
         rowwise() %>%
-        mutate(is_regulator_oi = regulator %in% unlist(strsplit(PERT_ENSEMBL, ","))) %>%
+        mutate(is_regulator_oi = GENE %in% unlist(strsplit(PERT_GENE, ","))) %>%
         ungroup()
     
     plts[["activity-double_perturbation_rep-ranking-scatter"]] = X %>%
@@ -83,7 +83,7 @@ plot_activity = function(protein_activity){
         labs(x="Ranking", y="Protein Activity", color="Is Perturbed")
     
     x = X %>%
-        group_by(GENE, is_regulator_oi, condition, cell_line_name, study_accession) %>%
+        group_by(PERT_ENSEMBL, PERT_GENE, GENE, regulator, is_regulator_oi, condition, cell_line_name, study_accession) %>%
         summarize(
             activity = median(activity, na.rm=TRUE)
         ) %>%
@@ -237,14 +237,15 @@ main = function(){
         ungroup() %>%
         
         # add activity
+        left_join(splicing_factors, by=c("regulator"="ENSEMBL")) %>%
         group_by(condition_lab) %>%
         arrange(activity) %>%
         mutate(
             activity_ranking = row_number(),
-            total_avail_sfs = sum(regulator %in% unlist(strsplit(PERT_ENSEMBL, ",")))
+            total_avail_sfs = sum(GENE %in% unlist(strsplit(PERT_GENE, ","))),
+            condition = gsub("CBP80","NCBP1",condition)
         ) %>%
-        ungroup() %>%
-        left_join(splicing_factors, by=c("regulator"="ENSEMBL"))
+        ungroup() 
     
     # plot
     plts = make_plots(protein_activity)

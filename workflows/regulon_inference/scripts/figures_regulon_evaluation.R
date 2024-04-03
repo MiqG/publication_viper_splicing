@@ -76,6 +76,8 @@ PAL_EVAL_TYPE = c(
 # RESULTS_DIR = file.path(ROOT,"results","regulon_inference")
 # evaluation_ex_file = file.path(RESULTS_DIR,"files","regulon_evaluation_scores","merged-EX.tsv.gz")
 # evaluation_genexpr_file = file.path(RESULTS_DIR,"files","regulon_evaluation_scores","merged-genexpr.tsv.gz")
+# regulators_per_target_file = file.path(RESULTS_DIR,"files","regulon_properties","regulators_per_target-EX.tsv.gz")
+# targets_per_regulator_file = file.path(RESULTS_DIR,"files","regulon_properties","targets_per_regulator-EX.tsv.gz")
 # figs_dir = file.path(RESULTS_DIR,"figures","regulon_evaluation")
 
 ##### FUNCTIONS #####
@@ -83,7 +85,7 @@ plot_evaluation = function(evaluation, omic_type_oi){
     plts = list()
     
     X = evaluation %>%
-        group_by(omic_type, eval_direction, eval_type, regulon_set, n_tails, regulon_set_id, pert_type_lab, regulator) %>%
+        group_by(omic_type, eval_direction, eval_type, regulon_set, n_tails, regulon_set_id, pert_type_lab, regulator, n_targets_median) %>%
         summarize(ranking_perc = median(ranking_perc, na.rm=TRUE)) %>%
         ungroup() %>%
         filter(omic_type==omic_type_oi)
@@ -139,7 +141,7 @@ plot_evaluation = function(evaluation, omic_type_oi){
     plts[["evaluation-ranking_perc_vs_regulon_set-robustness-box"]] = X %>%
         filter(regulon_set %in% SETS_ROBUSTNESS) %>%
         filter(n_tails=="two") %>%
-        group_by(omic_type, eval_direction, eval_type, regulon_set, regulator) %>%
+        group_by(omic_type, eval_direction, eval_type, regulon_set, regulator, n_targets_median) %>%
         summarize(ranking_perc = median(ranking_perc, na.rm=TRUE)) %>%
         ungroup() %>%
         mutate(regulon_set = factor(regulon_set, levels=SETS_ROBUSTNESS)) %>%
@@ -157,6 +159,11 @@ plot_evaluation = function(evaluation, omic_type_oi){
             count(regulon_set, eval_direction, eval_type, omic_type) %>% 
             mutate(label=paste0("n=",n)),
             position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        geom_text(
+            aes(y=0.1, label=n_targets_median), 
+            . %>% distinct(omic_type, eval_direction, eval_type, regulon_set, n_targets_median), 
+            size=FONT_SIZE+1, family=FONT_FAMILY
         ) +
         labs(x="Regulon Set", y="Evaluation Score", fill="Inference Type")
     
@@ -314,6 +321,8 @@ parseargs = function(){
     option_list = list( 
         make_option("--evaluation_ex_file", type="character"),
         make_option("--evaluation_genexpr_file", type="character"),
+        make_option("--regulators_per_target_file", type="character"),
+        make_option("--targets_per_regulator_file", type="character"),
         make_option("--figs_dir", type="character")
     )
 
@@ -327,6 +336,8 @@ main = function(){
     
     evaluation_ex_file = args[["evaluation_ex_file"]]
     evaluation_genexpr_file = args[["evaluation_genexpr_file"]]
+    regulators_per_target_file = args[["regulators_per_target_file"]]
+    targets_per_regulator_file = args[["targets_per_regulator_file"]]
     figs_dir = args[["figs_dir"]]
     
     dir.create(figs_dir, recursive = TRUE)
@@ -337,6 +348,29 @@ main = function(){
         read_tsv(evaluation_genexpr_file)
     ) %>%
     bind_rows()
+    
+    targets_per_regulator = read_tsv(targets_per_regulator_file)
+    regulators_per_target = read_tsv(regulators_per_target_file)
+    
+    targets_per_regulator = targets_per_regulator %>%
+        group_by(regulon_set_id) %>%
+        summarize(n_targets_median = median(n_targets)) %>%
+        ungroup()
+    n_targets_all = targets_per_regulator %>% 
+        filter(regulon_set_id=="experimentally_derived_regulons_pruned-EX") %>% 
+        pull(n_targets_median)
+    targets_per_regulator = targets_per_regulator %>%
+        mutate(perc_targets_median = round(100*n_targets_median/n_targets_all,1))
+    
+    regulators_per_target = regulators_per_target %>%
+        group_by(regulon_set_id) %>%
+        summarize(n_regulators_median = median(n_regulators)) %>%
+        ungroup()
+    n_regulators_all = regulators_per_target %>% 
+        filter(regulon_set_id=="experimentally_derived_regulons_pruned-EX") %>% 
+        pull(n_regulators_median)
+    regulators_per_target = regulators_per_target %>%
+        mutate(perc_regulators_median = round(100*n_regulators_median/n_regulators_all,1))
     
     # prep
     evaluation = evaluation %>%
@@ -353,7 +387,9 @@ main = function(){
                 PERT_TYPE=="OVEREXPRESSION" ~ "OE"
             ),
             regulon_set = gsub("-.*","",regulon_set_id)
-        )
+        ) %>%
+        left_join(regulators_per_target, by="regulon_set_id") %>%
+        left_join(targets_per_regulator, by="regulon_set_id")
     
     # plot
     plts = make_plots(evaluation)

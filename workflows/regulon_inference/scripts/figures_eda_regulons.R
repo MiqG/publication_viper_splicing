@@ -24,6 +24,13 @@ require(umap)
 require(ggbeeswarm)
 
 # variables
+SETS_MAIN = c(
+    'aracne_regulons_development',
+    'mlr_regulons_development',
+    'experimentally_derived_regulons_pruned'
+)
+
+SF_CLASS = c("Core", "RBP", "Other")
 
 # formatting
 LINE_SIZE = 0.25
@@ -43,14 +50,16 @@ PAL_DUAL = c("grey","orange") # '#1B9E77''#7570B3'
 # RESULTS_DIR = file.path(ROOT,"results","regulon_inference")
 # SUPPORT_DIR = file.path(ROOT,"support")
 # regulons_dir = file.path(RESULTS_DIR,"files","experimentally_derived_regulons_pruned-EX")
+# evaluation_ex_file = file.path(RESULTS_DIR,"files","regulon_evaluation_scores","merged-EX.tsv.gz")
 # enrichments_file = file.path(RESULTS_DIR,"files","regulons_eda_gsea","experimentally_derived_regulons_pruned-EX.tsv.gz")
 # annotation_file = file.path(RAW_DIR,'VastDB','EVENT_INFO-hg38_noseqs.tsv')
 # protein_impact_file = file.path(RAW_DIR,'VastDB','PROT_IMPACT-hg38-v3.tab.gz')
 # spliceosomedb_file = file.path(SUPPORT_DIR,"splicing_factors","literature_suptabs","SpliceosomeDB-human.csv")
+# splicing_factors_file = file.path(SUPPORT_DIR,"splicing_factors","splicing_factors.tsv")
 # figs_dir = file.path(RESULTS_DIR,'figures','eda_regulons-EX')
 
 ##### FUNCTIONS #####
-plot_regulons = function(regulons){
+plot_regulons = function(regulons, evaluation, splicing_factors){
     plts = list()
     
     X = regulons %>%
@@ -76,6 +85,46 @@ plot_regulons = function(regulons){
         guides(fill="none") +
         theme_pubr(x.text.angle=45) +
         labs(x="Regulon ID", y="N. Regulators per Target")
+    
+    plts[["regulons-n_targets_per_regulator_vs_evaluation-scatter"]] = evaluation %>%
+        left_join(
+            X %>%
+            count(regulon_id, regulator), 
+            by="regulator"
+        ) %>%
+        ggscatter(x="n", y="ranking_perc", alpha=0.5, size=1, color=PAL_DARK) +
+        xscale("log10", .format=TRUE) +
+        facet_wrap(~regulon_set+eval_direction) +
+        stat_cor()
+    
+    # RBP vs core spliceosome
+    x = X %>%
+        count(regulon_id, regulator) %>%
+        left_join(splicing_factors, by=c("regulator"="ENSEMBL")) %>%
+        mutate(
+            sf_class = case_when(
+                !is.na(spliceosome_db_complex) ~ "Core",
+                in_go_rbp ~ "RBP",
+                TRUE ~ "Other"
+            )
+        )
+    plts[["regulons-n_targets_per_regulator_vs_sf_class-box"]] = x %>%
+        mutate(sf_class = factor(sf_class, levels=SF_CLASS)) %>%
+        ggplot(aes(x=sf_class, y=n)) +
+        geom_quasirandom(size=0.1, color="orange", varwidth=0.5) +
+        geom_boxplot(width=0.5, outlier.shape=NA, color="black", fill=NA) +
+        geom_hline(yintercept = 25, linetype="dashed", color="black", size=LINE_SIZE) +
+        theme_pubr(x.text.angle=45) +
+        yscale("log10", .format=TRUE) +
+        guides(fill="none") +
+        geom_text(
+            aes(y = 1, label=label), 
+            . %>% 
+            count(sf_class) %>% 
+            mutate(label=paste0("n=",n)),
+            size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        labs(x="Splicing Factor Subset", y="N. Targets per Regulator")
     
     return(plts)
 }
@@ -166,9 +215,9 @@ plot_target_lengths = function(regulons, annot){
 }
 
 
-make_plots = function(regulons, protimp_freqs, regulons_umap, annot){
+make_plots = function(regulons, protimp_freqs, regulons_umap, annot, evaluation, splicing_factors){
     plts = list(
-        plot_regulons(regulons),
+        plot_regulons(regulons, evaluation, splicing_factors),
         plot_protein_impact(protimp_freqs),
         plot_similarities(regulons_umap),
         plot_target_lengths(regulons, annot)
@@ -209,6 +258,7 @@ save_plt = function(plts, plt_name, extension='.pdf',
 save_plots = function(plts, figs_dir){
     save_plt(plts, "regulons-n_targets_per_regulator-box", '.pdf', figs_dir, width=2, height=5)   
     save_plt(plts, "regulons-n_regulators_per_target-box", '.pdf', figs_dir, width=2, height=5)
+    save_plt(plts, "regulons-n_targets_per_regulator_vs_sf_class-box", '.pdf', figs_dir, width=3, height=4.5)
     save_plt(plts, "protein_impact-freqs-violin", '.pdf', figs_dir, width=6, height=6)
     save_plt(plts, "similarities-umap-scatter", '.pdf', figs_dir, width=5, height=5)
     save_plt(plts, "target_lengths-regulators-scatter", '.pdf', figs_dir, width=5, height=6)
@@ -272,12 +322,39 @@ main = function(){
                    term_clean=gsub("In the CDS, with uncertain impact",
                                    "In the CDS (uncertain)",term_clean))
     annot = read_tsv(annotation_file)
+    splicing_factors = read_tsv(splicing_factors_file)
+    evaluation = read_tsv(evaluation_ex_file)
     
     # prep
     protimp_freqs = regulons %>%
         distinct(regulator, target) %>%
         left_join(protein_impact, by=c("target"="EVENT")) %>%
         count(regulator, term_clean)
+    
+    evaluation = evaluation %>%
+        mutate(regulon_id = gsub("-","_",regulon_id)) %>%
+        filter(signature_id!=regulon_id) %>%
+        filter(!(str_detect(regulon_id,"ENASFS") & (signature_id=="ENASFS"))) %>%
+        # consider only signatures that we know activity 
+        # of the splicing factor was altered
+        filter(PERT_TYPE %in% c("KNOCKDOWN","KNOCKOUT","OVEREXPRESSION")) %>%
+        mutate(
+            pert_type_lab = case_when(
+                PERT_TYPE=="KNOCKDOWN" ~ "KD",
+                PERT_TYPE=="KNOCKOUT" ~ "KO",
+                PERT_TYPE=="OVEREXPRESSION" ~ "OE"
+            ),
+            regulon_set = gsub("-.*","",regulon_set_id)
+        ) %>%
+        group_by(omic_type, eval_direction, eval_type, regulon_set, n_tails, regulon_set_id, pert_type_lab, regulator) %>%
+        summarize(ranking_perc = median(ranking_perc, na.rm=TRUE)) %>%
+        ungroup() %>%
+        filter(regulon_set %in% SETS_MAIN) %>%
+        filter(n_tails=="two") %>%
+        group_by(omic_type, eval_direction, eval_type, regulon_set, regulator) %>%
+        summarize(ranking_perc = median(ranking_perc, na.rm=TRUE)) %>%
+        ungroup() %>%
+        mutate(regulon_set = factor(regulon_set, levels=SETS_MAIN))
     
     # make embedding of common targets
     regulons_mat = regulons %>%
@@ -298,7 +375,7 @@ main = function(){
         rownames_to_column("regulator") 
     
     # plot
-    plts = make_plots(regulons, protimp_freqs, regulons_umap, annot)
+    plts = make_plots(regulons, protimp_freqs, regulons_umap, annot, evaluation, splicing_factors)
     
     # make figdata
     figdata = make_figdata(regulons, protimp_freqs, regulons_umap, annot)
