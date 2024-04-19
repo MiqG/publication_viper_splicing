@@ -11,7 +11,7 @@ RESULTS_DIR = os.path.join(ROOT,"results","regulon_inference")
 SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
 
 EVENT_TYPES = ["EX"]
-OMIC_TYPES = ["genexpr"] + EVENT_TYPES
+OMIC_TYPES = EVENT_TYPES
 
 PERT_SPLICING_FILES = {
     "ENCOREKD_HepG2": os.path.join(PREP_DIR,'ground_truth_pert','ENCOREKD',"HepG2",'delta_psi-{omic_type}.tsv.gz'),
@@ -53,7 +53,9 @@ REGULON_SETS = [
 
 TOP_N = [100, 90, 80, 70, 60, 50, 40]
 ROBUSTNESS_EVAL_SETS = ["top{N}_experimentally_derived_regulons_pruned".format(N=n) for n in TOP_N]
-REGULON_SETS = REGULON_SETS + ROBUSTNESS_EVAL_SETS
+THRESH_DPSI = [5,10,15,20,25,30,35,40,45]
+THRESHOLDS_EVAL_SETS = ["dPSIthresh{thresh}_experimentally_derived_regulons_pruned".format(thresh=t) for t in THRESH_DPSI]
+REGULON_SETS = REGULON_SETS + ROBUSTNESS_EVAL_SETS + THRESHOLDS_EVAL_SETS
 
 SHADOWS = ["no"] # bug in viper does not allow shadow correction
 N_TAILS = ["one","two"]
@@ -160,7 +162,11 @@ rule combine_evaluations:
 rule figures_regulon_evaluation:
     input:
         evaluation_ex = os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","merged-EX.tsv.gz"),
-        evaluation_genexpr = os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","merged-genexpr.tsv.gz")
+        evaluation_genexpr = os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","merged-genexpr.tsv.gz"),
+        regulators_per_target_robustness = os.path.join(RESULTS_DIR,"files","regulon_properties","regulators_per_target-EX.tsv.gz"),
+        targets_per_regulator_robustness = os.path.join(RESULTS_DIR,"files","regulon_properties","targets_per_regulator-EX.tsv.gz"),
+        regulators_per_target_thresholds = os.path.join(RESULTS_DIR,"files","regulon_properties","dPSIthresh-regulators_per_target-EX.tsv.gz"),
+        targets_per_regulator_thresholds = os.path.join(RESULTS_DIR,"files","regulon_properties","dPSIthresh-targets_per_regulator-EX.tsv.gz")
     output:
         directory(os.path.join(RESULTS_DIR,"figures","regulon_evaluation"))
     shell:
@@ -168,6 +174,10 @@ rule figures_regulon_evaluation:
         Rscript scripts/figures_regulon_evaluation.R \
                     --evaluation_ex_file={input.evaluation_ex} \
                     --evaluation_genexpr_file={input.evaluation_genexpr} \
+                    --regulators_per_target_robustness_file={input.regulators_per_target_robustness} \
+                    --targets_per_regulator_robustness_file={input.targets_per_regulator_robustness} \
+                    --regulators_per_target_thresholds_file={input.regulators_per_target_thresholds} \
+                    --targets_per_regulator_thresholds_file={input.targets_per_regulator_thresholds} \
                     --figs_dir={output}
         """
         

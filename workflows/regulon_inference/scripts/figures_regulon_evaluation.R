@@ -46,6 +46,18 @@ SETS_ROBUSTNESS = c(
     'experimentally_derived_regulons_pruned'
 )
 
+SETS_THRESHOLDS = c(
+    'dPSIthresh5_experimentally_derived_regulons_pruned',
+    'dPSIthresh10_experimentally_derived_regulons_pruned',
+    'dPSIthresh15_experimentally_derived_regulons_pruned',
+    'dPSIthresh20_experimentally_derived_regulons_pruned',
+    'dPSIthresh25_experimentally_derived_regulons_pruned',
+    'dPSIthresh30_experimentally_derived_regulons_pruned',
+    'dPSIthresh35_experimentally_derived_regulons_pruned',
+    'dPSIthresh40_experimentally_derived_regulons_pruned',
+    'dPSIthresh45_experimentally_derived_regulons_pruned'
+)
+
 SETS_LIKELIHOOD = c(
     'aracne_and_experimental_regulons',
     'mlr_and_experimental_regulons',
@@ -76,8 +88,10 @@ PAL_EVAL_TYPE = c(
 # RESULTS_DIR = file.path(ROOT,"results","regulon_inference")
 # evaluation_ex_file = file.path(RESULTS_DIR,"files","regulon_evaluation_scores","merged-EX.tsv.gz")
 # evaluation_genexpr_file = file.path(RESULTS_DIR,"files","regulon_evaluation_scores","merged-genexpr.tsv.gz")
-# regulators_per_target_file = file.path(RESULTS_DIR,"files","regulon_properties","regulators_per_target-EX.tsv.gz")
-# targets_per_regulator_file = file.path(RESULTS_DIR,"files","regulon_properties","targets_per_regulator-EX.tsv.gz")
+# regulators_per_target_robustness_file = file.path(RESULTS_DIR,"files","regulon_properties","regulators_per_target-EX.tsv.gz")
+# targets_per_regulator_robustness_file = file.path(RESULTS_DIR,"files","regulon_properties","targets_per_regulator-EX.tsv.gz")
+# regulators_per_target_thresholds_file = file.path(RESULTS_DIR,"files","regulon_properties","dPSIthresh-regulators_per_target-EX.tsv.gz")
+# targets_per_regulator_thresholds_file = file.path(RESULTS_DIR,"files","regulon_properties","dPSIthresh-targets_per_regulator-EX.tsv.gz")
 # figs_dir = file.path(RESULTS_DIR,"figures","regulon_evaluation")
 
 ##### FUNCTIONS #####
@@ -85,7 +99,7 @@ plot_evaluation = function(evaluation, omic_type_oi){
     plts = list()
     
     X = evaluation %>%
-        group_by(omic_type, eval_direction, eval_type, regulon_set, n_tails, regulon_set_id, pert_type_lab, regulator, n_targets_median) %>%
+        group_by(omic_type, eval_direction, eval_type, regulon_set, n_tails, regulon_set_id, pert_type_lab, regulator, n_targets_median, n_total_regulators, n_total_targets) %>%
         summarize(ranking_perc = median(ranking_perc, na.rm=TRUE)) %>%
         ungroup() %>%
         filter(omic_type==omic_type_oi)
@@ -137,6 +151,41 @@ plot_evaluation = function(evaluation, omic_type_oi){
         labs(x="Regulon Set", y="Evaluation Score", fill="Inference Type")
     
     
+    # dPSI thresholds networks
+    plts[["evaluation-ranking_perc_vs_regulon_set-dpsi_thresh-box"]] = X %>%
+        filter(regulon_set %in% SETS_THRESHOLDS) %>%
+        filter(n_tails=="two") %>%
+        group_by(omic_type, eval_direction, eval_type, regulon_set, regulator, n_total_regulators, n_total_targets) %>%
+        summarize(ranking_perc = median(ranking_perc, na.rm=TRUE)) %>%
+        ungroup() %>%
+        mutate(regulon_set = factor(regulon_set, levels=SETS_THRESHOLDS)) %>%
+        ggplot(aes(x=regulon_set, y=ranking_perc, 
+                   group=interaction(regulon_set, eval_type))) +
+        geom_boxplot(aes(fill=eval_type), width=0.5, outlier.size=0.1, 
+                     position=position_dodge(0.5)) +
+        fill_palette(PAL_EVAL_TYPE) + 
+        theme_pubr() +
+        facet_wrap(~omic_type+eval_direction, ncol=2) +
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        geom_text(
+            aes(y = -0.1, label=label), 
+            . %>% 
+            count(regulon_set, eval_direction, eval_type, omic_type) %>% 
+            mutate(label=paste0("n=",n)),
+            position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        geom_text(
+            aes(y=0.1, label=n_total_regulators), 
+            . %>% distinct(omic_type, eval_direction, eval_type, regulon_set, n_total_regulators), 
+            size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        geom_text(
+            aes(y=0.05, label=n_total_targets), 
+            . %>% distinct(omic_type, eval_direction, eval_type, regulon_set, n_total_targets), 
+            size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        labs(x="Regulon Set", y="Evaluation Score", fill="Inference Type")
+    
     # robustness networks
     plts[["evaluation-ranking_perc_vs_regulon_set-robustness-box"]] = X %>%
         filter(regulon_set %in% SETS_ROBUSTNESS) %>%
@@ -163,7 +212,7 @@ plot_evaluation = function(evaluation, omic_type_oi){
         geom_text(
             aes(y=0.1, label=n_targets_median), 
             . %>% distinct(omic_type, eval_direction, eval_type, regulon_set, n_targets_median), 
-            size=FONT_SIZE+1, family=FONT_FAMILY
+            size=FONT_SIZE, family=FONT_FAMILY
         ) +
         labs(x="Regulon Set", y="Evaluation Score", fill="Inference Type")
     
@@ -250,8 +299,7 @@ plot_evaluation = function(evaluation, omic_type_oi){
 
 make_plots = function(evaluation){
     plts = list(
-        plot_evaluation(evaluation, "EX"),
-        plot_evaluation(evaluation, "genexpr")
+        plot_evaluation(evaluation, "EX")
     )
     plts = do.call(c,plts)
     return(plts)
@@ -284,13 +332,14 @@ save_plt = function(plts, plt_name, extension='.pdf',
 
 
 save_plots = function(plts, figs_dir){
-    omic_types = c("EX","genexpr")
+    omic_types = c("EX")
     for (omic_type_oi in omic_types){
         # main
         save_plt(plts, sprintf("%s-evaluation-ranking_perc_vs_regulon_set_vs_pert_type-main-box", omic_type_oi), '.pdf', figs_dir, width=6.5, height=12)
         save_plt(plts, sprintf("%s-evaluation-ranking_perc_vs_regulon_set-main-box", omic_type_oi), '.pdf', figs_dir, width=7, height=7)
         # robustness
         save_plt(plts, sprintf("%s-evaluation-ranking_perc_vs_regulon_set-robustness-box", omic_type_oi), '.pdf', figs_dir, width=12, height=7)
+        save_plt(plts, sprintf("%s-evaluation-ranking_perc_vs_regulon_set-dpsi_thresh-box", omic_type_oi), '.pdf', figs_dir, width=12, height=7)
         # likelihood
         save_plt(plts, sprintf("%s-evaluation-ranking_perc_vs_regulon_set-likelihood-box", omic_type_oi), '.pdf', figs_dir, width=7, height=7)
         # mor
@@ -321,8 +370,10 @@ parseargs = function(){
     option_list = list( 
         make_option("--evaluation_ex_file", type="character"),
         make_option("--evaluation_genexpr_file", type="character"),
-        make_option("--regulators_per_target_file", type="character"),
-        make_option("--targets_per_regulator_file", type="character"),
+        make_option("--regulators_per_target_robustness_file", type="character"),
+        make_option("--targets_per_regulator_robustness_file", type="character"),
+        make_option("--regulators_per_target_thresholds_file", type="character"),
+        make_option("--targets_per_regulator_thresholds_file", type="character"),
         make_option("--figs_dir", type="character")
     )
 
@@ -336,8 +387,10 @@ main = function(){
     
     evaluation_ex_file = args[["evaluation_ex_file"]]
     evaluation_genexpr_file = args[["evaluation_genexpr_file"]]
-    regulators_per_target_file = args[["regulators_per_target_file"]]
-    targets_per_regulator_file = args[["targets_per_regulator_file"]]
+    regulators_per_target_robustness_file = args[["regulators_per_target_robustness_file"]]
+    targets_per_regulator_robustness_file = args[["targets_per_regulator_robustness_file"]]
+    regulators_per_target_thresholds_file = args[["regulators_per_target_thresholds_file"]]
+    targets_per_regulator_thresholds_file = args[["targets_per_regulator_thresholds_file"]]
     figs_dir = args[["figs_dir"]]
     
     dir.create(figs_dir, recursive = TRUE)
@@ -349,12 +402,21 @@ main = function(){
     ) %>%
     bind_rows()
     
-    targets_per_regulator = read_tsv(targets_per_regulator_file)
-    regulators_per_target = read_tsv(regulators_per_target_file)
+    targets_per_regulator = list(
+        read_tsv(targets_per_regulator_robustness_file),
+        read_tsv(targets_per_regulator_thresholds_file)
+    ) %>% bind_rows()
+    regulators_per_target = list(
+        read_tsv(regulators_per_target_robustness_file),
+        read_tsv(regulators_per_target_thresholds_file)
+    ) %>% bind_rows()
     
     targets_per_regulator = targets_per_regulator %>%
         group_by(regulon_set_id) %>%
-        summarize(n_targets_median = median(n_targets)) %>%
+        summarize(
+            n_targets_median = median(n_targets),
+            n_total_regulators = n()
+        ) %>%
         ungroup()
     n_targets_all = targets_per_regulator %>% 
         filter(regulon_set_id=="experimentally_derived_regulons_pruned-EX") %>% 
@@ -364,7 +426,10 @@ main = function(){
     
     regulators_per_target = regulators_per_target %>%
         group_by(regulon_set_id) %>%
-        summarize(n_regulators_median = median(n_regulators)) %>%
+        summarize(
+            n_regulators_median = median(n_regulators),
+            n_total_targets = n()
+        ) %>%
         ungroup()
     n_regulators_all = regulators_per_target %>% 
         filter(regulon_set_id=="experimentally_derived_regulons_pruned-EX") %>% 
