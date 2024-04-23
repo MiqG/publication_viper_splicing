@@ -20,6 +20,7 @@ SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
 
 EVENT_TYPES = ["EX"]
 OMIC_TYPES = EVENT_TYPES
+COMPLEXES = ["sf3b_complex"]
 
 ##### RULES #####
 rule all:
@@ -31,7 +32,7 @@ rule all:
         expand(os.path.join(RESULTS_DIR,"files","protein_activity","sf3b_complex-{omic_type}.tsv.gz"), omic_type=OMIC_TYPES),
         
         # shortest paths to SF3B complex
-        os.path.join(RESULTS_DIR,'files','ppi','shortest_path_lengths_to_sf3b_complex.tsv.gz'),
+        expand(os.path.join(RESULTS_DIR,'files','ppi','shortest_path_lengths_to_{complex_oi}.tsv.gz'), complex_oi=COMPLEXES),
         
         # figures
         os.path.join(RESULTS_DIR,"figures","validation_sf3b_complex")
@@ -191,10 +192,10 @@ rule compute_protein_activity:
 rule shortest_paths_stringdb:
     input:
         ppi = os.path.join(PREP_DIR,'ppi','STRINGDB.tsv.gz'),
-        sources = os.path.join(SUPPORT_DIR,"splicing_factors","sf3b_complex-symbol.txt"),
+        sources = os.path.join(SUPPORT_DIR,"splicing_factors","{complex_oi}-symbol.txt"),
         targets = os.path.join(SUPPORT_DIR,"splicing_factors","splicing_factors-symbol.txt")
     output:
-        os.path.join(RESULTS_DIR,'files','ppi','shortest_path_lengths_to_sf3b_complex.tsv.gz')
+        os.path.join(RESULTS_DIR,'files','ppi','shortest_path_lengths_to_{complex_oi}.tsv.gz')
     threads: 16
     shell:
         """

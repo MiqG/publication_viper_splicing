@@ -36,10 +36,21 @@ DRUGS = c(
     "E7107"
 )
 
-
+# from SIGNOR: https://signor.uniroma2.it/relation_result.php?id=SIGNOR-C442
 SF3b_COMPLEX = c(
     "SF3B1", "SF3B2", "SF3B3", "SF3B4", 
-    "SF3B5", "SF3B6", "PHF5A", "DDX42"
+    "SF3B5", "SF3B6", "PHF5A"
+)
+
+# from SIGNOR: https://signor.uniroma2.it/relation_result.php?id=SIGNOR-C479
+U2snRNP_COMPLEX = c(
+    "SF3A1", "SF3B1", "SNIP1", "SNRPD3", 
+    "SNRPB", "SNRPE", "SF3B2", "SF3B3", 
+    "SF3B4", "SF3B5", "SF3B6", "PHF5A", 
+    "SF3A3", "SF3A2", "BUD13", "SNRPF", 
+    "SNRPG", "SNRPD1", "SNRPD2", 
+    "HTATSF1", "SNRPB2", "SNRPA1", 
+    "DDX46", "RBMX2"
 )
 
 # formatting
@@ -53,7 +64,10 @@ PAL_ACCENT = "darkred"
 PAL_DUAL = c(PAL_DARK, PAL_ACCENT)
 PAL_CONTRAST = c("darkgrey","darkred")
 PAL_CELL_LINES = "Dark2"
-
+PAL_U2 = c(
+    "In U2snRNP"="#87d7a9ff",
+    "Rest"="darkgrey"
+)
 # Development
 # -----------
 # ROOT = here::here()
@@ -152,14 +166,14 @@ plot_activity_drugs = function(protein_activity, shortest_paths){
         mutate(
             study_accession = factor(
                 study_accession, levels = c(
-                    # ISOF, SSA
-                    "PRJNA292827",
                     # H3B-8800
                     "PRJNA371421",
-                    # E7107
-                    "PRJNA354957","PRJNA380104",
                     # PLAD B
-                    "PRJNA662572","PRJNA685790"
+                    "PRJNA662572","PRJNA685790",
+                    # ISOF, SSA
+                    "PRJNA292827",
+                    # E7107
+                    "PRJNA354957","PRJNA380104"
                 )
             )
         ) %>%
@@ -221,21 +235,33 @@ plot_activity_drugs = function(protein_activity, shortest_paths){
         ungroup() %>%
         left_join(x, by=c("target"="GENE")) %>%
         drop_na(study_accession, cell_line_name, condition_lab) %>%
-        mutate(shortest_path_length_lab = factor(
-            shortest_path_length_lab, levels=c("0","1","2","3",">=4")
-        ))
+        mutate(
+            shortest_path_length_lab = factor(
+                shortest_path_length_lab, levels=c("0","1","2","3",">=4")
+            ),
+            in_u2snrnp = ifelse(target %in% U2snRNP_COMPLEX, "In U2snRNP", "Rest")
+        )
     
     plts[["activity_drugs-shortest_paths-bar"]] = y %>%
-        distinct(source, target, shortest_path_length_lab) %>%
-        count(shortest_path_length_lab) %>%
-        ggbarplot(x="shortest_path_length_lab", y="n", fill=PAL_DARK, color=NA) +
+        distinct(source, target, shortest_path_length_lab, in_u2snrnp) %>%
+        count(in_u2snrnp, shortest_path_length_lab) %>%
+        ggbarplot(
+            x="shortest_path_length_lab", y="n", fill="in_u2snrnp", 
+            label=TRUE, lab.family=FONT_FAMILY, lab.size=FONT_SIZE,
+            palette=PAL_U2, color=NA, position=position_dodge(0.9)) +
         labs(x="Shortest Path Length", y="Counts")
     
     plts[["activity_drugs-sf3b_complex_vs_shortest_paths-box"]] = y %>%
-        ggboxplot(x="shortest_path_length_lab", y="activity", color="condition", outlier.size=0.1) +
+        ggboxplot(x="shortest_path_length_lab", y="activity", color="condition_lab", outlier.size=0.1) +
         facet_wrap(~study_accession+cell_line_name+condition_lab, scales="free_y") +
         theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         labs(x="Shortest Path Length", y="Protein Activity", color="Drug")
+    
+    plts[["activity_drugs-sf3b_complex_vs_shortest_paths_vs_u2snrnp-box"]] = y %>%
+        ggboxplot(x="shortest_path_length_lab", y="activity", color="in_u2snrnp", fill=NA, outlier.size=0.1, palette=PAL_U2) +
+        facet_wrap(~study_accession+cell_line_name+condition_lab, scales="free", ncol=4) +
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Shortest Path Length", y="Protein Activity", color="")
     
     return(plts)
 }
@@ -280,8 +306,9 @@ save_plt = function(plts, plt_name, extension='.pdf',
 save_plots = function(plts, figs_dir){
     save_plt(plts, "activity_mutations-sf3b_complex-scatter_line", '.pdf', figs_dir, width=10, height=12)
     save_plt(plts, "activity_drugs-sf3b_complex-scatter_line", '.pdf', figs_dir, width=15, height=12)
-    save_plt(plts, "activity_drugs-shortest_paths-bar", '.pdf', figs_dir, width=4, height=2)
+    save_plt(plts, "activity_drugs-shortest_paths-bar", '.pdf', figs_dir, width=4, height=3.5)
     save_plt(plts, "activity_drugs-sf3b_complex_vs_shortest_paths-box", '.pdf', figs_dir, width=10, height=14)
+    save_plt(plts, "activity_drugs-sf3b_complex_vs_shortest_paths_vs_u2snrnp-box", '.pdf', figs_dir, width=10, height=9.5)
 }
 
 
