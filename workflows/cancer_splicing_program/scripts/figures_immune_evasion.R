@@ -2,11 +2,6 @@
 # Author: Miquel Anglada Girotto
 # Contact: miquel [dot] anglada [at] crg [dot] eu
 #
-# Outline
-# ----
-# 1. Differential inclusion in responders (CR/PR) vs non-responders (PD)
-# 2. Which differentially included exons affect functionally important genes?
-# 3. Does inclusion of prioritized exon(s) correlate with patient survival?
 
 require(optparse)
 require(tidyverse)
@@ -36,21 +31,17 @@ FONT_FAMILY = "Arial"
 # PREP_DIR = file.path(ROOT,'data','prep')
 # SUPPORT_DIR = file.path(ROOT,"support")
 # RESULTS_DIR = file.path(ROOT,"results","cancer_splicing_program")
-# genexpr_file = file.path(PREP_DIR,"genexpr_tpm","Riaz2017-PRE.tsv.gz")
+# REGINF_DIR = file.path(ROOT,"results","regulon_inference")
+# annotation_file = file.path(RAW_DIR,'VastDB','event_annotation-Hs2.tsv.gz')
+# regulons_path = file.path(REGINF_DIR,"files","experimentally_derived_regulons_pruned-EX")
 # splicing_file = file.path(PREP_DIR,"event_psi","Riaz2017-PRE-EX.tsv.gz")
-# protein_activity_file = file.path(RESULTS_DIR,"files","protein_activity","Riaz2017-PRE-EX.tsv.gz")
 # metadata_file = file.path(PREP_DIR,"metadata","Riaz2017.tsv.gz")
-# driver_types_file = file.path(RESULTS_DIR,'files','PANCAN','cancer_program.tsv.gz')
-# figs_dir = file.path(RESULTS_DIR,"figures","immune_evasion")
 # enrichments_reactome_file = file.path(RESULTS_DIR,"figures","cancer_program","figdata","cancer_program","enrichments_reactome.tsv.gz")
 # immune_screen_file = file.path(SUPPORT_DIR,"supplementary_tables_literature","Dubrot2022-suptabs-41590_2022_1315_MOESM2_ESM.xlsx") # Sup. Tab. 13
 # human2mouse_file = file.path(RAW_DIR,"BIOMART","human2mouse.tsv")
 # survival_analysis_file = file.path(RESULTS_DIR,'files',"survival_analysis",'splicing-EX-Riaz2017-PRE-surv.tsv.gz')
-# annotation_file = file.path(RAW_DIR,'VastDB','event_annotation-Hs2.tsv.gz')
 # protein_impact_file = file.path(RAW_DIR,'VastDB','PROT_IMPACT-hg38-v3.tab.gz')
-# REGINF_DIR = file.path(ROOT,"results","regulon_inference")
-# regulons_path = file.path(REGINF_DIR,"files","experimentally_derived_regulons_pruned-EX")
-
+# figs_dir = file.path(RESULTS_DIR,"figures","immune_evasion-EX")
 
 ##### FUNCTIONS #####
 load_regulons = function(regulons_path, patt=NULL){
@@ -186,8 +177,8 @@ save_plt = function(plts, plt_name, extension='.pdf',
 
 save_plots = function(plts, figs_dir){
     save_plt(plts, "diff_response-median_diff_vs_pvalue-scatter", '.pdf', figs_dir, width=4, height=4)
-    save_plt(plts, "diff_response-median_diff_vs_immune_screen_score-scatter", '.pdf', figs_dir, width=5, height=6)
-    save_plt(plts, "diff_response-psi_vs_survival-km-HsaEX1036341_SEC22B", '.pdf', figs_dir, width=5, height=7)
+    save_plt(plts, "diff_response-median_diff_vs_immune_screen_score-scatter", '.pdf', figs_dir, width=8, height=6)
+    save_plt(plts, "diff_response-psi_vs_survival-km-HsaEX1036341_SEC22B", '.pdf', figs_dir, width=5, height=7, format=FALSE)
 }
 
 
@@ -209,9 +200,15 @@ save_figdata = function(figdata, dir){
 parseargs = function(){
     
     option_list = list( 
-        make_option("--protein_activity_file", type="character"),
+        make_option("--annotation_file", type="character"),
+        make_option("--regulons_path", type="character"),
+        make_option("--splicing_file", type="character"),
         make_option("--metadata_file", type="character"),
-        make_option("--driver_types_file", type="character"),
+        make_option("--enrichments_reactome_file", type="character"),
+        make_option("--immune_screen_file", type="character"),
+        make_option("--human2mouse_file", type="character"),
+        make_option("--survival_analysis_file", type="character"),
+        make_option("--protein_impact_file", type="character"),
         make_option("--figs_dir", type="character")
     )
 
@@ -224,9 +221,15 @@ parseargs = function(){
 main = function(){
     args = parseargs()
     
-    protein_activity_file = args[["protein_activity_file"]]
+    annotation_file = args[["annotation_file"]]
+    regulons_path = args[["regulons_path"]]
+    splicing_file = args[["splicing_file"]]
     metadata_file = args[["metadata_file"]]
-    driver_types_file = args[["driver_types_file"]]
+    enrichments_reactome_file = args[["enrichments_reactome_file"]]
+    immune_screen_file = args[["immune_screen_file"]]
+    human2mouse_file = args[["human2mouse_file"]]
+    survival_analysis_file = args[["survival_analysis_file"]]
+    protein_impact_file = args[["protein_impact_file"]]
     figs_dir = args[["figs_dir"]]
     
     set.seed(RANDOM_SEED)    

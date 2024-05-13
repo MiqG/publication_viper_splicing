@@ -14,7 +14,6 @@ SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
 EVENT_TYPES = ["EX"]
 OMIC_TYPES = EVENT_TYPES
 
-CONDITIONS = ["PRE_PD1","PRE_CombPD1_CTLA4","ON_PD1","ON_CombPD1_CTLA4"]
 CONDITIONS = ["PRE","ON"]
 
 ##### RULES ######
@@ -22,18 +21,13 @@ rule all:
     input:
         # make datasets
         expand(os.path.join(PREP_DIR,'event_psi','Riaz2017-{condition}-{omic_type}.tsv.gz'), condition=CONDITIONS, omic_type=OMIC_TYPES),
-        expand(os.path.join(PREP_DIR,'genexpr_tpm','Riaz2017-{condition}.tsv.gz'), condition=CONDITIONS),
         
         # survival analysis
         expand(os.path.join(RESULTS_DIR,'files',"survival_analysis",'splicing-{omic_type}-Riaz2017-{condition}-surv.tsv.gz'), condition=CONDITIONS, omic_type=OMIC_TYPES),
         expand(os.path.join(RESULTS_DIR,'files',"survival_analysis",'splicing-{omic_type}-Riaz2017-{condition}-cat.tsv.gz'), condition=CONDITIONS, omic_type=OMIC_TYPES),
         
-        # compute signatures within
-        expand(os.path.join(RESULTS_DIR,"files","signatures","Riaz2017-{condition}-{omic_type}.tsv.gz"), condition=CONDITIONS, omic_type=OMIC_TYPES),
-        expand(os.path.join(RESULTS_DIR,"files","protein_activity","Riaz2017-{condition}-{omic_type}.tsv.gz"), condition=CONDITIONS, omic_type=OMIC_TYPES),
-        #expand(os.path.join(RESULTS_DIR,"files","protein_activity","Riaz2017-{omic_type}.tsv.gz"), omic_type=OMIC_TYPES),
-        
         # figures
+        expand(os.path.join(RESULTS_DIR,"figures","immune_evasion-{omic_type}"), omic_type=OMIC_TYPES)        
         
         
 rule split_psi_by_condition:
@@ -58,65 +52,6 @@ rule split_psi_by_condition:
         print("Done!")
         
 
-rule split_genexpr_by_condition:
-    input:
-        metadata = os.path.join(PREP_DIR,"metadata","Riaz2017.tsv.gz"),
-        genexpr = os.path.join(PREP_DIR,'genexpr_tpm','Riaz2017.tsv.gz')
-    output:
-        genexpr = os.path.join(PREP_DIR,'genexpr_tpm','Riaz2017-{condition}.tsv.gz')
-    params:
-        condition = "{condition}"
-    run:
-        import pandas as pd
-        
-        metadata = pd.read_table(input.metadata)
-        genexpr = pd.read_table(input.genexpr, index_col=0)
-        
-        idx = metadata["treatment_status"] == params.condition
-        samples_oi = list(set(metadata.loc[idx,"sampleID"]).intersection(genexpr.columns))
-        
-        genexpr[samples_oi].reset_index().to_csv(output.genexpr, **SAVE_PARAMS)
-        
-        print("Done!")
-        
-        
-rule compute_signature_within:
-    input:
-        splicing = os.path.join(PREP_DIR,'event_psi','Riaz2017-{condition}-{omic_type}.tsv.gz')
-    output:
-        signature = os.path.join(RESULTS_DIR,"files","signatures","Riaz2017-{condition}-{omic_type}.tsv.gz")
-    run:
-        import pandas as pd
-        
-        splicing = pd.read_table(input.splicing, index_col=0)
-        
-        # subtract median PT
-        signature = splicing
-        signature = signature - splicing.median(axis=1).values.reshape(-1,1)
-        
-        # save
-        signature.reset_index().to_csv(output.signature, **SAVE_PARAMS)
-        
-        print("Done!")        
-
-
-rule compute_protein_activity:
-    input:
-        signature = os.path.join(RESULTS_DIR,"files","signatures","Riaz2017-{condition}-{omic_type}.tsv.gz"),
-        regulons_path = os.path.join(REGULONS_DIR,"files","experimentally_derived_regulons_pruned-{omic_type}")
-    output:
-        os.path.join(RESULTS_DIR,"files","protein_activity","Riaz2017-{condition}-{omic_type}.tsv.gz")
-    params:
-        script_dir = BIN_DIR
-    shell:
-        """
-        Rscript {params.script_dir}/compute_protein_activity.R \
-                    --signature_file={input.signature} \
-                    --regulons_path={input.regulons_path} \
-                    --output_file={output}
-        """
-        
-        
 rule survival_analysis_splicing:
     input:
         splicing = os.path.join(PREP_DIR,'event_psi','Riaz2017-{condition}-{omic_type}.tsv.gz'),
@@ -141,15 +76,30 @@ rule survival_analysis_splicing:
         """
         
         
-# rule combine_protein_activities:
-#     input:
-#         signatures = [os.path.join(RESULTS_DIR,"files","protein_activity","Riaz2017-{condition}-{omic_type}.tsv.gz").format(condition=c, omic_type="{omic_type}") for c in CONDITIONS]
-#     output:
-#         signatures = os.path.join(RESULTS_DIR,"files","protein_activity","Riaz2017-{omic_type}.tsv.gz")
-#     run:
-#         import pandas as pd
-        
-#         signatures = pd.concat([pd.read_table(signature, index_col=0) for signature in input.signatures], axis=1)
-#         signatures.reset_index().to_csv(output.signatures, **SAVE_PARAMS)
-        
-#         print("Done!")
+rule figures_immune_evasion:
+    input:
+        annotation = os.path.join(RAW_DIR,'VastDB','event_annotation-Hs2.tsv.gz'),
+        regulons_path = os.path.join(REGULONS_DIR,"files","experimentally_derived_regulons_pruned-{omic_type}"),
+        splicing = os.path.join(PREP_DIR,"event_psi","Riaz2017-PRE-{omic_type}.tsv.gz"),
+        metadata = os.path.join(PREP_DIR,"metadata","Riaz2017.tsv.gz"),
+        enrichments_reactome = os.path.join(RESULTS_DIR,"figures","cancer_program","figdata","cancer_program","enrichments_reactome.tsv.gz"),
+        immune_screen = os.path.join(SUPPORT_DIR,"supplementary_tables_literature","Dubrot2022-suptabs-41590_2022_1315_MOESM2_ESM.xlsx"), # Sup. Tab. 13
+        human2mouse = os.path.join(RAW_DIR,"BIOMART","human2mouse.tsv"),
+        survival_analysis = os.path.join(RESULTS_DIR,'files',"survival_analysis",'splicing-{omic_type}-Riaz2017-PRE-surv.tsv.gz'),
+        protein_impact = os.path.join(RAW_DIR,'VastDB','PROT_IMPACT-hg38-v3.tab.gz')
+    output:
+        directory(os.path.join(RESULTS_DIR,"figures","immune_evasion-{omic_type}"))
+    shell:
+        """
+        Rscript scripts/figures_immune_evasion.R \
+                    --annotation_file={input.annotation} \
+                    --regulons_path={input.regulons_path} \
+                    --splicing_file={input.splicing} \
+                    --metadata_file={input.metadata} \
+                    --enrichments_reactome_file={input.enrichments_reactome} \
+                    --immune_screen_file={input.immune_screen} \
+                    --human2mouse_file={input.human2mouse} \
+                    --survival_analysis_file={input.survival_analysis} \
+                    --protein_impact_file={input.protein_impact} \
+                    --figs_dir={output}
+        """
