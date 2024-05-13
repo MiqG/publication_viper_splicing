@@ -1,0 +1,81 @@
+"""
+Workflow purpose
+----------------
+Combine results from different workflows for publication.
+
+"""
+
+import os
+import pandas as pd
+
+SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
+
+##### VARIABLES #####
+ROOT = os.path.dirname(os.path.dirname(os.getcwd()))
+SUPPORT_DIR = os.path.join(ROOT,'support')
+RESULTS_DIR = os.path.join(ROOT,'results')
+DATA_DIR = os.path.join(ROOT,'data')
+RAW_DIR = os.path.join(DATA_DIR,'raw')
+PREP_DIR = os.path.join(DATA_DIR,'prep')
+
+PROGRAM_DIR = os.path.join(RESULTS_DIR,"cancer_splicing_program")
+
+##### RULES #####
+rule all:
+    input:
+        os.path.join(RESULTS_DIR,'prepare_submission','files',"ENASFS.tsv.gz"),
+        os.path.join(RESULTS_DIR,'prepare_submission','files','supplementary_tables')
+
+
+rule prep_pert_datasets:
+    input:
+        metadata = os.path.join(PREP_DIR,"metadata","ENASFS.tsv.gz")
+    output:
+        metadata = os.path.join(RESULTS_DIR,'prepare_submission','files',"ENASFS.tsv.gz")
+    run:
+        import pandas as pd
+        
+        # load
+        metadata = pd.read_table(input.metadata)
+        
+        # filter perturbations
+        metadata = metadata.loc[~metadata["PERT_ENSEMBL"].isnull()].copy()
+        
+        pert_types_oi = ["KNOCKDOWN","KNOCKOUT","OVEREXPRESSION"]
+        metadata = metadata.loc[metadata["PERT_TYPE"].isin(pert_types_oi)].copy()
+        
+        # save
+        metadata.to_csv(output.metadata, **SAVE_PARAMS)
+        
+        print("Done!")
+        
+    
+rule supplementary_tables:
+    input:
+        # prior knowledge
+        suptab01_consensus_list_splicing_factors = os.path.join(SUPPORT_DIR,"splicing_factors","splicing_factors.tsv"),
+        suptab02_pert_datasets = os.path.join(RESULTS_DIR,'prepare_submission','files',"ENASFS.tsv.gz"),
+        suptab03_cancer_splicing_programs = os.path.join(PROGRAM_DIR,'files','PANCAN','cancer_program.tsv.gz')
+    output:
+        directory(os.path.join(RESULTS_DIR,'prepare_submission','files','supplementary_tables'))
+    run:
+        import os
+        import subprocess
+        
+        outdir = output[0]
+        os.makedirs(outdir, exist_ok=True)
+        
+        for key, f in input.items():
+            filename = os.path.basename(f)
+            extension = ".".join(filename.split(".")[1:])
+            outfile = os.path.join(outdir,key+"."+extension)
+            cmd = ["cp", f, outfile]
+            print(cmd)
+            subprocess.call(cmd)
+            
+            if not filename.endswith(".gz"):
+                cmd = ["gzip", outfile]
+                print(cmd)
+                subprocess.call(cmd)
+            
+        print("Done!")
