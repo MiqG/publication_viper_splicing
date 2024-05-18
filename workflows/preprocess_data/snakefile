@@ -1019,7 +1019,7 @@ rule mask_dpsi:
         print("Done!")
         
         
-rule impute_psi_tcga:
+rule impute_psi:
     input:
         os.path.join(PREP_DIR,'event_psi','{dataset}-{event_type}.tsv.gz')
     output:

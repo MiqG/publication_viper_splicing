@@ -31,9 +31,15 @@ Repurposing VIPER to estimate differential splicing factor activity.
             - from fibroblasts to cancer
     6. `prepare_submission`: prepare supplementary tables
 
-## Requirements
+## Requirements (TODO)
+- python
+- R
+    - CRAN
+    - bioconductor
+    - github
 
 ## Usage
+All workflows were written as `snakemake` pipelines. Refer to each specific workflow to run them.
 
 ## Authors
 - [Miquel Anglada Girotto](https://orcid.org/0000-0003-1885-8649)
@@ -45,5 +51,3 @@ Repurposing VIPER to estimate differential splicing factor activity.
 
 ## License
 
-## References
-- ARACNe, VIPER, Dan
