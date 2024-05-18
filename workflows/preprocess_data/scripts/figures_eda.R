@@ -53,7 +53,7 @@ plot_splicing_factors = function(splicing_factors){
     sfs_oi = list(
         "Rogalska2022" = X %>% filter(in_rogalska) %>% pull(ENSEMBL),
         "Hegele2012" = X %>% filter(in_hegele) %>% pull(ENSEMBL),
-        "Hand-curated" = X %>% filter(in_handcurated) %>% pull(ENSEMBL),
+        "Head2021" = X %>% filter(in_head) %>% pull(ENSEMBL),
         "Seiler2018" = X %>% filter(in_seiler) %>% pull(ENSEMBL),
         "Papasaikas2015" = X %>% filter(in_papasaikas) %>% pull(ENSEMBL)
     )

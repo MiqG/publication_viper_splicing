@@ -210,13 +210,13 @@ rule all:
 rule make_list_splicing_factors:
     input:
         spliceosome_db = os.path.join(SUPPORT_DIR,"splicing_factors","literature_suptabs","SpliceosomeDB-human.csv"),
-        handcurated = os.path.join(SUPPORT_DIR,"splicing_factors","splicing_factors_handcurated-ensembl.txt"),
+        head = os.path.join(SUPPORT_DIR,"splicing_factors","splicing_factors_Head2021-ensembl.txt"),
         rogalska = os.path.join(SUPPORT_DIR,"splicing_factors","literature_suptabs","Rogalska2022NatRevGen-suptab1.xlsx"),
         hegele = os.path.join(SUPPORT_DIR,"splicing_factors","literature_suptabs","Hegele2012MolCell-suptab1.xls"),
         seiler = os.path.join(SUPPORT_DIR,"splicing_factors","literature_suptabs","Seiler2018CellReports-suptab1.xlsx"),
         papasaikas = os.path.join(SUPPORT_DIR,"splicing_factors","literature_suptabs","Papasaikas2015MolCell-suptab2.xlsx"),
-        go_rna_splicing = os.path.join(SUPPORT_DIR,"splicing_factors","splicing_factors_handcurated-ensembl.txt"),
-        go_rna_binding = os.path.join(SUPPORT_DIR,"splicing_factors","splicing_factors_handcurated-ensembl.txt"),
+        go_rna_splicing = os.path.join(SUPPORT_DIR,"splicing_factors","GOBP_RNA_SPLICING-ensembl.txt"),
+        go_rna_binding = os.path.join(SUPPORT_DIR,"splicing_factors","GOMF_RNA_BINDING-ensembl.txt"),
         annot_hgnc = os.path.join(RAW_DIR,"HGNC","gene_annotations.tsv.gz"),
         annot_ensembl = os.path.join(RAW_DIR,"references","annotation-entrez_ensembl_symbol.tsv")
     output:
@@ -231,7 +231,7 @@ rule make_list_splicing_factors:
         hegele = pd.read_excel(input.hegele)
         seiler = pd.read_excel(input.seiler, skiprows=3, nrows=404)
         papasaikas = pd.read_excel(input.papasaikas)
-        handcurated = pd.read_table(input.handcurated, header=None)[0].tolist()
+        head = pd.read_table(input.head, header=None)[0].tolist()
         go_rna_splicing = pd.read_table(input.go_rna_splicing, header=None)[0].tolist()
         go_rna_binding = pd.read_table(input.go_rna_binding, header=None)[0].tolist()
         annot_hgnc = pd.read_table(input.annot_hgnc)
@@ -331,8 +331,8 @@ rule make_list_splicing_factors:
         spliceosome_db["dataset"] = "SpliceosomeDB"
         
         ## Hand-curated
-        handcurated = annot.loc[annot["ENSEMBL"].isin(handcurated)].copy()
-        handcurated["dataset"] = "HandCurated"
+        head = annot.loc[annot["ENSEMBL"].isin(head)].copy()
+        head["dataset"] = "Head2021"
         
         # combine datasets
         cols_oi = ["GENE","ENSEMBL","ENTREZ","dataset"]
@@ -341,7 +341,7 @@ rule make_list_splicing_factors:
             hegele[cols_oi],
             seiler[cols_oi],
             papasaikas[cols_oi],
-            handcurated[cols_oi]
+            head[cols_oi]
         ])
         
         # select splicing factors
@@ -357,7 +357,7 @@ rule make_list_splicing_factors:
         splicing_factors["in_hegele"] = splicing_factors["GENE"].isin(hegele["GENE"])
         splicing_factors["in_seiler"] = splicing_factors["GENE"].isin(seiler["GENE"])
         splicing_factors["in_papasaikas"] = splicing_factors["GENE"].isin(papasaikas["GENE"])
-        splicing_factors["in_handcurated"] = splicing_factors["GENE"].isin(handcurated["GENE"])
+        splicing_factors["in_head"] = splicing_factors["GENE"].isin(head["GENE"])
         splicing_factors["in_spliceosome_db"] = splicing_factors["GENE"].isin(spliceosome_db["GENE"])
         splicing_factors["in_go_sf"] = splicing_factors["ENSEMBL"].isin(go_rna_splicing)
         splicing_factors["in_go_rbp"] = splicing_factors["ENSEMBL"].isin(go_rna_binding)
