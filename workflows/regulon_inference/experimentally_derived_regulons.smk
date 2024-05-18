@@ -16,33 +16,22 @@ PERT_SPLICING_FILES = [
     os.path.join(PREP_DIR,'ground_truth_pert','ENASFS','delta_psi-{omic_type}.tsv.gz')
 ]
 
-PERT_GENEXPR_FILES = [
-    os.path.join(PREP_DIR,'ground_truth_pert','ENCOREKD',"HepG2",'log2_fold_change_tpm.tsv.gz'),
-    os.path.join(PREP_DIR,'ground_truth_pert','ENCOREKD',"K562",'log2_fold_change_tpm.tsv.gz'),
-    os.path.join(PREP_DIR,'ground_truth_pert','ENCOREKO',"HepG2",'log2_fold_change_tpm.tsv.gz'),
-    os.path.join(PREP_DIR,'ground_truth_pert','ENCOREKO',"K562",'log2_fold_change_tpm.tsv.gz'),
-    os.path.join(PREP_DIR,'ground_truth_pert','ENASFS','log2_fold_change_tpm.tsv.gz')
-]
-
 PERT_FILES = {
     "EX": PERT_SPLICING_FILES,
-    "genexpr": PERT_GENEXPR_FILES
 }
 
 
 EVENT_TYPES = ["EX"]
-OMIC_TYPES = ["genexpr"] + EVENT_TYPES
+OMIC_TYPES = EVENT_TYPES
 
 ##### RULES #####
 rule all:
     input:
         # make regulons
         expand(os.path.join(RESULTS_DIR,"files","experimentally_derived_regulons_raw-{omic_type}"), omic_type=EVENT_TYPES),
-        os.path.join(RESULTS_DIR,"files","experimentally_derived_regulons_raw-genexpr"),
         
         # prune regulons
         expand(os.path.join(RESULTS_DIR,"files","experimentally_derived_regulons_pruned-{omic_type}"), omic_type=EVENT_TYPES),
-        os.path.join(RESULTS_DIR,"files","experimentally_derived_regulons_pruned-genexpr")
         
         
 rule make_regulons:
@@ -61,8 +50,8 @@ rule make_regulons:
         
         regulators = pd.read_table(input.regulators)
         omic_type = params.omic_type
-        feature_name = "EVENT" if omic_type!="genexpr" else "ENSEMBL"
-        value_name = "delta_psi" if omic_type!="genexpr" else "log2fc_tpm"
+        feature_name = "EVENT"
+        value_name = "delta_psi"
         
         # prep regulators
         regulators = regulators[["GENE","ENSEMBL"]]
@@ -171,7 +160,7 @@ rule prune_regulons:
     output:
         output_dir = directory(os.path.join(RESULTS_DIR,"files","experimentally_derived_regulons_pruned-{omic_type}"))
     params:
-        thresh = lambda wildcards: 15 if wildcards.omic_type!="genexpr" else 1
+        thresh = 15
     run:
         import os
         import pandas as pd

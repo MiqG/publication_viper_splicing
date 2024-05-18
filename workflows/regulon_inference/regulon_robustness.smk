@@ -9,7 +9,7 @@ RESULTS_DIR = os.path.join(ROOT,"results","regulon_inference")
 SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
 
 EVENT_TYPES = ["EX"]
-OMIC_TYPES = ["genexpr"] + EVENT_TYPES
+OMIC_TYPES = EVENT_TYPES
 
 TOP_N = [100, 90, 80, 70, 60, 50, 40]
 

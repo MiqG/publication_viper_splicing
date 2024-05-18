@@ -21,19 +21,8 @@ PERT_SPLICING_FILES = {
     "ENASFS": os.path.join(PREP_DIR,'ground_truth_pert','ENASFS','delta_psi-{omic_type}.tsv.gz')
 }
 
-PERT_GENEXPR_FILES = {
-    "ENCOREKD_HepG2": os.path.join(PREP_DIR,'ground_truth_pert','ENCOREKD',"HepG2",'log2_fold_change_tpm.tsv.gz'),
-    "ENCOREKD_K562": os.path.join(PREP_DIR,'ground_truth_pert','ENCOREKD',"K562",'log2_fold_change_tpm.tsv.gz'),
-    "ENCOREKO_HepG2": os.path.join(PREP_DIR,'ground_truth_pert','ENCOREKO',"HepG2",'log2_fold_change_tpm.tsv.gz'),
-    "ENCOREKO_K562": os.path.join(PREP_DIR,'ground_truth_pert','ENCOREKO',"K562",'log2_fold_change_tpm.tsv.gz'),
-    "ENASFS": os.path.join(PREP_DIR,'ground_truth_pert','ENASFS','log2_fold_change_tpm.tsv.gz')
-}
-
-EVAL_DATASETS = list(PERT_GENEXPR_FILES.keys())
-
 PERT_FILES = {
     "EX": PERT_SPLICING_FILES,
-    "genexpr": PERT_GENEXPR_FILES
 }
 
 METADATA_FILES = [
@@ -162,7 +151,6 @@ rule combine_evaluations:
 rule figures_regulon_evaluation:
     input:
         evaluation_ex = os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","merged-EX.tsv.gz"),
-        evaluation_genexpr = os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","merged-genexpr.tsv.gz"),
         regulators_per_target_robustness = os.path.join(RESULTS_DIR,"files","regulon_properties","regulators_per_target-EX.tsv.gz"),
         targets_per_regulator_robustness = os.path.join(RESULTS_DIR,"files","regulon_properties","targets_per_regulator-EX.tsv.gz"),
         regulators_per_target_thresholds = os.path.join(RESULTS_DIR,"files","regulon_properties","dPSIthresh-regulators_per_target-EX.tsv.gz"),
@@ -173,7 +161,6 @@ rule figures_regulon_evaluation:
         """
         Rscript scripts/figures_regulon_evaluation.R \
                     --evaluation_ex_file={input.evaluation_ex} \
-                    --evaluation_genexpr_file={input.evaluation_genexpr} \
                     --regulators_per_target_robustness_file={input.regulators_per_target_robustness} \
                     --targets_per_regulator_robustness_file={input.targets_per_regulator_robustness} \
                     --regulators_per_target_thresholds_file={input.regulators_per_target_thresholds} \

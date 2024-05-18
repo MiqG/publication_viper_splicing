@@ -87,7 +87,6 @@ PAL_EVAL_TYPE = c(
 # SUPPORT_DIR = file.path(ROOT,"support")
 # RESULTS_DIR = file.path(ROOT,"results","regulon_inference")
 # evaluation_ex_file = file.path(RESULTS_DIR,"files","regulon_evaluation_scores","merged-EX.tsv.gz")
-# evaluation_genexpr_file = file.path(RESULTS_DIR,"files","regulon_evaluation_scores","merged-genexpr.tsv.gz")
 # regulators_per_target_robustness_file = file.path(RESULTS_DIR,"files","regulon_properties","regulators_per_target-EX.tsv.gz")
 # targets_per_regulator_robustness_file = file.path(RESULTS_DIR,"files","regulon_properties","targets_per_regulator-EX.tsv.gz")
 # regulators_per_target_thresholds_file = file.path(RESULTS_DIR,"files","regulon_properties","dPSIthresh-regulators_per_target-EX.tsv.gz")
@@ -369,7 +368,6 @@ parseargs = function(){
     
     option_list = list( 
         make_option("--evaluation_ex_file", type="character"),
-        make_option("--evaluation_genexpr_file", type="character"),
         make_option("--regulators_per_target_robustness_file", type="character"),
         make_option("--targets_per_regulator_robustness_file", type="character"),
         make_option("--regulators_per_target_thresholds_file", type="character"),
@@ -386,7 +384,6 @@ main = function(){
     args = parseargs()
     
     evaluation_ex_file = args[["evaluation_ex_file"]]
-    evaluation_genexpr_file = args[["evaluation_genexpr_file"]]
     regulators_per_target_robustness_file = args[["regulators_per_target_robustness_file"]]
     targets_per_regulator_robustness_file = args[["targets_per_regulator_robustness_file"]]
     regulators_per_target_thresholds_file = args[["regulators_per_target_thresholds_file"]]
@@ -397,8 +394,7 @@ main = function(){
     
     # load
     evaluation = list(
-        read_tsv(evaluation_ex_file),
-        read_tsv(evaluation_genexpr_file)
+        read_tsv(evaluation_ex_file)
     ) %>%
     bind_rows()
     

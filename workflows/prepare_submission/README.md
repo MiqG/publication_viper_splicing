@@ -1,4 +1,4 @@
-# Data preprocessing workflow
+# Prepare supplementary tables for submission
 
 Once run all workflows, this workflow collects the supplementary tables for the publication.
 

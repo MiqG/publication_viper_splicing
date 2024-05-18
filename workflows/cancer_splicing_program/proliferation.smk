@@ -5,7 +5,6 @@ Contact: miquelangladagirotto [at] gmail [dot] com
 Outline
 -------
 - proliferation
-    - MKI67 expression vs cell line doubling vs cancer-driver SFs in CCLE
     - MKI67 expression vs cancer-driver SFs in STN TCGA
 """
 
