@@ -4,7 +4,6 @@ import os
 ROOT = os.path.dirname(os.path.dirname(os.getcwd()))
 RAW_DIR = os.path.join(ROOT,"data","raw")
 PREP_DIR = os.path.join(ROOT,"data","prep")
-BIN_DIR = os.path.join(ROOT,"bin")
 SUPPORT_DIR = os.path.join(ROOT,"support")
 RESULTS_DIR = os.path.join(ROOT,"results","regulon_inference")
 SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}

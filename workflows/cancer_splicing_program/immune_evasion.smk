@@ -6,7 +6,6 @@ ROOT = os.path.dirname(os.path.dirname(os.getcwd()))
 RAW_DIR = os.path.join(ROOT,"data","raw")
 PREP_DIR = os.path.join(ROOT,"data","prep")
 SUPPORT_DIR = os.path.join(ROOT,"support")
-BIN_DIR = os.path.join(ROOT,"bin")
 RESULTS_DIR = os.path.join(ROOT,"results","cancer_splicing_program")
 REGULONS_DIR = os.path.join(ROOT,"results","regulon_inference")
 SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}

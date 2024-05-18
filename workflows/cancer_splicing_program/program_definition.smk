@@ -1,14 +1,3 @@
-"""
-Author: Miquel Anglada Girotto
-Contact: miquelangladagirotto [at] gmail [dot] com
-
-Outline
--------
-- SF activities in PT vs STN (median STN as reference)
-- SF activities in MET vs PT (median PT as reference)
-- SF activities within PT --> see differences with mutations
-"""
-
 import os
 import pandas as pd
 
@@ -17,7 +6,7 @@ ROOT = os.path.dirname(os.path.dirname(os.getcwd()))
 RAW_DIR = os.path.join(ROOT,"data","raw")
 PREP_DIR = os.path.join(ROOT,"data","prep")
 SUPPORT_DIR = os.path.join(ROOT,"support")
-BIN_DIR = os.path.join(ROOT,"bin")
+SRC_DIR = os.path.join(ROOT,"src")
 RESULTS_DIR = os.path.join(ROOT,"results","cancer_splicing_program")
 REGULONS_DIR = os.path.join(ROOT,"results","regulon_inference")
 PACT_CCLE_DIR = os.path.join(ROOT,"results","sf_activity_ccle")
@@ -271,7 +260,7 @@ rule compute_protein_activity:
     output:
         os.path.join(RESULTS_DIR,"files","protein_activity","{cancer}-{sample}-EX.tsv.gz")
     params:
-        script_dir = BIN_DIR
+        script_dir = SRC_DIR
     shell:
         """
         Rscript {params.script_dir}/compute_protein_activity.R \
@@ -288,7 +277,7 @@ rule compute_differential_protein_activity:
     output:
         os.path.join(RESULTS_DIR,'files',"diff_protein_activity",'{cancer}-{comparison}.tsv.gz')
     params:
-        script_dir = BIN_DIR,
+        script_dir = SRC_DIR,
         padj_method = PADJ_METHOD,
         condition_a = lambda wildcards: DIFF_CONDITIONS[wildcards.comparison]["a"],
         condition_b = lambda wildcards: DIFF_CONDITIONS[wildcards.comparison]["b"],
@@ -315,7 +304,7 @@ rule compute_differential_genexpr:
     output:
         os.path.join(RESULTS_DIR,'files',"diff_genexpr_tpm",'{cancer}-{comparison}.tsv.gz')
     params:
-        script_dir = BIN_DIR,
+        script_dir = SRC_DIR,
         padj_method = PADJ_METHOD,
         condition_a = lambda wildcards: DIFF_CONDITIONS[wildcards.comparison]["a"],
         condition_b = lambda wildcards: DIFF_CONDITIONS[wildcards.comparison]["b"],

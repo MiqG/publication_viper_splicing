@@ -10,7 +10,7 @@ ROOT = os.path.dirname(os.path.dirname(os.getcwd()))
 RAW_DIR = os.path.join(ROOT,"data","raw")
 PREP_DIR = os.path.join(ROOT,"data","prep")
 SUPPORT_DIR = os.path.join(ROOT,"support")
-BIN_DIR = os.path.join(ROOT,"bin")
+SRC_DIR = os.path.join(ROOT,"src")
 RESULTS_DIR = os.path.join(ROOT,"results","sf_activity_validation")
 REGULONS_DIR = os.path.join(ROOT,"results","regulon_inference")
 SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
@@ -76,7 +76,7 @@ rule compute_protein_activity:
     output:
         os.path.join(RESULTS_DIR,"files","protein_activity","protein_depletion-Nijhuis2020-{event_type}.tsv.gz")
     params:
-        script_dir = BIN_DIR
+        script_dir = SRC_DIR
     shell:
         """
         Rscript {params.script_dir}/compute_protein_activity.R \

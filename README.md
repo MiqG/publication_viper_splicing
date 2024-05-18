@@ -4,9 +4,9 @@
 Repurposing VIPER to estimate differential splicing factor activity.
 
 ## Structure
-- `bin`: project-wide scripts.
 - `data`: where data will be downloaded.
 - `results`: where results will be outputed.
+- `src`: project-wide scripts.
 - `support`: supporting files which creation is hard to automate.
 - `workflows`
     1. `obtain_data`: data download

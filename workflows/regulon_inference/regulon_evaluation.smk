@@ -5,7 +5,7 @@ import pandas as pd
 ROOT = os.path.dirname(os.path.dirname(os.getcwd()))
 RAW_DIR = os.path.join(ROOT,"data","raw")
 PREP_DIR = os.path.join(ROOT,"data","prep")
-BIN_DIR = os.path.join(ROOT,"bin")
+SRC_DIR = os.path.join(ROOT,"src")
 SUPPORT_DIR = os.path.join(ROOT,"support")
 RESULTS_DIR = os.path.join(ROOT,"results","regulon_inference")
 SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
@@ -115,7 +115,7 @@ rule evaluate_regulons:
     output:
         os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{regulon_set}-{dataset}-{omic_type}-shadow_{shadow}-{n_tails}_tailed.tsv.gz")
     params:
-        script_dir = BIN_DIR,
+        script_dir = SRC_DIR,
         shadow = "{shadow}",
         n_tails = "{n_tails}"
     shell:

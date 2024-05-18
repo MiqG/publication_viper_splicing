@@ -54,7 +54,9 @@ rule supplementary_tables:
     input:
         # prior knowledge
         suptab01_consensus_list_splicing_factors = os.path.join(SUPPORT_DIR,"splicing_factors","splicing_factors.tsv"),
+        # ENA SF perturbation datasets
         suptab02_pert_datasets = os.path.join(RESULTS_DIR,'prepare_submission','files',"ENASFS.tsv.gz"),
+        # Identified cancer splicing programs
         suptab03_cancer_splicing_programs = os.path.join(PROGRAM_DIR,'files','PANCAN','cancer_program.tsv.gz')
     output:
         directory(os.path.join(RESULTS_DIR,'prepare_submission','files','supplementary_tables'))
