@@ -330,7 +330,7 @@ rule make_list_splicing_factors:
         spliceosome_db = X.copy()
         spliceosome_db["dataset"] = "SpliceosomeDB"
         
-        ## Hand-curated
+        ## Head2021
         head = annot.loc[annot["ENSEMBL"].isin(head)].copy()
         head["dataset"] = "Head2021"
         
