@@ -1,223 +1,39 @@
-# Datasets
-## SF drugs
-### RBM39 degraders
-- [Lu2021](https://doi.org/10.1016/j.cell.2021.05.038)
-    - Conditions
-        - Indisulam: inhibits RBM39
-        - ms023: inhibition of type I protein arginine methyltransferases
-        - DMSO
-    - Cells
-        - 501-MEL
-        - A375
-        - SK-MEL-239
-    - Data types
-        - drugs
+# Download data
 
-### PRMT5 inhibitors
-- https://www.ebi.ac.uk/ena/browser/view/PRJNA551945
-    - Conditions
-        - DMSO
-        - palbociclib (PD991)
-        - GSK3326595 (CTX)
-    - Cells
-        - A375
-    - data types
-        - drug
+## Outline
+1. `download_and_align_CardosoMoreira2020.smk`
+2. `download_and_align_ena_sf.smk`
+3. `download_and_align_ENCORE_KD.smk`
+4. `download_and_align_ENCORE_KO.smk`
+5. `download_and_align_Nijhuis2020.smk`
+6. `download_and_align_Lu2021.smk`
+7. `download_and_align_TCGA.smk`
+8. `download_and_align_CCLE.smk`
+9. `download_and_align_Riaz2017.smk`
+10. `download_and_align_tumorigenesis.smk`
 
-- https://www.ebi.ac.uk/ena/browser/view/PRJNA646514
-    - Conditions
-        - DMSO (3 or 6 days)
-        - GSK3326595 (3 or 6 days)
-    - Cells
-        - Z138
-        - REC1
-        - MINO
-        - MAVER1
-        - JVM2
-        - SUDHL6
-        - SUDHL5
-        - SUDHL4
-    - data types
-        - drug
-        
-- https://www.ebi.ac.uk/ena/browser/view/PRJNA862346
-    - Conditions
-        - DMSO
-        - palbociclib
-        - GSK3326595
-        - CTX085
-    - Cells
-        - A375
-        - CHL1
-    - data types
-        - drug
+## Important remarks
 
-### SF3b complex
-- https://www.ebi.ac.uk/ena/browser/view/PRJEB23117
-    - Conditions
-        - DMSO
-        - DMSO+BrU (Bromouridine)
-        - Sudemycin C1
-        - Sudemycin K
-        - Spliceostatin A
-    - Cells
-        - HeLa
-    - data types
-        - drugs
+Make sure to have all packages required to run the scripts.
 
-- https://www.ebi.ac.uk/ena/browser/view/PRJNA292827
-    - Conditions
-        - DMSO
-        - Methanol
-        - Isoginkgetin
-        - spliceostatin A
-    - Cells
-        - HeLa
-    - data types
-        - drugs
-        
-- https://www.ebi.ac.uk/ena/browser/view/PRJNA380104
-    - Conditions
-        - DMSO
-        - DMSO + PHF5A (Y36C)
-        - E7107
-        - E7107 + PHF5A (Y36C)
-    - Cells
-        - HCT-166
-    - data types
-        - drug
-        - mutation
-        - drug + mutation
-
-- https://www.ebi.ac.uk/ena/browser/view/PRJNA662572
-    - Conditions
-        - DMSO
-        - Pladienolide B
-        - Pladienolide B + KD SF3B2
-    - Cells
-        - PC3
-    - data types
-        - drug
-        - drug + knockdown
-        
-- https://www.ebi.ac.uk/ena/browser/view/PRJNA685790
-    - Conditions
-        - DMSO
-        - PladB 5nM
-        - PladB 100nM
-        - heat shock
-    - Cells
-        - HEK293T
-    - data types
-        - drug
-
-- https://www.ebi.ac.uk/ena/browser/view/PRJNA371421
-    - Conditions
-        - DMSO
-        - 38800 1xGI50
-        - SF3B1 (K700E) + 38800 1xGI50
-    - Cells
-        - K562
-    - data types
-        - drug
-        - mutation
-        - drug + mutation
-
-- https://www.ebi.ac.uk/ena/browser/view/PRJNA375102
-    - Conditions
-        - DMSO
-        - H3B-8800 13nM
-        - E7107 15nM
-        - SF3B1 (K700E) + H3B-8800 13nM
-        - SF3B1 (K700E) + E7107 15nM
-    - Cells
-        - Nalm-6
-    - data types
-        - drug
-        - mutation
-        - drug + mutation
-        
-### ENA query
+## Recommendations
+Run the workflows using
 ```
-tax_eq(9606) AND library_strategy="RNA-Seq" AND library_source="TRANSCRIPTOMIC" AND (study_accession="PRJNA551945" OR study_accession="PRJNA646514" OR study_accession="PRJNA862346" OR study_accession="PRJEB23117" OR study_accession="PRJNA292827" OR study_accession="PRJNA380104" OR study_accession="PRJNA662572" OR study_accession="PRJNA685790" OR study_accession="PRJNA371421" OR study_accession="PRJNA375102")
+snakemake -s download_and_align_CardosoMoreira2020.smk --cores 6
+snakemake -s download_and_align_ena_sf.smk --cores 6
+snakemake -s download_and_align_ENCORE_KD.smk --cores 6
+snakemake -s download_and_align_ENCORE_KO.smk --cores 6
+snakemake -s download_and_align_Nijhuis2020.smk --cores 6
+snakemake -s download_and_align_Lu2021.smk --cores 6
+snakemake -s download_and_align_TCGA.smk --cores 6
+snakemake -s download_and_align_CCLE.smk --cores 6
+snakemake -s download_and_align_Riaz2017.smk --cores 6
+snakemake -s download_and_align_tumorigenesis.smk --cores 6
 ```
+In case you want to run the workflows on your cluster, refer to [snakemake documentation](https://snakemake.readthedocs.io/en/stable/executing/cluster.html).
 
-## PTMs
-### Phosphorylation
-- https://www.ebi.ac.uk/ena/browser/view/PRJEB22618 or https://www.nature.com/articles/s41467-018-07620-0#data-availability
-    - KD SRPK1, phosphorylator of SRSF1 and 2
-    - Conditions
-        - DMSO
-        - SPHINX31 (SRPK1 inhibitor)
-        - SRPK1 KO
-    - Cells
-        - THP1
-    - data types
-        - ptm
-        
-- https://www.ebi.ac.uk/ena/browser/view/PRJNA394754 or https://www.embopress.org/doi/full/10.15252/emmm.201708289
-    - CLK inhibitor phosphorylates splicing factors
-    - Conditions
-        - DMSO
-        - T-025 30nM
-        - T-025 100nM
-        - T-025 300nM
-    - Cells
-        - NCI-H1048
-        - MDA-MB-468
-        - 786-O
-        - COLO320HSR
-
-### Acetylation
-- https://www.ebi.ac.uk/ena/browser/view/PRJNA506256 or https://doi.org/10.1016/j.molcel.2019.04.009
-    - Conditions
-        - WT
-        - PHF5A (K29Q)
-    - Cells
-        - HCT166
-    - data types
-        - mutation that has something to do with acetylation
-        
-### ENA query
-```
-tax_eq(9606) AND library_strategy="RNA-Seq" AND library_source="TRANSCRIPTOMIC" AND (study_accession="PRJEB22618" OR study_accession="PRJNA394754" OR study_accession="PRJNA506256")
-```
-        
-## iPSC differentiation
-### Datasets
-- to neurons: 
-    - PRJNA596331
-    - https://doi.org/10.1038/s41467-019-14266-z
-    - https://www.ebi.ac.uk/ena/browser/view/PRJNA596331
-    
-- hESCs to beta cells: 
-    - PRJEB1195
-    - https://www.ebi.ac.uk/ena/browser/view/PRJEB1195
-    - http://doi.org/10.1016/j.stem.2012.11.023
-    
-- lung:
-    - PRJNA379280
-    - https://doi.org/10.1016/j.stem.2017.08.014
-    - https://www.ebi.ac.uk/ena/browser/view/PRJNA379280
-    
-- to cardiomyocytes: 
-    - PRJNA665705 
-    - https://doi.org/10.1016/j.molcel.2020.10.019
-    - https://www.ebi.ac.uk/ena/browser/view/PRJNA665705
-### ENA query
-```
-tax_eq(9606) AND library_strategy="RNA-Seq" AND library_source="TRANSCRIPTOMIC" AND (study_accession="PRJNA596331" OR study_accession="PRJEB1195" OR study_accession="PRJNA379280" OR study_accession="PRJNA665705")
-```
-
-## SF functional screens
-### ENCORE shRNA KD
-### ENCORE CRISPR KO  
-### Hand-curated datasets from ENA
-#### ENA query first search
+## Notes
+### ENA query used to search for transcriptomic perturbation experiments of SFs
 ```
 tax_eq(9606) AND library_strategy="RNA-Seq" AND library_source="TRANSCRIPTOMIC" AND (sample_alias="*HTATSF1*" OR run_alias="*HTATSF1*" OR sample_alias="*DDX46*" OR run_alias="*DDX46*" OR sample_alias="*SF3A2*" OR run_alias="*SF3A2*" OR sample_alias="*SF3A1*" OR run_alias="*SF3A1*" OR sample_alias="*SF3B1*" OR run_alias="*SF3B1*" OR sample_alias="*RNU2-1*" OR run_alias="*RNU2-1*" OR sample_alias="*SNRPA1*" OR run_alias="*SNRPA1*" OR sample_alias="*SNRPB2*" OR run_alias="*SNRPB2*" OR sample_alias="*SF3B4*" OR run_alias="*SF3B4*" OR sample_alias="*SF3A3*" OR run_alias="*SF3A3*" OR sample_alias="*SF3B2*" OR run_alias="*SF3B2*" OR sample_alias="*SF3B3*" OR run_alias="*SF3B3*" OR sample_alias="*SF3B6*" OR run_alias="*SF3B6*" OR sample_alias="*SF3B5*" OR run_alias="*SF3B5*" OR sample_alias="*PHF5A*" OR run_alias="*PHF5A*" OR sample_alias="*SNRPB*" OR run_alias="*SNRPB*" OR sample_alias="*SNRPD1*" OR run_alias="*SNRPD1*" OR sample_alias="*SNRPD2*" OR run_alias="*SNRPD2*" OR sample_alias="*SNRPD3*" OR run_alias="*SNRPD3*" OR sample_alias="*SNRPE*" OR run_alias="*SNRPE*" OR sample_alias="*SNRPF*" OR run_alias="*SNRPF*" OR sample_alias="*SNRPG*" OR run_alias="*SNRPG*" OR sample_alias="*HNRNPA1*" OR run_alias="*HNRNPA1*" OR sample_alias="*HNRNPAB*" OR run_alias="*HNRNPAB*" OR sample_alias="*U2AF1*" OR run_alias="*U2AF1*" OR sample_alias="*U2AF2*" OR run_alias="*U2AF2*" OR sample_alias="*RBM17*" OR run_alias="*RBM17*" OR sample_alias="*PUF60*" OR run_alias="*PUF60*" OR sample_alias="*SMNDC1*" OR run_alias="*SMNDC1*" OR sample_alias="*CHERP*" OR run_alias="*CHERP*" OR sample_alias="*U2SURP*" OR run_alias="*U2SURP*" OR sample_alias="*RBM25*" OR run_alias="*RBM25*" OR sample_alias="*RBM5*" OR run_alias="*RBM5*" OR sample_alias="*SF1*" OR run_alias="*SF1*" OR sample_alias="*RBM10*" OR run_alias="*RBM10*" OR sample_alias="*THRAP3*" OR run_alias="*THRAP3*" OR sample_alias="*PRPF40A*" OR run_alias="*PRPF40A*" OR sample_alias="*CCAR1*" OR run_alias="*CCAR1*" OR sample_alias="*SUGP1*" OR run_alias="*SUGP1*" OR sample_alias="*DHX15*" OR run_alias="*DHX15*" OR sample_alias="*SNRNP70*" OR run_alias="*SNRNP70*" OR sample_alias="*SNRPA*" OR run_alias="*SNRPA*" OR sample_alias="*SNRPC*" OR run_alias="*SNRPC*" OR sample_alias="*RNU1-1*" OR run_alias="*RNU1-1*" OR sample_alias="*PQBP1*" OR run_alias="*PQBP1*" OR sample_alias="*WBP11*" OR run_alias="*WBP11*" OR sample_alias="*TFIP11*" OR run_alias="*TFIP11*" OR sample_alias="*IK*" OR run_alias="*IK*" OR sample_alias="*MFAP1*" OR run_alias="*MFAP1*" OR sample_alias="*WBP4*" OR run_alias="*WBP4*" OR sample_alias="*SMU1*" OR run_alias="*SMU1*" OR sample_alias="*PRPF38A*" OR run_alias="*PRPF38A*" OR sample_alias="*ZMAT2*" OR run_alias="*ZMAT2*" OR sample_alias="*CDC5L*" OR run_alias="*CDC5L*" OR sample_alias="*PLRG1*" OR run_alias="*PLRG1*" OR sample_alias="*BCAS2*" OR run_alias="*BCAS2*" OR sample_alias="*PRPF19*" OR run_alias="*PRPF19*" OR sample_alias="*CWC15*" OR run_alias="*CWC15*" OR sample_alias="*CTNNBL1*" OR run_alias="*CTNNBL1*" OR sample_alias="*RBM22*" OR run_alias="*RBM22*" OR sample_alias="*BUD31*" OR run_alias="*BUD31*" OR sample_alias="*AQR*" OR run_alias="*AQR*" OR sample_alias="*PPIE*" OR run_alias="*PPIE*" OR sample_alias="*SNW1*" OR run_alias="*SNW1*" OR sample_alias="*CRNKL1*" OR run_alias="*CRNKL1*" OR sample_alias="*PPIL1*" OR run_alias="*PPIL1*" OR sample_alias="*XAB2*" OR run_alias="*XAB2*" OR sample_alias="*ISY1*" OR run_alias="*ISY1*" OR sample_alias="*RNU6-1*" OR run_alias="*RNU6-1*" OR sample_alias="*PRPF8*" OR run_alias="*PRPF8*" OR sample_alias="*EFTUD2*" OR run_alias="*EFTUD2*" OR sample_alias="*SNRNP40*" OR run_alias="*SNRNP40*" OR sample_alias="*SNRNP200*" OR run_alias="*SNRNP200*" OR sample_alias="*RNU5A-1*" OR run_alias="*RNU5A-1*" OR sample_alias="*LSM7*" OR run_alias="*LSM7*" OR sample_alias="*LSM6*" OR run_alias="*LSM6*" OR sample_alias="*LSM5*" OR run_alias="*LSM5*" OR sample_alias="*LSM4*" OR run_alias="*LSM4*" OR sample_alias="*LSM3*" OR run_alias="*LSM3*" OR sample_alias="*NAA38*" OR run_alias="*NAA38*" OR sample_alias="*LSM2*" OR run_alias="*LSM2*" OR sample_alias="*SART1*" OR run_alias="*SART1*" OR sample_alias="*USP39*" OR run_alias="*USP39*" OR sample_alias="*SNU13*" OR run_alias="*SNU13*" OR sample_alias="*PRPF4*" OR run_alias="*PRPF4*" OR sample_alias="*PRPF3*" OR run_alias="*PRPF3*" OR sample_alias="*PPIH*" OR run_alias="*PPIH*" OR sample_alias="*PRPF31*" OR run_alias="*PRPF31*" OR sample_alias="*RNU4-1*" OR run_alias="*RNU4-1*" OR sample_alias="*PRPF6*" OR run_alias="*PRPF6*" OR sample_alias="*DDX23*" OR run_alias="*DDX23*" OR sample_alias="*TXNL4A*" OR run_alias="*TXNL4A*" OR sample_alias="*PRCC*" OR run_alias="*PRCC*" OR sample_alias="*PPIL2*" OR run_alias="*PPIL2*" OR sample_alias="*CWC25*" OR run_alias="*CWC25*" OR sample_alias="*SAP18*" OR run_alias="*SAP18*" OR sample_alias="*GPATCH1*" OR run_alias="*GPATCH1*" OR sample_alias="*RBMX2*" OR run_alias="*RBMX2*" OR sample_alias="*EIF4A3*" OR run_alias="*EIF4A3*" OR sample_alias="*GPKOW*" OR run_alias="*GPKOW*" OR sample_alias="*RNF113A*" OR run_alias="*RNF113A*" OR sample_alias="*DHX16*" OR run_alias="*DHX16*" OR sample_alias="*CWC27*" OR run_alias="*CWC27*" OR sample_alias="*CWC22*" OR run_alias="*CWC22*" OR sample_alias="*ZNF830*" OR run_alias="*ZNF830*" OR sample_alias="*CCDC12*" OR run_alias="*CCDC12*" OR sample_alias="*BUD13*" OR run_alias="*BUD13*" OR sample_alias="*SNIP1*" OR run_alias="*SNIP1*" OR sample_alias="*CDC40*" OR run_alias="*CDC40*" OR sample_alias="*DHX35*" OR run_alias="*DHX35*" OR sample_alias="*PRPF18*" OR run_alias="*PRPF18*" OR sample_alias="*HNRNPC*" OR run_alias="*HNRNPC*" OR sample_alias="*MAGOH*" OR run_alias="*MAGOH*" OR sample_alias="*RBM8A*" OR run_alias="*RBM8A*" OR sample_alias="*HSPA8*" OR run_alias="*HSPA8*" OR sample_alias="*PPIG*" OR run_alias="*PPIG*" OR sample_alias="*ESS2*" OR run_alias="*ESS2*" OR sample_alias="*CDK10*" OR run_alias="*CDK10*" OR sample_alias="*FAM50A*" OR run_alias="*FAM50A*" OR sample_alias="*PPWD1*" OR run_alias="*PPWD1*" OR sample_alias="*SYF2*" OR run_alias="*SYF2*" OR sample_alias="*FAM32A*" OR run_alias="*FAM32A*" OR sample_alias="*NOSIP*" OR run_alias="*NOSIP*" OR sample_alias="*DDX41*" OR run_alias="*DDX41*" OR sample_alias="*C9orf78*" OR run_alias="*C9orf78*" OR sample_alias="*PPIL3*" OR run_alias="*PPIL3*" OR sample_alias="*CACTIN*" OR run_alias="*CACTIN*" OR sample_alias="*STEEP1*" OR run_alias="*STEEP1*" OR sample_alias="*LENG1*" OR run_alias="*LENG1*" OR sample_alias="*WDR83*" OR run_alias="*WDR83*" OR sample_alias="*FRA10AC1*" OR run_alias="*FRA10AC1*" OR sample_alias="*SDE2*" OR run_alias="*SDE2*" OR sample_alias="*DHX8*" OR run_alias="*DHX8*" OR sample_alias="*SLU7*" OR run_alias="*SLU7*" OR sample_alias="*SRRM2*" OR run_alias="*SRRM2*" OR sample_alias="*CD2BP2*" OR run_alias="*CD2BP2*" OR sample_alias="*ELAVL1*" OR run_alias="*ELAVL1*" OR sample_alias="*RBFOX2*" OR run_alias="*RBFOX2*" OR sample_alias="*PTBP1*" OR run_alias="*PTBP1*" OR sample_alias="*KHSRP*" OR run_alias="*KHSRP*" OR sample_alias="*QKI*" OR run_alias="*QKI*" OR sample_alias="*CELF1*" OR run_alias="*CELF1*" OR sample_alias="*RAVER1*" OR run_alias="*RAVER1*" OR sample_alias="*MBNL1*" OR run_alias="*MBNL1*" OR sample_alias="*FUBP1*" OR run_alias="*FUBP1*" OR sample_alias="*MBNL2*" OR run_alias="*MBNL2*" OR sample_alias="*CELF2*" OR run_alias="*CELF2*" OR sample_alias="*RAVER2*" OR run_alias="*RAVER2*" OR sample_alias="*MBNL3*" OR run_alias="*MBNL3*" OR sample_alias="*PTBP2*" OR run_alias="*PTBP2*" OR sample_alias="*HNRNPF*" OR run_alias="*HNRNPF*" OR sample_alias="*HNRNPH1*" OR run_alias="*HNRNPH1*" OR sample_alias="*SYNCRIP*" OR run_alias="*SYNCRIP*" OR sample_alias="*HNRNPK*" OR run_alias="*HNRNPK*" OR sample_alias="*HNRNPL*" OR run_alias="*HNRNPL*" OR sample_alias="*HNRNPU*" OR run_alias="*HNRNPU*" OR sample_alias="*HNRNPM*" OR run_alias="*HNRNPM*" OR sample_alias="*PCBP1*" OR run_alias="*PCBP1*" OR sample_alias="*FUS*" OR run_alias="*FUS*" OR sample_alias="*PCBP2*" OR run_alias="*PCBP2*" OR sample_alias="*HNRNPA2B1*" OR run_alias="*HNRNPA2B1*" OR sample_alias="*HNRNPD*" OR run_alias="*HNRNPD*" OR sample_alias="*HNRNPLL*" OR run_alias="*HNRNPLL*" OR sample_alias="*HNRNPH2*" OR run_alias="*HNRNPH2*" OR sample_alias="*HNRNPH3*" OR run_alias="*HNRNPH3*" OR sample_alias="*HNRNPDL*" OR run_alias="*HNRNPDL*" OR sample_alias="*HNRNPR*" OR run_alias="*HNRNPR*" OR sample_alias="*HNRNPA0*" OR run_alias="*HNRNPA0*" OR sample_alias="*HNRNPUL1*" OR run_alias="*HNRNPUL1*" OR sample_alias="*RALY*" OR run_alias="*RALY*" OR sample_alias="*RBMXL2*" OR run_alias="*RBMXL2*" OR sample_alias="*RBMX*" OR run_alias="*RBMX*" OR sample_alias="*RALYL*" OR run_alias="*RALYL*" OR sample_alias="*HNRNPA3*" OR run_alias="*HNRNPA3*" OR sample_alias="*HNRNPUL2*" OR run_alias="*HNRNPUL2*" OR sample_alias="*HNRNPCL1*" OR run_alias="*HNRNPCL1*" OR sample_alias="*RBM14*" OR run_alias="*RBM14*" OR sample_alias="*DDX6*" OR run_alias="*DDX6*" OR sample_alias="*DDX39B*" OR run_alias="*DDX39B*" OR sample_alias="*DDX21*" OR run_alias="*DDX21*" OR sample_alias="*ZC3H11A*" OR run_alias="*ZC3H11A*" OR sample_alias="*DHX57*" OR run_alias="*DHX57*" OR sample_alias="*RBM47*" OR run_alias="*RBM47*" OR sample_alias="*ZNF326*" OR run_alias="*ZNF326*" OR sample_alias="*DDX1*" OR run_alias="*DDX1*" OR sample_alias="*RBM3*" OR run_alias="*RBM3*" OR sample_alias="*RBM4*" OR run_alias="*RBM4*" OR sample_alias="*RBM14-RBM4*" OR run_alias="*RBM14-RBM4*" OR sample_alias="*ZNF131*" OR run_alias="*ZNF131*" OR sample_alias="*ZNF207*" OR run_alias="*ZNF207*" OR sample_alias="*DDX3Y*" OR run_alias="*DDX3Y*" OR sample_alias="*DDX18*" OR run_alias="*DDX18*" OR sample_alias="*ZMYM3*" OR run_alias="*ZMYM3*" OR sample_alias="*RNF40*" OR run_alias="*RNF40*" OR sample_alias="*DDX39A*" OR run_alias="*DDX39A*" OR sample_alias="*DDX19B*" OR run_alias="*DDX19B*" OR sample_alias="*DHX30*" OR run_alias="*DHX30*" OR sample_alias="*ZC3H13*" OR run_alias="*ZC3H13*" OR sample_alias="*GPATCH8*" OR run_alias="*GPATCH8*" OR sample_alias="*ZC3H4*" OR run_alias="*ZC3H4*" OR sample_alias="*ZNF346*" OR run_alias="*ZNF346*" OR sample_alias="*RBM15B*" OR run_alias="*RBM15B*" OR sample_alias="*ZFR*" OR run_alias="*ZFR*" OR sample_alias="*RBM27*" OR run_alias="*RBM27*" OR sample_alias="*AGGF1*" OR run_alias="*AGGF1*" OR sample_alias="*ZCCHC8*" OR run_alias="*ZCCHC8*" OR sample_alias="*DDX27*" OR run_alias="*DDX27*" OR sample_alias="*ZMAT5*" OR run_alias="*ZMAT5*" OR sample_alias="*RNF20*" OR run_alias="*RNF20*" OR sample_alias="*ZC3HAV1*" OR run_alias="*ZC3HAV1*" OR sample_alias="*RNF213*" OR run_alias="*RNF213*" OR sample_alias="*GPATCH3*" OR run_alias="*GPATCH3*" OR sample_alias="*RBM26*" OR run_alias="*RBM26*" OR sample_alias="*RBM42*" OR run_alias="*RBM42*" OR sample_alias="*DHX40*" OR run_alias="*DHX40*" OR sample_alias="*RNF34*" OR run_alias="*RNF34*" OR sample_alias="*ZCRB1*" OR run_alias="*ZCRB1*" OR sample_alias="*ZC3H18*" OR run_alias="*ZC3H18*" OR sample_alias="*RBM45*" OR run_alias="*RBM45*" OR sample_alias="*DHX36*" OR run_alias="*DHX36*" OR sample_alias="*CHAMP1*" OR run_alias="*CHAMP1*" OR sample_alias="*RBMXL1*" OR run_alias="*RBMXL1*" OR sample_alias="*NCBP1*" OR run_alias="*NCBP1*" OR sample_alias="*RBM39*" OR run_alias="*RBM39*" OR sample_alias="*RBM15*" OR run_alias="*RBM15*" OR sample_alias="*NCBP2*" OR run_alias="*NCBP2*" OR sample_alias="*KHDRBS1*" OR run_alias="*KHDRBS1*" OR sample_alias="*EWSR1*" OR run_alias="*EWSR1*" OR sample_alias="*DDX5*" OR run_alias="*DDX5*" OR sample_alias="*DDX3X*" OR run_alias="*DDX3X*" OR sample_alias="*YBX1*" OR run_alias="*YBX1*" OR sample_alias="*NUMA1*" OR run_alias="*NUMA1*" OR sample_alias="*PABPN1*" OR run_alias="*PABPN1*" OR sample_alias="*PABPC4*" OR run_alias="*PABPC4*" OR sample_alias="*DHX34*" OR run_alias="*DHX34*" OR sample_alias="*RBM7*" OR run_alias="*RBM7*" OR sample_alias="*DDX17*" OR run_alias="*DDX17*" OR sample_alias="*IGF2BP3*" OR run_alias="*IGF2BP3*" OR sample_alias="*XRN2*" OR run_alias="*XRN2*" OR sample_alias="*PABPC1*" OR run_alias="*PABPC1*" OR sample_alias="*SRRT*" OR run_alias="*SRRT*" OR sample_alias="*DDX19A*" OR run_alias="*DDX19A*" OR sample_alias="*PAXBP1*" OR run_alias="*PAXBP1*" OR sample_alias="*SRSF9*" OR run_alias="*SRSF9*" OR sample_alias="*SRSF7*" OR run_alias="*SRSF7*" OR sample_alias="*SRSF3*" OR run_alias="*SRSF3*" OR sample_alias="*SRSF4*" OR run_alias="*SRSF4*" OR sample_alias="*TRA2A*" OR run_alias="*TRA2A*" OR sample_alias="*SRSF5*" OR run_alias="*SRSF5*" OR sample_alias="*SRSF1*" OR run_alias="*SRSF1*" OR sample_alias="*SRSF2*" OR run_alias="*SRSF2*" OR sample_alias="*SRSF11*" OR run_alias="*SRSF11*" OR sample_alias="*SRSF10*" OR run_alias="*SRSF10*" OR sample_alias="*SRSF6*" OR run_alias="*SRSF6*" OR sample_alias="*SFSWAP*" OR run_alias="*SFSWAP*" OR sample_alias="*TRA2B*" OR run_alias="*TRA2B*" OR sample_alias="*SRSF8*" OR run_alias="*SRSF8*" OR sample_alias="*SRSF12*" OR run_alias="*SRSF12*" OR sample_alias="*SREK1*" OR run_alias="*SREK1*" OR sample_alias="*DDX42*" OR run_alias="*DDX42*" OR sample_alias="*PNN*" OR run_alias="*PNN*" OR sample_alias="*UPF1*" OR run_alias="*UPF1*" OR sample_alias="*ALYREF*" OR run_alias="*ALYREF*" OR sample_alias="*NXF1*" OR run_alias="*NXF1*" OR sample_alias="*RNPS1*" OR run_alias="*RNPS1*" OR sample_alias="*CASC3*" OR run_alias="*CASC3*" OR sample_alias="*ACIN1*" OR run_alias="*ACIN1*" OR sample_alias="*NXT1*" OR run_alias="*NXT1*" OR sample_alias="*PRPF4B*" OR run_alias="*PRPF4B*" OR sample_alias="*YJU2*" OR run_alias="*YJU2*" OR sample_alias="*DHX38*" OR run_alias="*DHX38*" OR sample_alias="*LUC7L*" OR run_alias="*LUC7L*" OR sample_alias="*ZRSR2*" OR run_alias="*ZRSR2*" OR sample_alias="*SNRNP35*" OR run_alias="*SNRNP35*" OR sample_alias="*RNPC3*" OR run_alias="*RNPC3*" OR sample_alias="*SNRNP25*" OR run_alias="*SNRNP25*" OR sample_alias="*SNRNP48*" OR run_alias="*SNRNP48*" OR sample_alias="*SART3*" OR run_alias="*SART3*" OR sample_alias="*SFPQ*" OR run_alias="*SFPQ*" OR sample_alias="*NONO*" OR run_alias="*NONO*" OR sample_alias="*SRPK1*" OR run_alias="*SRPK1*" OR sample_alias="*DBR1*" OR run_alias="*DBR1*" OR sample_alias="*LSM1*" OR run_alias="*LSM1*" OR sample_alias="*PRPF39*" OR run_alias="*PRPF39*" OR sample_alias="*DHX9*" OR run_alias="*DHX9*" OR sample_alias="*SNRNP27*" OR run_alias="*SNRNP27*" OR sample_alias="*MTREX*" OR run_alias="*MTREX*" OR sample_alias="*PRPF38B*" OR run_alias="*PRPF38B*" OR sample_alias="*CCAR2*" OR run_alias="*CCAR2*" OR sample_alias="*FRG1*" OR run_alias="*FRG1*" OR sample_alias="*MOV10*" OR run_alias="*MOV10*" OR sample_alias="*TRIM24*" OR run_alias="*TRIM24*" OR sample_alias="*FUBP3*" OR run_alias="*FUBP3*" OR sample_alias="*NCOR1*" OR run_alias="*NCOR1*" OR sample_alias="*CFAP20*" OR run_alias="*CFAP20*" OR sample_alias="*DDX50*" OR run_alias="*DDX50*" OR sample_alias="*CCNQ*" OR run_alias="*CCNQ*" OR sample_alias="*GPATCH11*" OR run_alias="*GPATCH11*" OR sample_alias="*MATR3*" OR run_alias="*MATR3*" OR sample_alias="*JUP*" OR run_alias="*JUP*" OR sample_alias="*BCAS1*" OR run_alias="*BCAS1*" OR sample_alias="*RACK1*" OR run_alias="*RACK1*" OR sample_alias="*FAM50B*" OR run_alias="*FAM50B*" OR sample_alias="*ZCCHC10*" OR run_alias="*ZCCHC10*" OR sample_alias="*WDR70*" OR run_alias="*WDR70*" OR sample_alias="*NKAP*" OR run_alias="*NKAP*" OR sample_alias="*YJU2B*" OR run_alias="*YJU2B*" OR sample_alias="*RBM4B*" OR run_alias="*RBM4B*" OR sample_alias="*TOE1*" OR run_alias="*TOE1*" OR sample_alias="*TTC14*" OR run_alias="*TTC14*" OR sample_alias="*SRRM1*" OR run_alias="*SRRM1*" OR sample_alias="*THOC1*" OR run_alias="*THOC1*" OR sample_alias="*THOC5*" OR run_alias="*THOC5*" OR sample_alias="*THOC2*" OR run_alias="*THOC2*" OR sample_alias="*THOC6*" OR run_alias="*THOC6*" OR sample_alias="*THOC7*" OR run_alias="*THOC7*" OR sample_alias="*THOC3*" OR run_alias="*THOC3*" OR sample_alias="*DNAJC8*" OR run_alias="*DNAJC8*" OR sample_alias="*BUB3*" OR run_alias="*BUB3*" OR sample_alias="*TRIR*" OR run_alias="*TRIR*" OR sample_alias="*CDK11A*" OR run_alias="*CDK11A*" OR sample_alias="*RBM23*" OR run_alias="*RBM23*" OR sample_alias="*TCERG1*" OR run_alias="*TCERG1*" OR sample_alias="*ILF3*" OR run_alias="*ILF3*" OR sample_alias="*ILF2*" OR run_alias="*ILF2*" OR sample_alias="*HSPB1*" OR run_alias="*HSPB1*" OR sample_alias="*UBL5*" OR run_alias="*UBL5*" OR sample_alias="*NCBP3*" OR run_alias="*NCBP3*" OR sample_alias="*SEC31B*" OR run_alias="*SEC31B*" OR sample_alias="*PPP1CA*" OR run_alias="*PPP1CA*" OR sample_alias="*NRIP2*" OR run_alias="*NRIP2*" OR sample_alias="*PPP1R8*" OR run_alias="*PPP1R8*" OR sample_alias="*SAP30BP*" OR run_alias="*SAP30BP*" OR sample_alias="*ARGLU1*" OR run_alias="*ARGLU1*" OR sample_alias="*CIRBP*" OR run_alias="*CIRBP*" OR sample_alias="*PRMT5*" OR run_alias="*PRMT5*" OR sample_alias="*PPIL4*" OR run_alias="*PPIL4*" OR sample_alias="*WDR77*" OR run_alias="*WDR77*" OR sample_alias="*NSRP1*" OR run_alias="*NSRP1*" OR sample_alias="*HSPA1A*" OR run_alias="*HSPA1A*" OR sample_alias="*DNAJC6*" OR run_alias="*DNAJC6*" OR sample_alias="*SMN1*" OR run_alias="*SMN1*" OR sample_alias="*CLNS1A*" OR run_alias="*CLNS1A*" OR sample_alias="*BAG2*" OR run_alias="*BAG2*" OR sample_alias="*RBBP6*" OR run_alias="*RBBP6*" OR sample_alias="*YBX3*" OR run_alias="*YBX3*" OR sample_alias="*KIN*" OR run_alias="*KIN*" OR sample_alias="*KHDRBS3*" OR run_alias="*KHDRBS3*" OR sample_alias="*SRPK2*" OR run_alias="*SRPK2*" OR sample_alias="*C1QBP*" OR run_alias="*C1QBP*" OR sample_alias="*CDK12*" OR run_alias="*CDK12*" OR sample_alias="*CELF3*" OR run_alias="*CELF3*" OR sample_alias="*CELF4*" OR run_alias="*CELF4*" OR sample_alias="*CELF5*" OR run_alias="*CELF5*" OR sample_alias="*CELF6*" OR run_alias="*CELF6*" OR sample_alias="*CLASRP*" OR run_alias="*CLASRP*" OR sample_alias="*CLK1*" OR run_alias="*CLK1*" OR sample_alias="*CLK2*" OR run_alias="*CLK2*" OR sample_alias="*CLK3*" OR run_alias="*CLK3*" OR sample_alias="*CLK4*" OR run_alias="*CLK4*" OR sample_alias="*CPSF6*" OR run_alias="*CPSF6*" OR sample_alias="*CSN3*" OR run_alias="*CSN3*" OR sample_alias="*DDX20*" OR run_alias="*DDX20*" OR sample_alias="*INTS6L*" OR run_alias="*INTS6L*" OR sample_alias="*EEF1A1*" OR run_alias="*EEF1A1*" OR sample_alias="*EIF2S2*" OR run_alias="*EIF2S2*" OR sample_alias="*EIF3A*" OR run_alias="*EIF3A*" OR sample_alias="*EIF3A*" OR run_alias="*EIF3A*" OR sample_alias="*ELAVL2*" OR run_alias="*ELAVL2*" OR sample_alias="*ELAVL3*" OR run_alias="*ELAVL3*" OR sample_alias="*ELAVL4*" OR run_alias="*ELAVL4*" OR sample_alias="*FMR1*" OR run_alias="*FMR1*" OR sample_alias="*GEMIN2*" OR run_alias="*GEMIN2*" OR sample_alias="*GEMIN5*" OR run_alias="*GEMIN5*" OR sample_alias="*GRSF1*" OR run_alias="*GRSF1*" OR sample_alias="*HSPA1B*" OR run_alias="*HSPA1B*" OR sample_alias="*HSPA5*" OR run_alias="*HSPA5*" OR sample_alias="*INTS1*" OR run_alias="*INTS1*" OR sample_alias="*INTS3*" OR run_alias="*INTS3*" OR sample_alias="*INTS4*" OR run_alias="*INTS4*" OR sample_alias="*INTS5*" OR run_alias="*INTS5*" OR sample_alias="*INTS6*" OR run_alias="*INTS6*" OR sample_alias="*INTS7*" OR run_alias="*INTS7*" OR sample_alias="*VIRMA*" OR run_alias="*VIRMA*" OR sample_alias="*LSM10*" OR run_alias="*LSM10*" OR sample_alias="*LSM8*" OR run_alias="*LSM8*" OR sample_alias="*LUC7L2*" OR run_alias="*LUC7L2*" OR sample_alias="*LUC7L3*" OR run_alias="*LUC7L3*" OR sample_alias="*MFSD11*" OR run_alias="*MFSD11*" OR sample_alias="*MSI1*" OR run_alias="*MSI1*" OR sample_alias="*MSI2*" OR run_alias="*MSI2*" OR sample_alias="*MYEF2*" OR run_alias="*MYEF2*" OR sample_alias="*NELFE*" OR run_alias="*NELFE*" OR sample_alias="*NOVA1*" OR run_alias="*NOVA1*" OR sample_alias="*NOVA2*" OR run_alias="*NOVA2*" OR sample_alias="*NUDT21*" OR run_alias="*NUDT21*" OR sample_alias="*PCBP3*" OR run_alias="*PCBP3*" OR sample_alias="*PCBP4*" OR run_alias="*PCBP4*" OR sample_alias="*PDCD7*" OR run_alias="*PDCD7*" OR sample_alias="*PPM1G*" OR run_alias="*PPM1G*" OR sample_alias="*PRPF40B*" OR run_alias="*PRPF40B*" OR sample_alias="*PSEN1*" OR run_alias="*PSEN1*" OR sample_alias="*PSIP1*" OR run_alias="*PSIP1*" OR sample_alias="*PTBP3*" OR run_alias="*PTBP3*" OR sample_alias="*RBMS1*" OR run_alias="*RBMS1*" OR sample_alias="*SNRPN*" OR run_alias="*SNRPN*" OR sample_alias="*SNURF*" OR run_alias="*SNURF*" OR sample_alias="*SPEN*" OR run_alias="*SPEN*" OR sample_alias="*SRPK3*" OR run_alias="*SRPK3*" OR sample_alias="*SSB*" OR run_alias="*SSB*" OR sample_alias="*TAF15*" OR run_alias="*TAF15*" OR sample_alias="*TIA1*" OR run_alias="*TIA1*" OR sample_alias="*TIAL1*" OR run_alias="*TIAL1*" OR sample_alias="*TNPO1*" OR run_alias="*TNPO1*" OR sample_alias="*TOP1MT*" OR run_alias="*TOP1MT*" OR sample_alias="*TOPORS*" OR run_alias="*TOPORS*" OR sample_alias="*U2AF1L4*" OR run_alias="*U2AF1L4*" OR sample_alias="*WTAP*" OR run_alias="*WTAP*" OR sample_alias="*ZRSR2P1*" OR run_alias="*ZRSR2P1*" OR sample_alias="*ESRP1*" OR run_alias="*ESRP1*" OR sample_alias="*ESRP2*" OR run_alias="*ESRP2*" OR sample_alias="*HMGA1*" OR run_alias="*HMGA1*" OR sample_alias="*DIS3*" OR run_alias="*DIS3*" OR sample_alias="*EXOSC4*" OR run_alias="*EXOSC4*" OR sample_alias="*DHX32*" OR run_alias="*DHX32*" OR sample_alias="*DHX33*" OR run_alias="*DHX33*" OR sample_alias="*DDX10*" OR run_alias="*DDX10*" OR sample_alias="*DDX24*" OR run_alias="*DDX24*" OR sample_alias="*DDX52*" OR run_alias="*DDX52*" OR sample_alias="*DIS3L*" OR run_alias="*DIS3L*" OR sample_alias="*DEK*" OR run_alias="*DEK*" OR sample_alias="*DDX31*" OR run_alias="*DDX31*" OR sample_alias="*DDX11*" OR run_alias="*DDX11*" OR sample_alias="*DDX28*" OR run_alias="*DDX28*" OR sample_alias="*DDX12P*" OR run_alias="*DDX12P*" OR sample_alias="*TDRD9*" OR run_alias="*TDRD9*" OR sample_alias="*HFM1*" OR run_alias="*HFM1*" OR sample_alias="*EP300*" OR run_alias="*EP300*" OR sample_alias="*KAT2A*" OR run_alias="*KAT2A*" OR sample_alias="*KAT5*" OR run_alias="*KAT5*" OR sample_alias="*CARM1*" OR run_alias="*CARM1*" OR sample_alias="*BRD4*" OR run_alias="*BRD4*" OR sample_alias="*CTCF*" OR run_alias="*CTCF*" OR sample_alias="*CHD1*" OR run_alias="*CHD1*" OR sample_alias="*DICER1*" OR run_alias="*DICER1*" OR sample_alias="*RBM6*" OR run_alias="*RBM6*" OR sample_alias="*MORF4L1*" OR run_alias="*MORF4L1*" OR sample_alias="*HDAC1*" OR run_alias="*HDAC1*" OR sample_alias="*SIRT1*" OR run_alias="*SIRT1*" OR sample_alias="*HDAC2*" OR run_alias="*HDAC2*" OR sample_alias="*HDAC4*" OR run_alias="*HDAC4*" OR sample_alias="*HDAC6*" OR run_alias="*HDAC6*" OR sample_alias="*ASCL1*" OR run_alias="*ASCL1*" OR sample_alias="*TET1*" OR run_alias="*TET1*" OR sample_alias="*HDAC3*" OR run_alias="*HDAC3*" OR sample_alias="*SUV39H1*" OR run_alias="*SUV39H1*" OR sample_alias="*SETD1A*" OR run_alias="*SETD1A*" OR sample_alias="*EHMT2*" OR run_alias="*EHMT2*" OR sample_alias="*SETD2*" OR run_alias="*SETD2*" OR sample_alias="*MECP2*" OR run_alias="*MECP2*" OR sample_alias="*MBD2*" OR run_alias="*MBD2*" OR sample_alias="*NAB2*" OR run_alias="*NAB2*" OR sample_alias="*BMI1*" OR run_alias="*BMI1*" OR sample_alias="*EED*" OR run_alias="*EED*" OR sample_alias="*PHC1*" OR run_alias="*PHC1*" OR sample_alias="*KDM1A*" OR run_alias="*KDM1A*" OR sample_alias="*KDM4B*" OR run_alias="*KDM4B*" OR sample_alias="*PHC2*" OR run_alias="*PHC2*" OR sample_alias="*EZH2*" OR run_alias="*EZH2*" OR sample_alias="*SMARCA4*" OR run_alias="*SMARCA4*" OR sample_alias="*SMARCA2*" OR run_alias="*SMARCA2*" OR sample_alias="*KAT2B*" OR run_alias="*KAT2B*" OR sample_alias="*DNMT1*" OR run_alias="*DNMT1*" OR sample_alias="*AGO2*" OR run_alias="*AGO2*" OR sample_alias="*CBX3*" OR run_alias="*CBX3*" OR sample_alias="*RPS6KA5*" OR run_alias="*RPS6KA5*" OR sample_alias="*ASH2L*" OR run_alias="*ASH2L*" OR sample_alias="*BCLAF1*" OR run_alias="*BCLAF1*" OR sample_alias="*BICC1*" OR run_alias="*BICC1*" OR sample_alias="*CPSF7*" OR run_alias="*CPSF7*" OR sample_alias="*CSTF2*" OR run_alias="*CSTF2*" OR sample_alias="*CSTF2T*" OR run_alias="*CSTF2T*" OR sample_alias="*KHDRBS2*" OR run_alias="*KHDRBS2*" OR sample_alias="*MEX3B*" OR run_alias="*MEX3B*" OR sample_alias="*MEX3C*" OR run_alias="*MEX3C*" OR sample_alias="*MEX3D*" OR run_alias="*MEX3D*" OR sample_alias="*PNISR*" OR run_alias="*PNISR*" OR sample_alias="*RBFOX1*" OR run_alias="*RBFOX1*" OR sample_alias="*RBM12*" OR run_alias="*RBM12*" OR sample_alias="*RBM18*" OR run_alias="*RBM18*" OR sample_alias="*RBM19*" OR run_alias="*RBM19*" OR sample_alias="*RBM20*" OR run_alias="*RBM20*" OR sample_alias="*RBM24*" OR run_alias="*RBM24*" OR sample_alias="*RBM28*" OR run_alias="*RBM28*" OR sample_alias="*RBM33*" OR run_alias="*RBM33*" OR sample_alias="*RBM34*" OR run_alias="*RBM34*" OR sample_alias="*RBM38*" OR run_alias="*RBM38*" OR sample_alias="*RBM41*" OR run_alias="*RBM41*" OR sample_alias="*RBM43*" OR run_alias="*RBM43*" OR sample_alias="*RBMS2*" OR run_alias="*RBMS2*" OR sample_alias="*RBMS3*" OR run_alias="*RBMS3*" OR sample_alias="*RBPMS*" OR run_alias="*RBPMS*" OR sample_alias="*RBPMS2*" OR run_alias="*RBPMS2*" OR sample_alias="*SCAF1*" OR run_alias="*SCAF1*" OR sample_alias="*SCAF4*" OR run_alias="*SCAF4*" OR sample_alias="*SCAF8*" OR run_alias="*SCAF8*" OR sample_alias="*SCAF11*" OR run_alias="*SCAF11*" OR sample_alias="*SRRM3*" OR run_alias="*SRRM3*" OR sample_alias="*SRRM4*" OR run_alias="*SRRM4*" OR sample_alias="*UHMK1*" OR run_alias="*UHMK1*")
-```
-#### ENA query selected studies
-```
-
 ```

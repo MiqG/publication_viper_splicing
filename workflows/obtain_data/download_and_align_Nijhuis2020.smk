@@ -58,8 +58,9 @@ rule all:
         # tidy PSI
         os.path.join(ARTICLE_DIR,'vast_out','PSI-minN_1-minSD_0-noVLOW-min_ALT_use25-Tidy.tab.gz'),
         '.done/Nijhuis2020.done'
-
-
+        
+        
+        
 rule download_supdata:
     params:
         rnaseq_geo = "https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE160446&format=file",
@@ -74,14 +75,14 @@ rule download_supdata:
         set -eo pipefail
 
         # rna seq counts
-        wget "{params.rnaseq_geo}" -O {output.rnaseq_geo}
+        wget '{params.rnaseq_geo}' -O {output.rnaseq_geo}
         # proteomics
-        wget "{params.proteomics1}" -O {output.proteomics1}.zip
-        wget "{params.proteomics2}" -O {output.proteomics2}.zip
+        wget '{params.proteomics1}' -O {output.proteomics1}.zip
+        wget '{params.proteomics2}' -O {output.proteomics2}.zip
 
         # prep RNA seq
         mkdir rnaseq_geo
-        tar xvf {} -C rnaseq_geo/
+        tar xvf {output.rnaseq_geo} -C rnaseq_geo/
 
         # prep proteomics
         unzip {output.proteomics1}.zip -d {output.proteomics1}
@@ -90,6 +91,7 @@ rule download_supdata:
         echo "Done!"
         """
 
+        
 rule prep_supdata:
     input:
         proteomics1 = os.path.join(ARTICLE_DIR,"supplementary_data","MQ_S1-12_search_results_txt_folder"),
