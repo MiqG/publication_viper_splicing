@@ -47,7 +47,7 @@ rule all:
         expand(os.path.join(RESULTS_DIR,"files","aracne_regulons_development-{omic_type}"), omic_type=OMIC_TYPES)
         
                
-# ----- ARACNe RBP-cass network reverse engineering -----
+# ----- ARACNe network reverse engineering -----
 rule decompress_inputs:
     input:
         regulators = lambda wildcards: GENEXPR_FILES[wildcards.dataset],
