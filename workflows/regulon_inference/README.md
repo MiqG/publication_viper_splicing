@@ -1,4 +1,4 @@
-# Validation of SF activity estimation with VIPER and SF-exon networks
+# Inference of SF-exon networks
 
 ## Outline
 1. Regulon inference
