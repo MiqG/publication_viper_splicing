@@ -109,7 +109,7 @@ rule compute_protein_activity:
        """
 
         
-rule make_figures:
+rule figures_tumorigenesis:
     input:
         protein_activity = os.path.join(RESULTS_DIR,"files","protein_activity","tumorigenesis-{omic_type}.tsv.gz"),
         metadata = os.path.join(PREP_DIR,"metadata","tumorigenesis.tsv.gz"),
