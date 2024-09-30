@@ -21,6 +21,8 @@ PERT_SPLICING_FILES = {
     "ENASFS": os.path.join(PREP_DIR,'ground_truth_pert','ENASFS','delta_psi-{omic_type}.tsv.gz')
 }
 
+EVAL_DATASETS = list(PERT_SPLICING_FILES.keys())
+
 PERT_FILES = {
     "EX": PERT_SPLICING_FILES,
 }
@@ -40,11 +42,13 @@ REGULON_SETS = [
     "aracne_and_mlr_regulons"
 ]
 
+METHODS_ACTIVITY = ["viper","correlation_pearson","correlation_spearman","gsea"]
+
 TOP_N = [100, 90, 80, 70, 60, 50, 40]
 ROBUSTNESS_EVAL_SETS = ["top{N}_experimentally_derived_regulons_pruned".format(N=n) for n in TOP_N]
 THRESH_DPSI = [5,10,15,20,25,30,35,40,45]
 THRESHOLDS_EVAL_SETS = ["dPSIthresh{thresh}_experimentally_derived_regulons_pruned".format(thresh=t) for t in THRESH_DPSI]
-REGULON_SETS = REGULON_SETS + ROBUSTNESS_EVAL_SETS + THRESHOLDS_EVAL_SETS
+#REGULON_SETS = REGULON_SETS + ROBUSTNESS_EVAL_SETS + THRESHOLDS_EVAL_SETS
 
 SHADOWS = ["no"] # bug in viper does not allow shadow correction
 N_TAILS = ["one","two"]
@@ -57,7 +61,7 @@ rule all:
         
         # evaluate regulons
         ## run
-        expand(os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{regulon_set}-{dataset}-{omic_type}-shadow_{shadow}-{n_tails}_tailed.tsv.gz"), regulon_set=REGULON_SETS, dataset=EVAL_DATASETS, omic_type=OMIC_TYPES, shadow=SHADOWS, n_tails=N_TAILS),
+        expand(os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{method_activity}","{regulon_set}-{dataset}-{omic_type}-shadow_{shadow}-{n_tails}_tailed.tsv.gz"), regulon_set=REGULON_SETS, dataset=EVAL_DATASETS, omic_type=OMIC_TYPES, shadow=SHADOWS, n_tails=N_TAILS, method_activity=METHODS_ACTIVITY),
         ## merge
         expand(os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","merged-{omic_type}.tsv.gz"), omic_type=OMIC_TYPES),
         
@@ -113,18 +117,20 @@ rule evaluate_regulons:
         regulons = os.path.join(RESULTS_DIR,"files","{regulon_set}-{omic_type}"),
         eval_labels = os.path.join(RESULTS_DIR,"files","regulon_evaluation_labels","{dataset}.tsv.gz")
     output:
-        os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{regulon_set}-{dataset}-{omic_type}-shadow_{shadow}-{n_tails}_tailed.tsv.gz")
+        os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{method_activity}","{regulon_set}-{dataset}-{omic_type}-shadow_{shadow}-{n_tails}_tailed.tsv.gz")
     params:
         script_dir = SRC_DIR,
         shadow = "{shadow}",
-        n_tails = "{n_tails}"
+        n_tails = "{n_tails}",
+        method_activity = "{method_activity}"
     shell:
         """
-        nice Rscript {params.script_dir}/compute_protein_activity.R \
+        nice Rscript {params.script_dir}/evaluate_activity.R \
                     --signature_file={input.signature} \
                     --regulons_path={input.regulons} \
                     --eval_labels_file={input.eval_labels} \
                     --output_file={output} \
+                    --method_activity={params.method_activity} \
                     --shadow_correction={params.shadow} \
                     --n_tails={params.n_tails}
         """
@@ -132,7 +138,7 @@ rule evaluate_regulons:
         
 rule combine_evaluations:
     input:
-        evaluations = [os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{regulon_set}-{dataset}-{omic_type}-shadow_{shadow}-{n_tails}_tailed.tsv.gz").format(regulon_set=r, dataset=d, omic_type="{omic_type}", shadow=s, n_tails=n) for r in REGULON_SETS for d in EVAL_DATASETS for s in SHADOWS for n in N_TAILS]
+        evaluations = [os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{method_activity}","{regulon_set}-{dataset}-{omic_type}-shadow_{shadow}-{n_tails}_tailed.tsv.gz").format(regulon_set=r, dataset=d, omic_type="{omic_type}", shadow=s, n_tails=n, method_activity=m) for r in REGULON_SETS for d in EVAL_DATASETS for s in SHADOWS for n in N_TAILS for m in METHODS_ACTIVITY]
     output:
         os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","merged-{omic_type}.tsv.gz")
     params:
