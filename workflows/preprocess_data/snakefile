@@ -64,9 +64,6 @@ CANCER_TYPES = [
     'UVM'
 ]
 
-tcga_metadata = pd.read_table(os.path.join(RAW_DIR,"TCGA","metadata","PANCAN.tsv.gz"))
-TCGA_N_SAMPLES = tcga_metadata["cancer_type"].value_counts().to_dict()
-
 DATASETS = ["CCLE"]
 
 ENCORE_DATASETS = ["ENCOREKD","ENCOREKO"]
@@ -77,6 +74,17 @@ N_SAMPLES_ENA = {
     "ipsc_differentiation": 217 
 }
 
+tcga_metadata = pd.read_table(os.path.join(RAW_DIR,"TCGA","metadata","PANCAN.tsv.gz"))
+TCGA_N_SAMPLES = tcga_metadata["cancer_type"].value_counts().to_dict()
+tcga_metadata = tcga_metadata.groupby(
+    ["sample_type_clean","cancer_type"]
+).size().reset_index().rename(columns={0:"n"})
+tcga_metadata = tcga_metadata.loc[tcga_metadata["n"]>=3]
+
+CANCER_TYPES_SPLIT = tcga_metadata["cancer_type"].values
+SAMPLE_TYPES_SPLIT = tcga_metadata["sample_type_clean"].values
+CANCER_TYPES_STN = tcga_metadata.loc[tcga_metadata["sample_type_clean"]=="SolidTissueNormal","cancer_type"].values
+        
 ##### RULES #####
 rule all:
     input:
@@ -124,14 +132,12 @@ rule all:
         os.path.join(PREP_DIR,"event_psi","ENASFS-ALTA.tsv.gz"),
         os.path.join(PREP_DIR,"event_psi","ENASFS-ALTD.tsv.gz"),
         os.path.join(PREP_DIR,"event_psi","ENASFS-INT.tsv.gz"),
-        os.path.join(PREP_DIR,"genexpr_tpm","ENASFS.tsv.gz"),    
+        os.path.join(PREP_DIR,"genexpr_tpm","ENASFS.tsv.gz"),
         
         # PERTURBATION SCREENS
         ### ENCORE
         ### compute delta PSI
         expand(os.path.join(PREP_DIR,'pert_transcriptomes','{dataset}',"{cell_line}",'delta_psi-{event_type}.tsv.gz'), event_type=EVENT_TYPES, cell_line=CELL_LINES, dataset=ENCORE_DATASETS),
-        ### mask delta PSI
-        expand(os.path.join(PREP_DIR,'ground_truth_pert','{dataset}',"{cell_line}",'{dpsi_type}-{event_type}-masked.tsv.gz'), event_type=EVENT_TYPES, cell_line=CELL_LINES, dpsi_type=DPSI_TYPES, dataset=ENCORE_DATASETS),
         ### simplify delta PSI
         expand(os.path.join(PREP_DIR,'ground_truth_pert','{dataset}',"{cell_line}",'{dpsi_type}-{event_type}.tsv.gz'), event_type=EVENT_TYPES, dpsi_type=DPSI_TYPES, cell_line=CELL_LINES, dataset=ENCORE_DATASETS),
         
@@ -142,7 +148,7 @@ rule all:
         expand(os.path.join(PREP_DIR,'ground_truth_pert','ENASFS','delta_psi-{event_type}.tsv.gz'), event_type=EVENT_TYPES),
         
         # impute event PSI
-        expand(os.path.join(PREP_DIR,'event_psi_imputed','{dataset}-{event_type}.tsv.gz'), dataset=["CardosoMoreira2020"], event_type=EVENT_TYPES),
+        expand(os.path.join(PREP_DIR,'event_psi_imputed','{dataset}-{event_type}.tsv.gz'), dataset=["CardosoMoreira2020","PANCAN-SolidTissueNormal"], event_type=EVENT_TYPES),
         
         # compute summary stats
         expand(os.path.join(PREP_DIR,"summary_stats","event_psi_imputed","{dataset}-EX.tsv.gz"), dataset=DATASETS),
@@ -203,8 +209,22 @@ rule all:
         os.path.join(PREP_DIR,'ppi','STRINGDB.tsv.gz'),
         
         # EDA data figures
-        os.path.join(RESULTS_DIR,'figures','eda')
+        os.path.join(RESULTS_DIR,'figures','eda'),
         
+        # TCGA for network inference
+        ## split by cancer type and sample type
+        expand(os.path.join(PREP_DIR,"event_psi","{cancer}-{sample}-EX.tsv.gz"), zip, cancer=CANCER_TYPES_SPLIT, sample=SAMPLE_TYPES_SPLIT),
+        expand(os.path.join(PREP_DIR,"genexpr_tpm","{cancer}-{sample}.tsv.gz"), zip, cancer=CANCER_TYPES_SPLIT, sample=SAMPLE_TYPES_SPLIT),
+        ## concatenate by sample type
+        expand(os.path.join(PREP_DIR,"event_psi","PANCAN-{sample}-EX.tsv.gz"), sample=["SolidTissueNormal"]),
+        expand(os.path.join(PREP_DIR,"genexpr_tpm","PANCAN-{sample}.tsv.gz"), sample=["SolidTissueNormal"]),
+        
+        # POSTAR3 preprocessing
+        os.path.join(PREP_DIR,"clip_peaks_mapped","POSTAR3.tsv.gz"),
+        
+        # preprocess SplicingLore
+        os.path.join(PREP_DIR,"metadata","SplicingLore.tsv.gz"),
+        os.path.join(PREP_DIR,"ground_truth_pert","SplicingLore","delta_psi-EX.tsv.gz")
 
         
 rule make_list_splicing_factors:
@@ -454,10 +474,12 @@ rule preprocess_ccle:
         
         # subset
         ## find common samples
-        common_samples = set(metadata["run_accession"]).intersection(
-            psis["EX"].columns
-        ).intersection(
-            genexpr.columns
+        common_samples = list(
+            set(metadata["run_accession"]).intersection(
+                psis["EX"].columns
+            ).intersection(
+                genexpr.columns
+            )
         )
         psis = {e: psis[e][common_samples].copy() for e in event_types}
         genexpr = genexpr[common_samples].copy()
@@ -589,10 +611,12 @@ rule preprocess_TCGA:
             
         # subset
         ## find common samples
-        common_samples = set(metadata["file_id"]).intersection(
-            psis["EX"].columns
-        ).intersection(
-            genexpr.columns
+        common_samples = list(
+            set(metadata["file_id"]).intersection(
+                psis["EX"].columns
+            ).intersection(
+                genexpr.columns
+            )
         )
         psis = {e: psis[e][common_samples].copy() for e in event_types}
         genexpr = genexpr[common_samples].copy()
@@ -716,7 +740,7 @@ rule preprocess_encorekd:
         metadata["PERT_GENE"] = metadata["Experiment target"].str.replace("-human","")
         gene_annot = genexpr.index.to_frame().rename(columns={"ID":"PERT_ENSEMBL", "NAME":"PERT_GENE"})
         metadata = pd.merge(metadata, gene_annot, how="left", on="PERT_GENE")
-        metadata["PERT_TYPE"] = "SHRNAKD"
+        metadata["PERT_TYPE"] = "KNOCKDOWN"
         ## experiment
         metadata["experiment"] = metadata["Experiment accession"]
         ## replicate
@@ -752,7 +776,7 @@ rule preprocess_encorekd:
         metadata["control_experiment"] = ctls_exps
         metadata["control_samples"] = ctls_samps
         
-        cols_oi = ['sampleID','cell_line', 'DepMap_ID', 'PERT_GENE', 'PERT_ENSEMBL', 'experiment', 
+        cols_oi = ['sampleID','cell_line', 'DepMap_ID', 'PERT_GENE', 'PERT_ENSEMBL', 'PERT_TYPE', 'experiment', 
                    'control_experiment', 'control_samples','replicate']
         metadata = metadata[cols_oi].drop_duplicates()
         
@@ -832,7 +856,7 @@ rule preprocess_encoreko:
         metadata["PERT_GENE"] = metadata["Experiment target"].str.replace("-human","")
         gene_annot = genexpr.index.to_frame().rename(columns={"ID":"PERT_ENSEMBL", "NAME":"PERT_GENE"})
         metadata = pd.merge(metadata, gene_annot, how="left", on="PERT_GENE")
-        metadata["PERT_TYPE"] = "CRISPRKO"
+        metadata["PERT_TYPE"] = "KNOCKOUT"
         ## experiment
         metadata["experiment"] = metadata["Experiment accession"]
         ## replicate
@@ -868,7 +892,7 @@ rule preprocess_encoreko:
         metadata["control_experiment"] = ctls_exps
         metadata["control_samples"] = ctls_samps
         
-        cols_oi = ['sampleID','cell_line', 'DepMap_ID', 'PERT_GENE', 'PERT_ENSEMBL', 'experiment', 
+        cols_oi = ['sampleID','cell_line', 'DepMap_ID', 'PERT_GENE', 'PERT_ENSEMBL', 'PERT_TYPE', 'experiment', 
                    'control_experiment', 'control_samples','replicate']
         metadata = metadata[cols_oi].drop_duplicates()
         
@@ -946,7 +970,7 @@ rule delta_psi_encore:
                 
                 delta_psi[sample_oi] = dpsi
                 
-                del dpsi, rel_dpsi, psi_ctls, ctls
+                del dpsi, psi_ctls, ctls
                 
         
         delta_psi = pd.DataFrame(delta_psi)
@@ -962,7 +986,8 @@ rule prepare_ground_truth_pert_dpsi:
         metadata = os.path.join(PREP_DIR,'metadata','{dataset}.tsv.gz'),
         dpsi = os.path.join(PREP_DIR,'pert_transcriptomes','{dataset}',"{cell_line}",'{dpsi_type}-{event_type}.tsv.gz'),
     params:
-        cell_line = "{cell_line}"
+        cell_line = "{cell_line}",
+        dataset = "{dataset}",
     output:
         dpsi = os.path.join(PREP_DIR,'ground_truth_pert','{dataset}',"{cell_line}",'{dpsi_type}-{event_type}.tsv.gz'),
     run:
@@ -971,6 +996,7 @@ rule prepare_ground_truth_pert_dpsi:
         metadata = pd.read_table(input.metadata)
         dpsi = pd.read_table(input.dpsi, index_col=0)
         cell_line = params.cell_line
+        dataset = params.dataset
         
         # drop control samples
         metadata = metadata.loc[~metadata["PERT_ENSEMBL"].isnull()].copy()
@@ -978,12 +1004,18 @@ rule prepare_ground_truth_pert_dpsi:
         # subset by cell line
         metadata = metadata.loc[metadata["cell_line"]==cell_line].copy()
         
+        # make perturbation id
+        metadata["study_accession"] = dataset
+        metadata["PERT_ID"] = metadata[
+            ["study_accession","cell_line","PERT_ENSEMBL","PERT_TYPE"]
+        ].apply(lambda row: '___'.join(row.values.astype(str)), axis=1)        
         dpsis = []
-        for ensembl in metadata["PERT_ENSEMBL"].unique():
-            samples_oi = metadata.loc[metadata["PERT_ENSEMBL"]==ensembl, "sampleID"]
+        
+        for pert_id in metadata["PERT_ID"].unique():
+            samples_oi = metadata.loc[metadata["PERT_ID"]==pert_id, "sampleID"]
             
             dpsi_avg = dpsi[samples_oi].mean(axis=1)
-            dpsi_avg.name = ensembl
+            dpsi_avg.name = pert_id
             dpsis.append(dpsi_avg)
             
         dpsis = pd.concat(dpsis, axis=1)
@@ -991,33 +1023,7 @@ rule prepare_ground_truth_pert_dpsi:
         dpsis.reset_index().to_csv(output.dpsi, **SAVE_PARAMS)
         
         print("Done!")
-        
-        
-rule mask_dpsi:
-    input:
-        delta_psi = os.path.join(PREP_DIR,'ground_truth_pert','{dataset}','{cell_line}','delta_psi-{event_type}.tsv.gz'),
-        delta_psi_tomask = os.path.join(PREP_DIR,'ground_truth_pert','{dataset}','{cell_line}','{dpsi_type}-{event_type}.tsv.gz')
-    output:
-        os.path.join(PREP_DIR,'ground_truth_pert','{dataset}',"{cell_line}",'{dpsi_type}-{event_type}-masked.tsv.gz')
-    params:
-        thresh = -1
-    run:
-        import pandas as pd
-        import numpy as np
-        
-        # load
-        delta_psi = pd.read_table(input.delta_psi, index_col=0)
-        delta_psi_tomask = pd.read_table(input.delta_psi_tomask, index_col=0)
-        thresh = params.thresh
-        
-        # mask
-        delta_psi_tomask[np.abs(delta_psi) < thresh] = np.nan
-        
-        # save
-        delta_psi_tomask.reset_index().to_csv(output[0], **SAVE_PARAMS)
-        
-        print("Done!")
-        
+
         
 rule impute_psi:
     input:
@@ -1194,10 +1200,12 @@ rule preprocess_Nijhuis2020:
         
         # subset
         ## find common samples
-        common_samples = set(metadata["run_accession"]).intersection(
-            psis["EX"].columns
-        ).intersection(
-            genexpr.columns
+        common_samples = list(
+            set(metadata["run_accession"]).intersection(
+                psis["EX"].columns
+            ).intersection(
+                genexpr.columns
+            )
         )
         psis = {e: psis[e][common_samples].copy() for e in event_types}
         genexpr = genexpr[common_samples].copy()
@@ -1276,10 +1284,12 @@ rule preprocess_Lu2021:
         
         # subset
         ## find common samples
-        common_samples = set(metadata["run_accession"]).intersection(
-            psis["EX"].columns
-        ).intersection(
-            genexpr.columns
+        common_samples = list(
+            set(metadata["run_accession"]).intersection(
+                psis["EX"].columns
+            ).intersection(
+                genexpr.columns
+            )
         )
         psis = {e: psis[e][common_samples].copy() for e in event_types}
         genexpr = genexpr[common_samples].copy()
@@ -1355,10 +1365,12 @@ rule preprocess_ena_datasets:
         
         # subset
         ## find common samples
-        common_samples = set(metadata["run_accession"]).intersection(
-            psis["EX"].columns
-        ).intersection(
-            genexpr.columns
+        common_samples = list(
+            set(metadata["run_accession"]).intersection(
+                psis["EX"].columns
+            ).intersection(
+                genexpr.columns
+            )
         )
         psis = {e: psis[e][common_samples].copy() for e in event_types}
         genexpr = genexpr[common_samples].copy()
@@ -1479,10 +1491,12 @@ rule preprocess_ena_splicing_factors:
         
         # subset
         ## find common samples
-        common_samples = set(metadata["sampleID"]).intersection(
-            psis["EX"].columns
-        ).intersection(
-            genexpr.columns
+        common_samples = list(
+            set(metadata["sampleID"]).intersection(
+                psis["EX"].columns
+            ).intersection(
+                genexpr.columns
+            )
         )
         psis = {e: psis[e][common_samples].copy() for e in event_types}
         genexpr = genexpr[common_samples].copy()
@@ -1560,7 +1574,7 @@ rule prepare_ground_truth_pert_dpsi_ena_splicing_factors:
         # drop control samples
         metadata = metadata.loc[~metadata["PERT_ENSEMBL"].isnull()].copy()
         metadata["PERT_ID"] = metadata[
-            ["study_accession","cell_line_name","PERT_ENSEMBL"]
+            ["study_accession","cell_line_name","PERT_ENSEMBL","PERT_TYPE"]
         ].apply(lambda row: '___'.join(row.values.astype(str)), axis=1)
         
         dpsis = []
@@ -1631,10 +1645,12 @@ rule preprocess_CardosoMoreira2020:
         
         # subset
         ## find common samples
-        common_samples = set(metadata["run_accession"]).intersection(
-            psis["EX"].columns
-        ).intersection(
-            genexpr.columns
+        common_samples = list(
+            set(metadata["run_accession"]).intersection(
+                psis["EX"].columns
+            ).intersection(
+                genexpr.columns
+            )
         )
         psis = {e: psis[e][common_samples].copy() for e in event_types}
         genexpr = genexpr[common_samples].copy()
@@ -1754,10 +1770,12 @@ rule preprocess_tumorigenesis:
         
         # subset
         ## find common samples
-        common_samples = set(metadata["sampleID"]).intersection(
-            psis["EX"].columns
-        ).intersection(
-            genexpr.columns
+        common_samples = list(
+            set(metadata["sampleID"]).intersection(
+                psis["EX"].columns
+            ).intersection(
+                genexpr.columns
+            )
         )
         psis = {e: psis[e][common_samples].copy() for e in event_types}
         genexpr = genexpr[common_samples].copy()
@@ -1875,10 +1893,12 @@ rule preprocess_Riaz2017:
         
         # subset
         ## find common samples
-        common_samples = set(metadata["run_accession"]).intersection(
-            psis["EX"].columns
-        ).intersection(
-            genexpr.columns
+        common_samples = list(
+            set(metadata["run_accession"]).intersection(
+                psis["EX"].columns
+            ).intersection(
+                genexpr.columns
+            )
         )
         psis = {e: psis[e][common_samples].copy() for e in event_types}
         genexpr = genexpr[common_samples].copy()
@@ -1936,3 +1956,294 @@ rule figures_eda:
                     --figs_dir={output}
         """
         
+rule split_event_psi_by_cancer_and_sample_type:
+    input:
+        metadata = os.path.join(PREP_DIR,"metadata","{cancer}.tsv.gz"),
+        psi = os.path.join(PREP_DIR,"event_psi","{cancer}-EX.tsv.gz")
+    output:
+        psi = os.path.join(PREP_DIR,"event_psi","{cancer}-{sample}-EX.tsv.gz")
+    params:
+        cancer_type = "{cancer}",
+        sample_type = "{sample}"
+    run:
+        import pandas as pd
+        
+        metadata = pd.read_table(input.metadata)
+        psi = pd.read_table(input.psi, index_col=0)
+        cancer_type = params.cancer_type
+        sample_type = params.sample_type
+        
+        idx = (metadata["cancer_type"]==cancer_type) & (metadata["sample_type_clean"]==sample_type)
+        samples_oi = metadata.loc[idx,"sampleID"].values
+        
+        psi = psi[samples_oi]
+        print(psi.shape)
+        
+        if psi.shape[1]>0:
+            print("Saving...")
+            psi.reset_index().to_csv(output.psi, **SAVE_PARAMS)
+        
+        print("Done!")
+
+
+rule split_genexpr_tpm_by_cancer_and_sample_type:
+    input:
+        metadata = os.path.join(PREP_DIR,"metadata","{cancer}.tsv.gz"),
+        genexpr = os.path.join(PREP_DIR,"genexpr_tpm","{cancer}.tsv.gz")
+    output:
+        genexpr = os.path.join(PREP_DIR,"genexpr_tpm","{cancer}-{sample}.tsv.gz")
+    params:
+        cancer_type = "{cancer}",
+        sample_type = "{sample}"
+    run:
+        import pandas as pd
+        
+        metadata = pd.read_table(input.metadata)
+        genexpr = pd.read_table(input.genexpr, index_col=0)
+        cancer_type = params.cancer_type
+        sample_type = params.sample_type
+        
+        idx = (metadata["cancer_type"]==cancer_type) & (metadata["sample_type_clean"]==sample_type)
+        samples_oi = metadata.loc[idx,"sampleID"].values
+        
+        genexpr = genexpr[samples_oi]
+        print(genexpr.shape)
+        
+        if genexpr.shape[1]>0:
+            print("Saving...")
+            genexpr.reset_index().to_csv(output.genexpr, **SAVE_PARAMS)
+        
+        print("Done!")
+        
+
+ruleorder: concatenate_tcga_splicing > split_event_psi_by_cancer_and_sample_type
+rule concatenate_tcga_splicing:
+    input:
+        tables = lambda wildcards: [
+            os.path.join(PREP_DIR,"event_psi","{cancer}-{sample}-EX.tsv.gz").format(cancer=c, sample=wildcards.sample) 
+            for c in CANCER_TYPES_STN
+        ]
+    output:
+        os.path.join(PREP_DIR,"event_psi","PANCAN-{sample}-EX.tsv.gz")
+    run:
+        import pandas as pd
+        
+        table = pd.concat([pd.read_table(f, index_col=0) for f in input.tables], axis=1)
+        
+        print(table.shape)
+        
+        table.reset_index().to_csv(output[0], **SAVE_PARAMS)
+        
+        print("Done!")
+
+        
+rule concatenate_tcga_genexpr:
+    input:
+        tables = lambda wildcards: [
+            os.path.join(PREP_DIR,"genexpr_tpm","{cancer}-{sample}.tsv.gz").format(cancer=c, sample=wildcards.sample) 
+            for c in CANCER_TYPES_STN
+        ]
+    output:
+        os.path.join(PREP_DIR,"genexpr_tpm","PANCAN-{sample}.tsv.gz")
+    run:
+        import pandas as pd
+        
+        table = pd.concat([pd.read_table(f, index_col=0) for f in input.tables], axis=1)
+        
+        print(table.shape)
+        
+        table.reset_index().to_csv(output[0], **SAVE_PARAMS)
+        
+        print("Done!")
+    
+    
+rule map_clip_peaks_to_exons:
+    input:
+        peaks = os.path.join(RAW_DIR,'POSTAR3','human.txt.gz'),
+        event_info = os.path.join(RAW_DIR,"VastDB","EVENT_INFO-hg38_noseqs.tsv")
+    output:
+        os.path.join(PREP_DIR,"clip_peaks_mapped","POSTAR3.tsv.gz")
+    params:
+        margin = 500
+    run:
+        import pandas as pd
+        import pyranges as pr
+        
+        # load
+        ## read peaks file
+        col_names = [
+            "Chromosome",
+            "Start",
+            "End",
+            "peak_id",
+            "Strand",
+            "RBP",
+            "experiment_method",
+            "experiment_model",
+            "experiment_id"
+        ]
+        peaks = pd.read_table(
+            input.peaks,
+            header=None,
+            names=col_names
+        )
+        ## read vastdb events
+        events = pd.read_table(input.event_info)
+        ## params
+        margin = params.margin
+        
+        # assign exons to peaks if a peak falls on the exon or one of its neighboring introns
+        ## only event type of interest
+        events = events.loc[events["EVENT"].str.contains("EX")].copy()
+        ## process event coordinates
+        events["Chromosome"] = (
+            events["COORD_o"].str.split(":").str[0]
+        )
+        events["EVENT_start"] = (
+            events["COORD_o"].str.split(":").str[1].str.split("-").str[0]
+        ).astype("int")
+        events["EVENT_end"] = (
+            events["COORD_o"].str.split(":").str[1].str.split("-").str[1].astype("int")
+        )
+        events["Strand"] = (
+            events["REF_CO"].str.split(":").str[2]
+        )
+        events["Start"] = events["EVENT_start"]
+        events["End"] = events["EVENT_end"]
+        
+        # intersect
+        ## prepare
+        X = pr.PyRanges(
+            events[["EVENT", "Chromosome", "Start", "End", "Strand"]],
+            int64=True,
+        )
+        Y = pr.PyRanges(peaks, int64=True)
+        ## join
+        mapping = X.join(Y, slack=margin, how="left", report_overlap=True)
+               
+        # prepare outputs
+        ## drop unmapped
+        mapping = mapping.df.loc[~mapping.df["peak_id"].isin(["-1"])]
+        ## rename
+        mapping = mapping.rename(columns={
+            "Start_b":"peak_start",
+            "End_b":"peak_end"
+        })
+        
+        # save
+        mapping.to_csv(output[0], sep="\t", compression="gzip", index=False)
+        
+        print("Done!")
+        
+        
+rule preprocess_splicinglore:
+    input:
+        folder = os.path.join(RAW_DIR,"SplicingLore"),
+        event_info = os.path.join(RAW_DIR,"VastDB","EVENT_INFO-hg19_noseqs.tsv"),
+        urls = os.path.join(SUPPORT_DIR, "SplicingLore-urls.txt")
+    output:
+        metadata = os.path.join(PREP_DIR,"metadata","SplicingLore.tsv.gz"),
+        perts = os.path.join(PREP_DIR,"ground_truth_pert","SplicingLore","delta_psi-EX.tsv.gz")
+    params:
+        margin = 0
+    run:
+        import os
+        import pandas as pd
+        from urllib.parse import urlparse
+        import pyranges as pr
+        
+        # load
+        sl_dir = input.folder
+        pert_files = [f for f in os.listdir(sl_dir, ) if f.endswith(".csv")]
+        events = pd.read_table(input.event_info)
+        urls = pd.read_table(input.urls, names=["url"])
+        margin = params.margin
+        
+        # prep URLs
+        urls["file_name"] = urls["url"].apply(lambda x: os.path.basename(urlparse(x).path))
+        urls["experiment_id"] = urls["file_name"].str.replace(".csv","", regex=False)
+        splits = urls["experiment_id"].str.split("_", expand=True)
+        splits["PERT_GENE"] = splits[0]
+        splits["study_accession"] = splits[1]
+        splits["cell_line"] = splits[2]
+        splits["experiment_id"] = splits[3]
+        ## fix splits (for the 7 experiments perturbing multiple splicing factors)
+        idx = ~splits[4].isnull()
+        splits.loc[idx, "PERT_GENE"] = splits.loc[idx, [0,1]].apply(lambda x: ",".join(x[[0,1]]), axis=1)
+        splits.loc[idx, "study_accession"] = splits.loc[idx, 2]
+        splits.loc[idx, "cell_line"] = splits.loc[idx, 3]
+        splits.loc[idx, "experiment_id"] = splits.loc[idx, 4]
+        ## update urls
+        cols_oi = ["PERT_GENE","study_accession","cell_line","experiment_id"] 
+        urls[cols_oi] = splits[cols_oi]
+        ## rename to metadata
+        metadata = urls.copy()
+        ## make PERT_ID
+        metadata["PERT_ID"] = metadata["file_name"]
+        
+        # prep mapping to VASTDB
+        ## only event type of interest
+        events = events.loc[events["EVENT"].str.contains("EX")].copy()
+        ## process event coordinates
+        events["Chromosome"] = (
+            events["COORD_o"].str.split(":").str[0]
+        )
+        events["EVENT_start"] = (
+            events["COORD_o"].str.split(":").str[1].str.split("-").str[0]
+        ).astype("int")
+        events["EVENT_end"] = (
+            events["COORD_o"].str.split(":").str[1].str.split("-").str[1].astype("int")
+        )
+        events["Strand"] = (
+            events["REF_CO"].str.split(":").str[2]
+        )
+        events["Start"] = events["EVENT_start"]
+        events["End"] = events["EVENT_end"]
+        
+        # get genes to add strand to perts
+        gene_strand = events[["GENE","Strand"]].drop_duplicates()
+        
+        # load each perturbation, map and concatenate
+        perts = []
+        for f in pert_files:
+            print(f"Processing {f} ...")
+            # load
+            pert = pd.read_csv(os.path.join(sl_dir,f), sep=";")
+            
+            # add gene
+            pert["GENE"] = pert["Gene_exon"].str.split("_").str[0]
+            
+            # add experiment metadata
+            pert["file_name"] = f
+            pert = pd.merge(pert, metadata, on="file_name", how="left")
+            
+            # prep intersection
+            pert["Chromosome"] = "chr"+pert["chr"].astype("str")
+            pert["Start"] = pert["start"]
+            pert["End"] = pert["end"]
+            
+            # intersect by exact exon match
+            mapping = pd.merge(
+                events[["EVENT","GENE", "Chromosome", "Start", "End", "Strand"]],
+                pert, 
+                on=["GENE","Chromosome","Start","End"],
+                how="left"
+            )
+            
+            # filter out unmapped exons
+            mapping = mapping.loc[~mapping["Gene_exon"].isnull()]
+            
+            print("Mapped %s interactions out of %s." % (mapping.shape[0], pert.shape[0]))
+            
+            # store
+            perts.append(mapping)
+            
+            del pert
+
+        perts = pd.concat(perts)
+        
+        # save
+        metadata.to_csv(output.metadata, **SAVE_PARAMS)
+        perts.to_csv(output.perts, **SAVE_PARAMS)
+        
+        print("Done!")
