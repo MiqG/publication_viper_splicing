@@ -59,7 +59,7 @@ PAL_DUAL = c("grey","orange") # '#1B9E77''#7570B3'
 # figs_dir = file.path(RESULTS_DIR,'figures','eda_regulons-EX')
 
 ##### FUNCTIONS #####
-plot_regulons = function(regulons, evaluation, splicing_factors){
+plot_regulons = function(regulons, splicing_factors){
     plts = list()
     
     X = regulons %>%
@@ -86,16 +86,16 @@ plot_regulons = function(regulons, evaluation, splicing_factors){
         theme_pubr(x.text.angle=45) +
         labs(x="Regulon ID", y="N. Regulators per Target")
     
-    plts[["regulons-n_targets_per_regulator_vs_evaluation-scatter"]] = evaluation %>%
-        left_join(
-            X %>%
-            count(regulon_id, regulator), 
-            by="regulator"
-        ) %>%
-        ggscatter(x="n", y="ranking_perc", alpha=0.5, size=1, color=PAL_DARK) +
-        xscale("log10", .format=TRUE) +
-        facet_wrap(~regulon_set+eval_direction) +
-        stat_cor()
+    # plts[["regulons-n_targets_per_regulator_vs_evaluation-scatter"]] = evaluation %>%
+    #     left_join(
+    #         X %>%
+    #         count(regulon_id, regulator), 
+    #         by="regulator"
+    #     ) %>%
+    #     ggscatter(x="n", y="ranking_perc", alpha=0.5, size=1, color=PAL_DARK) +
+    #     xscale("log10", .format=TRUE) +
+    #     facet_wrap(~regulon_set+eval_direction) +
+    #     stat_cor()
     
     # RBP vs core spliceosome
     x = X %>%
@@ -215,9 +215,9 @@ plot_target_lengths = function(regulons, annot){
 }
 
 
-make_plots = function(regulons, protimp_freqs, regulons_umap, annot, evaluation, splicing_factors){
+make_plots = function(regulons, protimp_freqs, regulons_umap, annot, splicing_factors){
     plts = list(
-        plot_regulons(regulons, evaluation, splicing_factors),
+        plot_regulons(regulons, splicing_factors),
         plot_protein_impact(protimp_freqs),
         plot_similarities(regulons_umap),
         plot_target_lengths(regulons, annot)
@@ -286,6 +286,7 @@ parseargs = function(){
         make_option("--regulons_dir", type="character"),
         make_option("--protein_impact_file", type="character"),
         make_option("--annotation_file", type="character"),
+        make_option("--splicing_factors_file", type="character"),
         make_option("--figs_dir", type="character")
     )
 
@@ -300,6 +301,7 @@ main = function(){
     regulons_dir = args[["regulons_dir"]]
     protein_impact_file = args[["protein_impact_file"]]
     annotation_file = args[["annotation_file"]]
+    splicing_factors_file = args[["splicing_factors_file"]]
     figs_dir = args[["figs_dir"]]
     
     dir.create(figs_dir, recursive = TRUE)
@@ -323,7 +325,6 @@ main = function(){
                                    "In the CDS (uncertain)",term_clean))
     annot = read_tsv(annotation_file)
     splicing_factors = read_tsv(splicing_factors_file)
-    evaluation = read_tsv(evaluation_ex_file)
     
     # prep
     protimp_freqs = regulons %>%
@@ -331,30 +332,30 @@ main = function(){
         left_join(protein_impact, by=c("target"="EVENT")) %>%
         count(regulator, term_clean)
     
-    evaluation = evaluation %>%
-        mutate(regulon_id = gsub("-","_",regulon_id)) %>%
-        filter(signature_id!=regulon_id) %>%
-        filter(!(str_detect(regulon_id,"ENASFS") & (signature_id=="ENASFS"))) %>%
-        # consider only signatures that we know activity 
-        # of the splicing factor was altered
-        filter(PERT_TYPE %in% c("KNOCKDOWN","KNOCKOUT","OVEREXPRESSION")) %>%
-        mutate(
-            pert_type_lab = case_when(
-                PERT_TYPE=="KNOCKDOWN" ~ "KD",
-                PERT_TYPE=="KNOCKOUT" ~ "KO",
-                PERT_TYPE=="OVEREXPRESSION" ~ "OE"
-            ),
-            regulon_set = gsub("-.*","",regulon_set_id)
-        ) %>%
-        group_by(omic_type, eval_direction, eval_type, regulon_set, n_tails, regulon_set_id, pert_type_lab, regulator) %>%
-        summarize(ranking_perc = median(ranking_perc, na.rm=TRUE)) %>%
-        ungroup() %>%
-        filter(regulon_set %in% SETS_MAIN) %>%
-        filter(n_tails=="two") %>%
-        group_by(omic_type, eval_direction, eval_type, regulon_set, regulator) %>%
-        summarize(ranking_perc = median(ranking_perc, na.rm=TRUE)) %>%
-        ungroup() %>%
-        mutate(regulon_set = factor(regulon_set, levels=SETS_MAIN))
+    # evaluation = evaluation %>%
+    #     mutate(regulon_id = gsub("-","_",regulon_id)) %>%
+    #     filter(signature_id!=regulon_id) %>%
+    #     filter(!(str_detect(regulon_id,"ENASFS") & (signature_id=="ENASFS"))) %>%
+    #     # consider only signatures that we know activity 
+    #     # of the splicing factor was altered
+    #     filter(PERT_TYPE %in% c("KNOCKDOWN","KNOCKOUT","OVEREXPRESSION")) %>%
+    #     mutate(
+    #         pert_type_lab = case_when(
+    #             PERT_TYPE=="KNOCKDOWN" ~ "KD",
+    #             PERT_TYPE=="KNOCKOUT" ~ "KO",
+    #             PERT_TYPE=="OVEREXPRESSION" ~ "OE"
+    #         ),
+    #         regulon_set = gsub("-.*","",regulon_set_id)
+    #     ) %>%
+    #     group_by(omic_type, eval_direction, eval_type, regulon_set, n_tails, regulon_set_id, pert_type_lab, regulator) %>%
+    #     summarize(ranking_perc = median(ranking_perc, na.rm=TRUE)) %>%
+    #     ungroup() %>%
+    #     filter(regulon_set %in% SETS_MAIN) %>%
+    #     filter(n_tails=="two") %>%
+    #     group_by(omic_type, eval_direction, eval_type, regulon_set, regulator) %>%
+    #     summarize(ranking_perc = median(ranking_perc, na.rm=TRUE)) %>%
+    #     ungroup() %>%
+    #     mutate(regulon_set = factor(regulon_set, levels=SETS_MAIN))
     
     # make embedding of common targets
     regulons_mat = regulons %>%
@@ -375,7 +376,7 @@ main = function(){
         rownames_to_column("regulator") 
     
     # plot
-    plts = make_plots(regulons, protimp_freqs, regulons_umap, annot, evaluation, splicing_factors)
+    plts = make_plots(regulons, protimp_freqs, regulons_umap, annot, splicing_factors)
     
     # make figdata
     figdata = make_figdata(regulons, protimp_freqs, regulons_umap, annot)

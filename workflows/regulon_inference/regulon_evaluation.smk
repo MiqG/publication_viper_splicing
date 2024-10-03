@@ -34,15 +34,19 @@ METADATA_FILES = [
 ]
 
 REGULON_SETS = [
+    # general comparison
     "experimentally_derived_regulons_pruned",
     "aracne_regulons_development",
     "mlr_regulons_development",
+    #"postar3_clip_regulons",
+    "splicinglore_regulons",
+    # empirical vs computational networks
     "aracne_and_experimental_regulons",
     "mlr_and_experimental_regulons",
     "aracne_and_mlr_regulons"
 ]
 
-METHODS_ACTIVITY = ["viper","correlation_pearson","correlation_spearman","gsea"]
+METHODS_ACTIVITY = ["viper","correlation_pearson","correlation_spearman"]#,"gsea"]
 
 TOP_N = [100, 90, 80, 70, 60, 50, 40]
 ROBUSTNESS_EVAL_SETS = ["top{N}_experimentally_derived_regulons_pruned".format(N=n) for n in TOP_N]
@@ -51,7 +55,7 @@ THRESHOLDS_EVAL_SETS = ["dPSIthresh{thresh}_experimentally_derived_regulons_prun
 #REGULON_SETS = REGULON_SETS + ROBUSTNESS_EVAL_SETS + THRESHOLDS_EVAL_SETS
 
 SHADOWS = ["no"] # bug in viper does not allow shadow correction
-N_TAILS = ["one","two"]
+N_TAILS = ["two"] #["one","two"]
 
 ##### RULES #####
 rule all:
@@ -66,8 +70,8 @@ rule all:
         expand(os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","merged-{omic_type}.tsv.gz"), omic_type=OMIC_TYPES),
         
         # make figures
-        os.path.join(RESULTS_DIR,"figures","regulon_evaluation"),
-        os.path.join(RESULTS_DIR,"figures","regulon_inference")
+        #os.path.join(RESULTS_DIR,"figures","regulon_evaluation"),
+        #os.path.join(RESULTS_DIR,"figures","regulon_inference")
         
         
 rule make_evaluation_labels:
@@ -78,6 +82,8 @@ rule make_evaluation_labels:
     run:
         import pandas as pd
         
+        perts_oi = ["KNOCKDOWN","KNOCKOUT","OVEREXPRESSION"]
+        
         for f in input.metadatas:
             # load
             metadata = pd.read_table(f)
@@ -87,12 +93,20 @@ rule make_evaluation_labels:
                 for cell_line in metadata["cell_line"].unique():
                     # make labels
                     labels = metadata.loc[
-                        metadata["cell_line"]==cell_line, ["PERT_GENE","PERT_ENSEMBL"]
+                        metadata["cell_line"]==cell_line, 
+                        ["cell_line","PERT_ENSEMBL","PERT_TYPE"]
                     ].drop_duplicates().copy()
-                    labels["PERT_ID"] = metadata["PERT_ENSEMBL"]
-                    labels["PERT_TYPE"] = "KNOCKDOWN" if "KD" in os.path.basename(f) else "KNOCKOUT"
+                    
                     
                     dataset = "ENCOREKD" if "KD" in os.path.basename(f) else "ENCOREKO"
+                    labels["study_accession"] = dataset
+                    
+                    labels["PERT_ID"] = labels[
+                        ["study_accession","cell_line","PERT_ENSEMBL","PERT_TYPE"]
+                    ].apply(lambda row: '___'.join(row.values.astype(str)), axis=1)
+                    
+                    # only simple perturbations
+                    labels = labels.loc[labels["PERT_TYPE"].isin(perts_oi)]
                     
                     # save
                     labels.dropna().to_csv(os.path.join(output.output_dir,"%s_%s.tsv.gz") % (dataset, cell_line), **SAVE_PARAMS)
@@ -100,9 +114,13 @@ rule make_evaluation_labels:
             elif "ENASFS" in f:
                 # prepare labels
                 metadata["PERT_ID"] = metadata[
-                    ["study_accession","cell_line_name","PERT_ENSEMBL"]
+                    ["study_accession","cell_line_name","PERT_ENSEMBL","PERT_TYPE"]
                 ].apply(lambda row: '___'.join(row.values.astype(str)), axis=1)
+                
                 labels = metadata[["PERT_ID","PERT_GENE","PERT_ENSEMBL","PERT_TYPE"]].drop_duplicates()
+
+                # only simple perturbations
+                labels = labels.loc[labels["PERT_TYPE"].isin(perts_oi)]
 
                 # save
                 labels.dropna().to_csv(os.path.join(output.output_dir,"ENASFS.tsv.gz"), **SAVE_PARAMS)
@@ -115,10 +133,11 @@ rule evaluate_regulons:
     input:
         signature = lambda wildcards: PERT_FILES[wildcards.omic_type][wildcards.dataset],
         regulons = os.path.join(RESULTS_DIR,"files","{regulon_set}-{omic_type}"),
-        eval_labels = os.path.join(RESULTS_DIR,"files","regulon_evaluation_labels","{dataset}.tsv.gz")
+        eval_labels = os.path.join(RESULTS_DIR,"files","regulon_evaluation_labels")
     output:
         os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{method_activity}","{regulon_set}-{dataset}-{omic_type}-shadow_{shadow}-{n_tails}_tailed.tsv.gz")
     params:
+        eval_labels = os.path.join(RESULTS_DIR,"files","regulon_evaluation_labels","{dataset}.tsv.gz"),
         script_dir = SRC_DIR,
         shadow = "{shadow}",
         n_tails = "{n_tails}",
@@ -128,7 +147,7 @@ rule evaluate_regulons:
         nice Rscript {params.script_dir}/evaluate_activity.R \
                     --signature_file={input.signature} \
                     --regulons_path={input.regulons} \
-                    --eval_labels_file={input.eval_labels} \
+                    --eval_labels_file={params.eval_labels} \
                     --output_file={output} \
                     --method_activity={params.method_activity} \
                     --shadow_correction={params.shadow} \
@@ -145,10 +164,21 @@ rule combine_evaluations:
         omic_type = "{omic_type}"
     run:
         import pandas as pd
-    
-        evaluation = pd.concat([pd.read_table(f) for f in input.evaluations])
+        
+        print("Reading...")
+        cols_oi = [
+            "PERT_ID","auc_roc","auc_pr","avg_pr","mean_rank_percentile","median_rank_percentile",
+            "grouping_var","n_pos_class","n_total","curves_type","eval_direction","eval_type","regulator",
+            "n_networks_per_regulator","regulon_set_id","signature_id","shadow_correction","n_tails",
+            "method_activity"
+        ]
+        evaluation = pd.concat([
+            pd.read_table(f, usecols=cols_oi, low_memory=False).drop_duplicates() 
+            for f in input.evaluations
+        ])
         evaluation["omic_type"] = params.omic_type
         
+        print("Saving...")
         evaluation.to_csv(output[0], **SAVE_PARAMS)
         
         print("Done!")

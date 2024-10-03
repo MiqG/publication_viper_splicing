@@ -37,7 +37,6 @@ rule all:
 rule make_regulons:
     input:
         perts = lambda wildcards: PERT_FILES[wildcards.omic_type],
-        metadata = os.path.join(PREP_DIR,"metadata","ENASFS.tsv.gz"), # only for ENASFS
         regulators = os.path.join(SUPPORT_DIR,"splicing_factors","splicing_factors.tsv")
     output:
         output_dir = directory(os.path.join(RESULTS_DIR,"files","experimentally_derived_regulons_raw-{omic_type}"))
@@ -68,7 +67,6 @@ rule make_regulons:
             
             elif "ENASFS" in f:
                 dataset = "ENASFS"
-                metadata = pd.read_table(input.metadata)
                 
             # prep perturbations
             perts.index.name = feature_name
@@ -84,11 +82,17 @@ rule make_regulons:
             
             os.makedirs(output.output_dir, exist_ok=True)
             if "ENCORE" in dataset:
+                # correct PERT_ID column
+                X = perts["PERT_ID"].str.split("___", expand=True)
+                X.columns = ["study_accession","cell_line_name","PERT_ENSEMBL","PERT_TYPE"]
+                perts[["study_accession","cell_line_name","PERT_ENSEMBL","PERT_TYPE"]] = X
+                perts["regulator"] = perts["PERT_ENSEMBL"]
+                
                 # subset
-                perts = perts.loc[perts["PERT_ID"].isin(regulators["ENSEMBL"])].copy()
+                perts = perts.loc[perts["PERT_ENSEMBL"].isin(regulators["ENSEMBL"])].copy()
 
                 # add gene symbols
-                perts = pd.merge(perts, regulators, left_on="PERT_ID", right_on="ENSEMBL", how="left")
+                perts = pd.merge(perts, regulators, left_on="PERT_ENSEMBL", right_on="ENSEMBL", how="left")
 
                 # save
                 output_file = os.path.join(output.output_dir,"%s-%s-%s.tsv.gz") % (dataset, cell_line, value_name)
@@ -98,22 +102,15 @@ rule make_regulons:
             elif dataset=="ENASFS":
                 # correct PERT_ID column
                 X = perts["PERT_ID"].str.split("___", expand=True)
-                X.columns = ["study_accession","cell_line_name","PERT_ENSEMBL"]
-                perts[["study_accession","cell_line_name","PERT_ENSEMBL"]] = X
-                perts["regulator"] = perts["PERT_ID"]
+                X.columns = ["study_accession","cell_line_name","PERT_ENSEMBL","PERT_TYPE"]
+                perts[["study_accession","cell_line_name","PERT_ENSEMBL","PERT_TYPE"]] = X
+                perts["regulator"] = perts["PERT_ENSEMBL"]
                 
                 # subset
                 perts = perts.loc[perts["PERT_ENSEMBL"].isin(regulators["ENSEMBL"])].copy()
                 
                 # add gene symbols
                 perts = pd.merge(perts, regulators, left_on="PERT_ENSEMBL", right_on="ENSEMBL", how="left")
-                
-                # add pert type
-                metadata = metadata.loc[~metadata["PERT_ENSEMBL"].isnull()].copy()
-                metadata["PERT_ID"] = metadata[
-                    ["study_accession","cell_line_name","PERT_ENSEMBL"]
-                ].apply(lambda row: '___'.join(row.values.astype(str)), axis=1)
-                perts = pd.merge(perts, metadata[["PERT_ID","PERT_TYPE"]].drop_duplicates(), on="PERT_ID", how="left")
                 
                 # subset pert types
                 pert_types_oi = ["KNOCKDOWN","KNOCKOUT","OVEREXPRESSION"]

@@ -9,14 +9,16 @@ RESULTS_DIR = os.path.join(ROOT,"results","regulon_inference")
 SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
 
 EVENT_TYPES = ["EX"]
-OMIC_TYPES = ["genexpr"] + EVENT_TYPES
+OMIC_TYPES = EVENT_TYPES # ["genexpr"] + 
 
 GENEXPR_FILES = {
     "CardosoMoreira2020": os.path.join(PREP_DIR,'genexpr_tpm','CardosoMoreira2020.tsv.gz'),
+    "PANCAN_STN": os.path.join(PREP_DIR,'genexpr_tpm','PANCAN-SolidTissueNormal.tsv.gz'),
 }
 
 SPLICING_FILES = {
     "CardosoMoreira2020": os.path.join(PREP_DIR,'event_psi_imputed','CardosoMoreira2020-{omic_type}.tsv.gz'),
+    "PANCAN_STN": os.path.join(PREP_DIR,'event_psi_imputed','PANCAN-SolidTissueNormal-{omic_type}.tsv.gz'),
 }
 
 DATASETS = list(SPLICING_FILES.keys())
@@ -55,6 +57,10 @@ rule decompress_inputs:
     output:
         regulators = os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{omic_type}","regulators.tsv"),
         targets = os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{omic_type}","targets.tsv")
+    threads: 1
+    resources:
+        runtime = 3600*1, # h 
+        memory = 5, # 5GB
     shell:
         """
         set -eo pipefail
@@ -220,6 +226,10 @@ rule make_regulon_sets:
         regulons = [os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{omic_type}","pruned","regulons.tsv.gz").format(dataset=d, omic_type="{omic_type}") for d in DATASETS]
     output:
         regulons_dir = directory(os.path.join(RESULTS_DIR,"files","aracne_regulons_development-{omic_type}"))
+    threads: 1
+    resources:
+        runtime = 3600*1, # 1 h
+        memory = 10 # GB
     run:
         import os
         import shutil

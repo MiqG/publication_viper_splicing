@@ -78,7 +78,8 @@ rule figures_eda_regulons:
     input:
         regulons = os.path.join(RESULTS_DIR,"files","experimentally_derived_regulons_pruned-{event_type}"),
         protein_impact = os.path.join(RAW_DIR,'VastDB','PROT_IMPACT-hg38-v3.tab.gz'),
-        annotation = os.path.join(RAW_DIR,'VastDB','EVENT_INFO-hg38_noseqs.tsv')
+        annotation = os.path.join(RAW_DIR,'VastDB','EVENT_INFO-hg38_noseqs.tsv'),
+        splicing_factors = os.path.join(SUPPORT_DIR,"splicing_factors","splicing_factors.tsv")
     output:
         directory(os.path.join(RESULTS_DIR,'figures','eda_regulons-{event_type}'))
     shell:
@@ -87,5 +88,6 @@ rule figures_eda_regulons:
                     --regulons_dir={input.regulons} \
                     --protein_impact_file={input.protein_impact} \
                     --annotation_file={input.annotation} \
+                    --splicing_factors_file={input.splicing_factors} \
                     --figs_dir={output}
         """

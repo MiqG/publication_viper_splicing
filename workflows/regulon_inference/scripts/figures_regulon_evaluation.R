@@ -74,6 +74,7 @@ LINE_SIZE = 0.25
 FONT_SIZE = 2 # for additional labels
 FONT_FAMILY = "Arial"
 
+PAL_DARK = "#616161"
 PAL_EVAL_TYPE = c(
     "random" = "lightgrey",
     "real" = "orange"
@@ -96,6 +97,185 @@ PAL_EVAL_TYPE = c(
 ##### FUNCTIONS #####
 plot_evaluation = function(evaluation, omic_type_oi){
     plts = list()
+    
+    X = evaluation
+    
+    # general evaluation 
+    ## across perturbations
+    plts[["evaluation-general-perturbations-auc_roc-violin"]] = X %>%
+        filter(regulon_set %in% SETS_MAIN) %>%
+        mutate(regulon_set = factor(regulon_set, levels=SETS_MAIN)) %>%
+        filter(curves_type=="combined" & eval_direction=="perturbations" & n_tails=="two") %>%
+        ggplot(aes(x=method_activity, y=auc_roc, group=interaction(method_activity, eval_type))) +
+        geom_violin(aes(fill=eval_type), color=NA, trim=TRUE) +
+        geom_point(aes(fill=eval_type), color=PAL_DARK, size=0.1, 
+                   position=position_jitterdodge(dodge.width=0.9, jitter.width=0.1)) +
+        stat_summary(fun=median, geom="crossbar", linewidth=0.1, width=0.5, color="black", position=position_dodge(0.9)) + 
+        fill_palette(PAL_EVAL_TYPE) + 
+        geom_text(
+            aes(y = 0.3, label=label), 
+            . %>% 
+            count(method_activity, regulon_set, eval_type) %>% 
+            mutate(label=paste0("n=",n)),
+            position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        theme_pubr(x.text.angle = 45) +
+        facet_wrap(~regulon_set) +  
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Method", y="ROC AUC | Perturbations", fill="Inference Type")
+    
+    
+    ## across regulators
+    plts[["evaluation-general-regulators-auc_roc-violin"]] = X %>%
+        filter(regulon_set %in% SETS_MAIN) %>%
+        mutate(regulon_set = factor(regulon_set, levels=SETS_MAIN)) %>%
+        filter(curves_type=="combined" & eval_direction=="regulators" & n_tails=="two") %>%
+        ggplot(aes(x=method_activity, y=auc_roc, group=interaction(method_activity, eval_type))) +
+        geom_violin(aes(fill=eval_type), color=NA, trim=TRUE) +
+        geom_point(aes(fill=eval_type), color=PAL_DARK, size=0.1, 
+                   position=position_jitterdodge(dodge.width=0.9, jitter.width=0.1)) +
+        stat_summary(fun=median, geom="crossbar", linewidth=0.1, width=0.5, color="black", position=position_dodge(0.9)) + 
+        fill_palette(PAL_EVAL_TYPE) + 
+        geom_text(
+            aes(y = 0.3, label=label), 
+            . %>% 
+            count(method_activity, regulon_set, eval_type) %>% 
+            mutate(label=paste0("n=",n)),
+            position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        theme_pubr(x.text.angle = 45) +
+        facet_wrap(~regulon_set) +  
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Method", y="ROC AUC | Regulators", fill="Inference Type")
+    
+    # evaluation by single profile
+    ## perturbations
+    plts[["evaluation-single-perturbations-auc_roc-violin"]] = X %>%
+        filter(regulon_set %in% SETS_MAIN) %>%
+        mutate(regulon_set = factor(regulon_set, levels=SETS_MAIN)) %>%
+        filter(curves_type=="by_group" & eval_direction=="perturbations" & n_tails=="two") %>%
+        ggplot(aes(x=method_activity, y=auc_roc, group=interaction(method_activity, eval_type))) +
+        geom_violin(aes(fill=eval_type), color=NA, trim=TRUE) +
+        geom_point(aes(fill=eval_type), color=PAL_DARK, size=0.1, 
+                   position=position_jitterdodge(dodge.width=0.9, jitter.width=0.1)) +
+        stat_summary(fun=median, geom="crossbar", linewidth=0.1, width=0.5, color="black", position=position_dodge(0.9)) + 
+        fill_palette(PAL_EVAL_TYPE) + 
+        geom_text(
+            aes(y=-0.1, label=label), 
+            . %>% 
+            count(method_activity, regulon_set, eval_type) %>% 
+            mutate(label=paste0("n=",n)),
+            position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        theme_pubr(x.text.angle = 45) +
+        facet_wrap(~regulon_set) +  
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Method", y="AUC ROC | Perturbation", fill="Inference Type")    
+    
+    ## regulators
+    plts[["evaluation-single-regulators-auc_roc-violin"]] = X %>%
+        filter(regulon_set %in% SETS_MAIN) %>%
+        mutate(regulon_set = factor(regulon_set, levels=SETS_MAIN)) %>%
+        filter(curves_type=="by_group" & eval_direction=="regulators" & n_tails=="two") %>%
+        ggplot(aes(x=method_activity, y=auc_roc, group=interaction(method_activity, eval_type))) +
+        geom_violin(aes(fill=eval_type), color=NA, trim=TRUE) +
+        geom_point(aes(fill=eval_type), color=PAL_DARK, size=0.1, 
+                   position=position_jitterdodge(dodge.width=0.9, jitter.width=0.1)) +
+        stat_summary(fun=median, geom="crossbar", linewidth=0.1, width=0.5, color="black", position=position_dodge(0.9)) + 
+        fill_palette(PAL_EVAL_TYPE) + 
+        geom_text(
+            aes(y=-0.1, label=label), 
+            . %>% 
+            count(method_activity, regulon_set, eval_type) %>% 
+            mutate(label=paste0("n=",n)),
+            position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        theme_pubr(x.text.angle = 45) +
+        facet_wrap(~regulon_set) +  
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Method", y="AUC ROC | Regulator", fill="Inference Type")        
+    
+    # batch effects
+    ## between benchmark datasets
+    plts[["evaluation-batch_effect_datasets-perturbations-auc_roc-violin"]] = X %>%
+        filter(regulon_set %in% SETS_MAIN) %>%
+        filter(curves_type=="by_group" & eval_direction=="perturbations" & n_tails=="two") %>%
+        filter(regulon_set=="experimentally_derived_regulons_pruned") %>%
+        ggplot(aes(x=signature_id, y=auc_roc, group=interaction(signature_id, eval_type))) +
+        geom_violin(aes(fill=eval_type), color=NA, trim=TRUE) +
+        geom_point(aes(fill=eval_type), color=PAL_DARK, size=0.1, 
+                   position=position_jitterdodge(dodge.width=0.9, jitter.width=0.1)) +
+        stat_summary(fun=median, geom="crossbar", linewidth=0.1, width=0.5, color="black", position=position_dodge(0.9)) + 
+        fill_palette(PAL_EVAL_TYPE) + 
+        geom_text(
+            aes(y=-0.1, label=label), 
+            . %>% 
+            count(signature_id, regulon_set, method_activity, eval_type) %>% 
+            mutate(label=paste0("n=",n)),
+            position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        theme_pubr(x.text.angle = 45) +
+        facet_wrap(~regulon_set+method_activity) +  
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Method", y="AUC ROC | Perturbation", fill="Inference Type")
+    
+    plts[["evaluation-batch_effect_datasets-regulators-auc_roc-violin"]] = X %>%
+        filter(regulon_set %in% SETS_MAIN) %>%
+        filter(curves_type=="by_group" & eval_direction=="regulators" & n_tails=="two") %>%
+        filter(regulon_set=="experimentally_derived_regulons_pruned") %>%
+        ggplot(aes(x=signature_id, y=auc_roc, group=interaction(signature_id, eval_type))) +
+        geom_violin(aes(fill=eval_type), color=NA, trim=TRUE) +
+        geom_point(aes(fill=eval_type), color=PAL_DARK, size=0.1, 
+                   position=position_jitterdodge(dodge.width=0.9, jitter.width=0.1)) +
+        stat_summary(fun=median, geom="crossbar", linewidth=0.1, width=0.5, color="black", position=position_dodge(0.9)) + 
+        fill_palette(PAL_EVAL_TYPE) + 
+        geom_text(
+            aes(y=-0.1, label=label), 
+            . %>% 
+            count(signature_id, regulon_set, method_activity, eval_type) %>% 
+            mutate(label=paste0("n=",n)),
+            position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        theme_pubr(x.text.angle = 45) +
+        facet_wrap(~regulon_set+method_activity) +  
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Method", y="AUC ROC | Regulator", fill="Inference Type")
+    
+    ## performance considering the number of networks per regulator
+    plts[["evaluation-batch_effect_n_networks-regulators-auc_roc-violin"]] = X %>%
+        filter(regulon_set %in% SETS_MAIN) %>%
+        filter(curves_type=="by_group" & eval_direction=="regulators" & n_tails=="two") %>%
+        filter(regulon_set=="experimentally_derived_regulons_pruned" & method_activity=="viper") %>%
+        ggplot(aes(x=as.factor(n_networks_per_regulator), y=auc_roc, group=interaction(n_networks_per_regulator, eval_type))) +
+        geom_violin(aes(fill=eval_type), color=NA, trim=TRUE) +
+        geom_point(aes(color=eval_type), size=0.1, 
+                   position=position_jitterdodge(dodge.width=0.9, jitter.width=0.1)) +
+        stat_summary(fun=median, geom="crossbar", linewidth=0.1, width=0.5, color="black", position=position_dodge(0.9)) + 
+        fill_palette(PAL_EVAL_TYPE) + 
+        color_palette(PAL_EVAL_TYPE) + 
+        geom_text(
+            aes(y=-0.1, label=label), 
+            . %>% 
+            count(n_networks_per_regulator, regulon_set, method_activity, eval_type) %>% 
+            mutate(label=paste0("n=",n)),
+            position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        theme_pubr(x.text.angle = 0) +
+        facet_wrap(~regulon_set+method_activity) +  
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Method", y="AUC ROC | Regulator", fill="Inference Type", color="Inference Type")
+    
+    ## (TODO) explore performance on diverse cell types through ENASFS
+    X %>%
+        filter(regulon_set %in% SETS_MAIN) %>%
+        filter(curves_type=="by_group" & eval_direction=="regulators" & n_tails=="two") %>%
+        filter(regulon_set=="experimentally_derived_regulons_pruned" & signature_id=="ENASFS")
+    
+    ## (TODO) combined performance empirical networks with different thresholds
+    
+    ## (TODO) combined performance empirical netowkrs with different ablations
+    
+    ####### OLD ######
     
     X = evaluation %>%
         group_by(omic_type, eval_direction, eval_type, regulon_set, n_tails, regulon_set_id, pert_type_lab, regulator, n_targets_median, n_total_regulators, n_total_targets) %>%
@@ -435,18 +615,18 @@ main = function(){
     
     # prep
     evaluation = evaluation %>%
-        mutate(regulon_id = gsub("-","_",regulon_id)) %>%
-        filter(signature_id!=regulon_id) %>%
-        filter(!(str_detect(regulon_id,"ENASFS") & (signature_id=="ENASFS"))) %>%
+        # mutate(regulon_id = gsub("-","_",regulon_id)) %>%
+        # filter(signature_id!=regulon_id) %>%
+        # filter(!(str_detect(regulon_id,"ENASFS") & (signature_id=="ENASFS"))) %>%
         # consider only signatures that we know activity 
         # of the splicing factor was altered
-        filter(PERT_TYPE %in% c("KNOCKDOWN","KNOCKOUT","OVEREXPRESSION")) %>%
+        # filter(PERT_TYPE %in% c("KNOCKDOWN","KNOCKOUT","OVEREXPRESSION")) %>%
         mutate(
-            pert_type_lab = case_when(
-                PERT_TYPE=="KNOCKDOWN" ~ "KD",
-                PERT_TYPE=="KNOCKOUT" ~ "KO",
-                PERT_TYPE=="OVEREXPRESSION" ~ "OE"
-            ),
+            # pert_type_lab = case_when(
+            #     PERT_TYPE=="KNOCKDOWN" ~ "KD",
+            #     PERT_TYPE=="KNOCKOUT" ~ "KO",
+            #     PERT_TYPE=="OVEREXPRESSION" ~ "OE"
+            # ),
             regulon_set = gsub("-.*","",regulon_set_id)
         ) %>%
         left_join(regulators_per_target, by="regulon_set_id") %>%

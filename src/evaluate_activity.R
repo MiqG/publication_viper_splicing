@@ -14,14 +14,18 @@ require(clusterProfiler)
 # PREP_DIR = file.path(ROOT,"data","prep")
 # RESULTS_DIR = file.path(ROOT,"results","regulon_inference")
 # signature_file = file.path(PREP_DIR,'ground_truth_pert','ENCOREKO',"HepG2",'log2_fold_change_tpm.tsv.gz')
-# signature_file = file.path(PREP_DIR,'ground_truth_pert','ENCOREKO',"HepG2",'delta_psi-EX.tsv.gz')
-# regulons_path = file.path(RESULTS_DIR,"files","mlr_and_experimental_regulons-genexpr")
+# signature_file = file.path(PREP_DIR,'ground_truth_pert','ENCOREKD',"K562",'delta_psi-EX.tsv.gz')
 # regulons_path = file.path(RESULTS_DIR,"files","aracne_and_experimental_regulons-genexpr")
+# regulons_path = file.path(RESULTS_DIR,"files","mlr_regulons_development-EX")
+# eval_labels_file = file.path(RESULTS_DIR,"files","regulon_evaluation_labels","ENCOREKO_K562.tsv.gz")
 # regulons_path = file.path(RESULTS_DIR,"files","experimentally_derived_regulons_pruned-EX")
-# eval_labels_file = file.path(RESULTS_DIR,"files","regulon_evaluation_labels","ENCOREKO_HepG2.tsv.gz")
+
+# signature_file = file.path(PREP_DIR,'ground_truth_pert','ENASFS','delta_psi-EX.tsv.gz')
+# regulons_path = file.path(RESULTS_DIR,"files","mlr_and_experimental_regulons-EX")
+# eval_labels_file = file.path(RESULTS_DIR,"files","regulon_evaluation_labels","ENASFS.tsv.gz")
 # shadow_correction = "no"
 # n_tails = "two"
-# method_activity = "viper"
+# method_activity = "correlation_spearman"
 
 ##### FUNCTIONS #####
 as_regulon_network = function(regulons){
@@ -133,13 +137,17 @@ compute_enrichment = function(signature, networks_eval){
                 drop_na() %>%
                 deframe() %>%
                 sort(decreasing=TRUE)
+            x = x[x!=0] # remove 0s to avoid errors
 
-            result = GSEA(geneList=x, TERM2GENE=ontology, pvalueCutoff=1)
+            result = GSEA(geneList=x, TERM2GENE=ontology, pvalueCutoff=1.1)
 
             activities = result@result %>%
                 as.tibble() %>% 
                 distinct(Description, NES) %>%
                 deframe()
+        
+            s = sprintf("sample:%s and data length:%s", sample_oi, length(activities))
+            print(s)
 
             return(activities)
         }, simplify=FALSE) %>%
@@ -215,6 +223,12 @@ compute_curves = function(x, grouping_var){
     
     x = x %>%
         group_by(get(grouping_var)) %>%
+
+        # drop those with exactly the same activity
+        filter(n_distinct(activity) > 1) %>%
+        ungroup %>%
+        
+        group_by(get(grouping_var)) %>%
         # we changed the sign of overexpression activities, so we expect
         # perturbed splicing factors to have low activity; to evaluate 
         # we normalize such that the lower the closer to one and
@@ -223,13 +237,13 @@ compute_curves = function(x, grouping_var){
             activity_norm = -activity,
             activity_norm = (activity_norm - min(activity_norm)) / (max(activity_norm) - min(activity_norm))
         ) %>%
-        ungroup()   
+        ungroup()
     
     curves_by_group = x %>% 
         group_by(get(grouping_var)) %>%
         do({
             # summary
-            pert_sf_clean = .$pert_sf[is.finite(.$activity_norm)]
+            pert_sf_clean = .$pert_sf[is.finite(.$activity_norm)] # we replaced NAs
             
             # rank percentile
             mean_rp = mean(.$activity_norm[.$pert_sf=="Regulator"], na.rm=TRUE)
@@ -313,14 +327,17 @@ evaluate_activities = function(protein_activities, eval_labels){
         drop_na()
     
     # we consider only perturbations where the regulator was measured, keeping all regulators
+    # but regulators have different activities
     perts_oi = X %>%
-        filter(PERT_ENSEMBL == regulator) %>%
+        filter(PERT_ENSEMBL==regulator) %>%
         distinct(PERT_ID) %>%
         pull()
     curves_real_pert = X %>% 
         filter(PERT_ID %in% perts_oi) %>%
         compute_curves(., grouping_var="PERT_ID") %>%
-        rename(PERT_ID = `get(grouping_var)`)  %>%
+        rename(
+            PERT_ID = `get(grouping_var)`
+        )  %>%
         mutate(
             eval_direction = "perturbations",
             eval_type = "real"
@@ -331,7 +348,9 @@ evaluate_activities = function(protein_activities, eval_labels){
         mutate(activity = sample(activity)) %>%
         ungroup() %>%
         compute_curves(., grouping_var="PERT_ID") %>%
-        rename(PERT_ID = `get(grouping_var)`)  %>%
+        rename(
+            PERT_ID = `get(grouping_var)`
+        )  %>%
         mutate(
             eval_direction = "perturbations",
             eval_type = "random"
@@ -345,7 +364,9 @@ evaluate_activities = function(protein_activities, eval_labels){
     curves_real_sf = X %>% 
         filter(regulator %in% sfs_oi) %>%
         compute_curves(., grouping_var="regulator") %>%
-        rename(regulator = `get(grouping_var)`) %>%
+        rename(
+            regulator = `get(grouping_var)`
+        )  %>%
         mutate(
             eval_direction = "regulators",
             eval_type = "real"
@@ -356,7 +377,9 @@ evaluate_activities = function(protein_activities, eval_labels){
         mutate(activity = sample(activity)) %>%
         ungroup() %>%
         compute_curves(., grouping_var="regulator") %>%
-        rename(regulator = `get(grouping_var)`) %>%
+        rename(
+            regulator = `get(grouping_var)`
+        )  %>%
         mutate(
             eval_direction = "regulators",
             eval_type = "random"

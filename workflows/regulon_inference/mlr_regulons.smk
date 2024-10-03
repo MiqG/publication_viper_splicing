@@ -26,14 +26,16 @@ RESULTS_DIR = os.path.join(ROOT,"results","regulon_inference")
 SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
 
 EVENT_TYPES = ["EX"]
-OMIC_TYPES = ["genexpr"] + EVENT_TYPES
+OMIC_TYPES = EVENT_TYPES # ["genexpr"] + 
 
 GENEXPR_FILES = {
     "CardosoMoreira2020": os.path.join(PREP_DIR,'genexpr_tpm','CardosoMoreira2020.tsv.gz'),
+    "PANCAN_STN": os.path.join(PREP_DIR,'genexpr_tpm','PANCAN-SolidTissueNormal.tsv.gz'),
 }
 
 SPLICING_FILES = {
     "CardosoMoreira2020": os.path.join(PREP_DIR,'event_psi_imputed','CardosoMoreira2020-{omic_type}.tsv.gz'),
+    "PANCAN_STN": os.path.join(PREP_DIR,'event_psi_imputed','PANCAN-SolidTissueNormal-{omic_type}.tsv.gz'),
 }
 
 DATASETS = list(SPLICING_FILES.keys())

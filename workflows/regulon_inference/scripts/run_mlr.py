@@ -128,7 +128,7 @@ def main():
     ## regulators of interest
     regulators = regulators.loc[regulators.index.isin(regulators_oi)].copy()
     ## samples
-    common_samples = set(regulators.columns).intersection(targets.columns)
+    common_samples = list(set(regulators.columns).intersection(targets.columns))
     regulators = regulators[common_samples].dropna().copy()
     targets = targets[common_samples].copy()
     
