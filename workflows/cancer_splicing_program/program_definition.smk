@@ -72,10 +72,6 @@ OMICS = ["protein_activity","genexpr_tpm"]
 ##### RULES #####
 rule all:
     input:
-        # split by cancer type and sample type
-        expand(os.path.join(PREP_DIR,"event_psi","{cancer}-{sample}-EX.tsv.gz"), zip, cancer=CANCER_TYPES, sample=SAMPLE_TYPES),
-        expand(os.path.join(PREP_DIR,"genexpr_tpm","{cancer}-{sample}.tsv.gz"), zip, cancer=CANCER_TYPES, sample=SAMPLE_TYPES),
-        
         # calculate signatures
         expand(os.path.join(RESULTS_DIR,"files","signatures","{cancer}-PrimaryTumor_vs_SolidTissueNormal-EX.tsv.gz"), cancer=CANCER_TYPES_PTSTN),
         expand(os.path.join(RESULTS_DIR,"files","signatures","{cancer}-Metastatic_vs_PrimaryTumor-EX.tsv.gz"), cancer=CANCER_TYPES_METPT),
@@ -123,66 +119,6 @@ rule all:
         os.path.join(RESULTS_DIR,"figures","cancer_program")
         
 
-rule split_event_psi_by_cancer_and_sample_type:
-    input:
-        metadata = os.path.join(PREP_DIR,"metadata","{cancer}.tsv.gz"),
-        psi = os.path.join(PREP_DIR,"event_psi","{cancer}-EX.tsv.gz")
-    output:
-        psi = os.path.join(PREP_DIR,"event_psi","{cancer}-{sample}.tsv.gz")
-    params:
-        cancer_type = "{cancer}",
-        sample_type = "{sample}"
-    run:
-        import pandas as pd
-        
-        metadata = pd.read_table(input.metadata)
-        psi = pd.read_table(input.psi, index_col=0)
-        cancer_type = params.cancer_type
-        sample_type = params.sample_type
-        
-        idx = (metadata["cancer_type"]==cancer_type) & (metadata["sample_type_clean"]==sample_type)
-        samples_oi = metadata.loc[idx,"sampleID"].values
-        
-        psi = psi[samples_oi]
-        print(psi.shape)
-        
-        if psi.shape[1]>0:
-            print("Saving...")
-            psi.reset_index().to_csv(output.psi, **SAVE_PARAMS)
-        
-        print("Done!")
-
-
-rule split_genexpr_tpm_by_cancer_and_sample_type:
-    input:
-        metadata = os.path.join(PREP_DIR,"metadata","{cancer}.tsv.gz"),
-        genexpr = os.path.join(PREP_DIR,"genexpr_tpm","{cancer}.tsv.gz")
-    output:
-        genexpr = os.path.join(PREP_DIR,"genexpr_tpm","{cancer}-{sample}.tsv.gz")
-    params:
-        cancer_type = "{cancer}",
-        sample_type = "{sample}"
-    run:
-        import pandas as pd
-        
-        metadata = pd.read_table(input.metadata)
-        genexpr = pd.read_table(input.genexpr, index_col=0)
-        cancer_type = params.cancer_type
-        sample_type = params.sample_type
-        
-        idx = (metadata["cancer_type"]==cancer_type) & (metadata["sample_type_clean"]==sample_type)
-        samples_oi = metadata.loc[idx,"sampleID"].values
-        
-        genexpr = genexpr[samples_oi]
-        print(genexpr.shape)
-        
-        if genexpr.shape[1]>0:
-            print("Saving...")
-            genexpr.reset_index().to_csv(output.genexpr, **SAVE_PARAMS)
-        
-        print("Done!")
-
-        
 rule compute_signature_pt_vs_stn:
     input:
         splicing_pt = os.path.join(PREP_DIR,"event_psi","{cancer}-PrimaryTumor-EX.tsv.gz"),
