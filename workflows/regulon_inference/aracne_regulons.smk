@@ -46,7 +46,7 @@ rule all:
         expand(os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{omic_type}","pruned","network.txt"), dataset=DATASETS, omic_type=OMIC_TYPES),
         expand(os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{omic_type}","pruned","regulons.tsv.gz"), dataset=DATASETS, omic_type=OMIC_TYPES),
         # make regulon set
-        expand(os.path.join(RESULTS_DIR,"files","aracne_regulons_development-{omic_type}"), omic_type=OMIC_TYPES)
+        expand(os.path.join(RESULTS_DIR,"files","aracne_regulons_{dataset}-{omic_type}"), omic_type=OMIC_TYPES, dataset=DATASETS)
         
                
 # ----- ARACNe network reverse engineering -----
@@ -220,26 +220,22 @@ rule prepare_regulons:
         echo "Done!"
         """
         
-        
 rule make_regulon_sets:
     input:
-        regulons = [os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{omic_type}","pruned","regulons.tsv.gz").format(dataset=d, omic_type="{omic_type}") for d in DATASETS]
+        regulons = os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{omic_type}","pruned","regulons.tsv.gz")
     output:
-        regulons_dir = directory(os.path.join(RESULTS_DIR,"files","aracne_regulons_development-{omic_type}"))
-    threads: 1
-    resources:
-        runtime = 3600*1, # 1 h
-        memory = 10 # GB
+        regulons_dir = directory(os.path.join(RESULTS_DIR,"files","aracne_regulons_{dataset}-{omic_type}"))
     run:
         import os
         import shutil
         
         os.makedirs(output.regulons_dir, exist_ok=True)
-        for f in input.regulons:
-            dataset = os.path.basename(os.path.dirname(os.path.dirname(f))).split("-")[0]
-            filename = os.path.join(output.regulons_dir,"%s.tsv.gz") % dataset
-            shutil.copy(f, filename)
-            print("Copied", filename)
+
+        f = input.regulons
+        dataset = os.path.basename(os.path.dirname(os.path.dirname(f))).split("-")[0]
+        filename = os.path.join(output.regulons_dir,"%s.tsv.gz") % dataset
+        shutil.copy(f, filename)
+        print("Copied", filename)
             
         print("Done!")
         
