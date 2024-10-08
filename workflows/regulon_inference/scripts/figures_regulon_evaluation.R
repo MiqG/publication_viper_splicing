@@ -14,8 +14,10 @@ require(extrafont)
 
 # variables
 REGULON_SETS = c(
-    'aracne_regulons_development',
-    'mlr_regulons_development',
+    'aracne_regulons_CardosoMoreira2020',
+    'mlr_regulons_CardosoMoreira2020',
+    'aracne_regulons_PANCAN_STN',
+    'mlr_regulons_PANCAN_STN',
     'experimentally_derived_regulons_pruned',
     'aracne_and_experimental_regulons',
     'mlr_and_experimental_regulons',
@@ -30,8 +32,11 @@ REGULON_SETS = c(
 )
 
 SETS_MAIN = c(
-    'aracne_regulons_development',
-    'mlr_regulons_development',
+    'aracne_regulons_CardosoMoreira2020',
+    'mlr_regulons_CardosoMoreira2020',
+    'aracne_regulons_PANCAN_STN',
+    'mlr_regulons_PANCAN_STN',
+    'splicinglore_regulons',
     'experimentally_derived_regulons_pruned'
 )
 
@@ -80,6 +85,15 @@ PAL_EVAL_TYPE = c(
     "real" = "orange"
 )
 
+METHODS_ACTIVITY = c(
+    "gsea",
+    "correlation_spearman",
+    "correlation_pearson",
+    "viper"
+)
+
+SF_CLASS = c("Core", "RBP", "Other")
+
 # Development
 # -----------
 # ROOT = here::here()
@@ -92,10 +106,11 @@ PAL_EVAL_TYPE = c(
 # targets_per_regulator_robustness_file = file.path(RESULTS_DIR,"files","regulon_properties","targets_per_regulator-EX.tsv.gz")
 # regulators_per_target_thresholds_file = file.path(RESULTS_DIR,"files","regulon_properties","dPSIthresh-regulators_per_target-EX.tsv.gz")
 # targets_per_regulator_thresholds_file = file.path(RESULTS_DIR,"files","regulon_properties","dPSIthresh-targets_per_regulator-EX.tsv.gz")
+# splicing_factors_file = file.path(SUPPORT_DIR,"splicing_factors","splicing_factors.tsv")
 # figs_dir = file.path(RESULTS_DIR,"figures","regulon_evaluation")
 
 ##### FUNCTIONS #####
-plot_evaluation = function(evaluation, omic_type_oi){
+plot_evaluation = function(evaluation){
     plts = list()
     
     X = evaluation
@@ -104,7 +119,10 @@ plot_evaluation = function(evaluation, omic_type_oi){
     ## across perturbations
     plts[["evaluation-general-perturbations-auc_roc-violin"]] = X %>%
         filter(regulon_set %in% SETS_MAIN) %>%
-        mutate(regulon_set = factor(regulon_set, levels=SETS_MAIN)) %>%
+        mutate(
+            regulon_set = factor(regulon_set, levels=SETS_MAIN),
+            method_activity = factor(method_activity, levels=METHODS_ACTIVITY)
+        ) %>%
         filter(curves_type=="combined" & eval_direction=="perturbations" & n_tails=="two") %>%
         ggplot(aes(x=method_activity, y=auc_roc, group=interaction(method_activity, eval_type))) +
         geom_violin(aes(fill=eval_type), color=NA, trim=TRUE) +
@@ -128,7 +146,10 @@ plot_evaluation = function(evaluation, omic_type_oi){
     ## across regulators
     plts[["evaluation-general-regulators-auc_roc-violin"]] = X %>%
         filter(regulon_set %in% SETS_MAIN) %>%
-        mutate(regulon_set = factor(regulon_set, levels=SETS_MAIN)) %>%
+        mutate(
+            regulon_set = factor(regulon_set, levels=SETS_MAIN),
+            method_activity = factor(method_activity, levels=METHODS_ACTIVITY)
+        ) %>%
         filter(curves_type=="combined" & eval_direction=="regulators" & n_tails=="two") %>%
         ggplot(aes(x=method_activity, y=auc_roc, group=interaction(method_activity, eval_type))) +
         geom_violin(aes(fill=eval_type), color=NA, trim=TRUE) +
@@ -152,7 +173,10 @@ plot_evaluation = function(evaluation, omic_type_oi){
     ## perturbations
     plts[["evaluation-single-perturbations-auc_roc-violin"]] = X %>%
         filter(regulon_set %in% SETS_MAIN) %>%
-        mutate(regulon_set = factor(regulon_set, levels=SETS_MAIN)) %>%
+        mutate(
+            regulon_set = factor(regulon_set, levels=SETS_MAIN),
+            method_activity = factor(method_activity, levels=METHODS_ACTIVITY)
+        ) %>%
         filter(curves_type=="by_group" & eval_direction=="perturbations" & n_tails=="two") %>%
         ggplot(aes(x=method_activity, y=auc_roc, group=interaction(method_activity, eval_type))) +
         geom_violin(aes(fill=eval_type), color=NA, trim=TRUE) +
@@ -175,7 +199,10 @@ plot_evaluation = function(evaluation, omic_type_oi){
     ## regulators
     plts[["evaluation-single-regulators-auc_roc-violin"]] = X %>%
         filter(regulon_set %in% SETS_MAIN) %>%
-        mutate(regulon_set = factor(regulon_set, levels=SETS_MAIN)) %>%
+        mutate(
+            regulon_set = factor(regulon_set, levels=SETS_MAIN),
+            method_activity = factor(method_activity, levels=METHODS_ACTIVITY)
+        ) %>%
         filter(curves_type=="by_group" & eval_direction=="regulators" & n_tails=="two") %>%
         ggplot(aes(x=method_activity, y=auc_roc, group=interaction(method_activity, eval_type))) +
         geom_violin(aes(fill=eval_type), color=NA, trim=TRUE) +
@@ -217,7 +244,7 @@ plot_evaluation = function(evaluation, omic_type_oi){
         theme_pubr(x.text.angle = 45) +
         facet_wrap(~regulon_set+method_activity) +  
         theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
-        labs(x="Method", y="AUC ROC | Perturbation", fill="Inference Type")
+        labs(x="Benchmark Signature", y="AUC ROC | Perturbation", fill="Inference Type")
     
     plts[["evaluation-batch_effect_datasets-regulators-auc_roc-violin"]] = X %>%
         filter(regulon_set %in% SETS_MAIN) %>%
@@ -263,7 +290,35 @@ plot_evaluation = function(evaluation, omic_type_oi){
         theme_pubr(x.text.angle = 0) +
         facet_wrap(~regulon_set+method_activity) +  
         theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
-        labs(x="Method", y="AUC ROC | Regulator", fill="Inference Type", color="Inference Type")
+        labs(x="N. Independent Signatures per Regulator", y="AUC ROC | Regulator", fill="Inference Type", color="Inference Type")
+    
+    ## performance of different regulators according to their general class
+    plts[["evaluation-sf_class-regulators-auc_roc-violin"]] = X %>%
+        filter(regulon_set %in% SETS_MAIN) %>%
+        mutate(
+            regulon_set = factor(regulon_set, levels=SETS_MAIN),
+            method_activity = factor(method_activity, levels=METHODS_ACTIVITY),
+            sf_class = factor(sf_class, levels=SF_CLASS)
+        ) %>%
+        filter(curves_type=="by_group" & eval_direction=="regulators" & n_tails=="two") %>%
+        filter(method_activity=="viper") %>%
+        ggplot(aes(x=sf_class, y=auc_roc, group=interaction(sf_class, eval_type))) +
+        geom_violin(aes(fill=eval_type), color=NA, trim=TRUE) +
+        geom_point(aes(fill=eval_type), color=PAL_DARK, size=0.1, 
+                   position=position_jitterdodge(dodge.width=0.9, jitter.width=0.1)) +
+        stat_summary(fun=median, geom="crossbar", linewidth=0.1, width=0.5, color="black", position=position_dodge(0.9)) + 
+        fill_palette(PAL_EVAL_TYPE) + 
+        geom_text(
+            aes(y=-0.1, label=label), 
+            . %>% 
+            count(sf_class, regulon_set, method_activity, eval_type) %>% 
+            mutate(label=paste0("n=",n)),
+            position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        theme_pubr(x.text.angle = 45) +
+        facet_wrap(~regulon_set+method_activity) +  
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Method", y="AUC ROC | Regulator", fill="Inference Type") 
     
     ## (TODO) explore performance on diverse cell types through ENASFS
     X %>%
@@ -573,10 +628,8 @@ main = function(){
     dir.create(figs_dir, recursive = TRUE)
     
     # load
-    evaluation = list(
-        read_tsv(evaluation_ex_file)
-    ) %>%
-    bind_rows()
+    evaluation = read_tsv(evaluation_ex_file)
+    splicing_factors = read_tsv(splicing_factors_file)
     
     targets_per_regulator = list(
         read_tsv(targets_per_regulator_robustness_file),
@@ -615,22 +668,17 @@ main = function(){
     
     # prep
     evaluation = evaluation %>%
-        # mutate(regulon_id = gsub("-","_",regulon_id)) %>%
-        # filter(signature_id!=regulon_id) %>%
-        # filter(!(str_detect(regulon_id,"ENASFS") & (signature_id=="ENASFS"))) %>%
-        # consider only signatures that we know activity 
-        # of the splicing factor was altered
-        # filter(PERT_TYPE %in% c("KNOCKDOWN","KNOCKOUT","OVEREXPRESSION")) %>%
         mutate(
-            # pert_type_lab = case_when(
-            #     PERT_TYPE=="KNOCKDOWN" ~ "KD",
-            #     PERT_TYPE=="KNOCKOUT" ~ "KO",
-            #     PERT_TYPE=="OVEREXPRESSION" ~ "OE"
-            # ),
             regulon_set = gsub("-.*","",regulon_set_id)
         ) %>%
-        left_join(regulators_per_target, by="regulon_set_id") %>%
-        left_join(targets_per_regulator, by="regulon_set_id")
+        left_join(splicing_factors, by=c("regulator"="ENSEMBL")) %>%
+        mutate(
+            sf_class = case_when(
+                !is.na(spliceosome_db_complex) ~ "Core",
+                in_go_rbp ~ "RBP",
+                TRUE ~ "Other"
+            )
+        )
     
     # plot
     plts = make_plots(evaluation)

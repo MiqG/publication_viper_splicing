@@ -36,9 +36,11 @@ METADATA_FILES = [
 REGULON_SETS = [
     # general comparison
     "experimentally_derived_regulons_pruned",
-    "aracne_regulons_development",
-    "mlr_regulons_development",
-    #"postar3_clip_regulons",
+    "aracne_regulons_CardosoMoreira2020",
+    "aracne_regulons_PANCAN_STN",
+    "mlr_regulons_CardosoMoreira2020",
+    "mlr_regulons_PANCAN_STN",
+    "postar3_clip_regulons",
     "splicinglore_regulons",
     # empirical vs computational networks
     "aracne_and_experimental_regulons",
@@ -46,7 +48,9 @@ REGULON_SETS = [
     "aracne_and_mlr_regulons"
 ]
 
-METHODS_ACTIVITY = ["viper","correlation_pearson","correlation_spearman"]#,"gsea"]
+METHODS_ACTIVITY = ["viper","correlation_pearson","correlation_spearman","gsea"]
+METHODS_ACTIVITY = {r: METHODS_ACTIVITY for r in REGULON_SETS}
+METHODS_ACTIVITY["postar3_clip_regulons"] = ["viper","gsea"]
 
 TOP_N = [100, 90, 80, 70, 60, 50, 40]
 ROBUSTNESS_EVAL_SETS = ["top{N}_experimentally_derived_regulons_pruned".format(N=n) for n in TOP_N]
@@ -54,8 +58,11 @@ THRESH_DPSI = [5,10,15,20,25,30,35,40,45]
 THRESHOLDS_EVAL_SETS = ["dPSIthresh{thresh}_experimentally_derived_regulons_pruned".format(thresh=t) for t in THRESH_DPSI]
 #REGULON_SETS = REGULON_SETS + ROBUSTNESS_EVAL_SETS + THRESHOLDS_EVAL_SETS
 
-SHADOWS = ["no"] # bug in viper does not allow shadow correction
-N_TAILS = ["two"] #["one","two"]
+# prepare lists for zip expand
+OMIC_TYPE_ZIPLIST = ["EX" for r in REGULON_SETS for m in METHODS_ACTIVITY[r] for e in EVAL_DATASETS]
+REGULON_SETS_ZIPLIST = [r for r in REGULON_SETS for m in METHODS_ACTIVITY[r] for e in EVAL_DATASETS]
+EVAL_DATASETS_ZIPLIST = [e for r in REGULON_SETS for m in METHODS_ACTIVITY[r] for e in EVAL_DATASETS]
+METHODS_ACTIVITY_ZIPLIST = [m for r in REGULON_SETS for m in METHODS_ACTIVITY[r] for e in EVAL_DATASETS]
 
 ##### RULES #####
 rule all:
@@ -65,7 +72,7 @@ rule all:
         
         # evaluate regulons
         ## run
-        expand(os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{method_activity}","{regulon_set}-{dataset}-{omic_type}-shadow_{shadow}-{n_tails}_tailed.tsv.gz"), regulon_set=REGULON_SETS, dataset=EVAL_DATASETS, omic_type=OMIC_TYPES, shadow=SHADOWS, n_tails=N_TAILS, method_activity=METHODS_ACTIVITY),
+        expand(os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{method_activity}","{regulon_set}-{dataset}-{omic_type}-shadow_no-two_tailed.tsv.gz"), zip, regulon_set=REGULON_SETS_ZIPLIST, dataset=EVAL_DATASETS_ZIPLIST, method_activity=METHODS_ACTIVITY_ZIPLIST, omic_type=OMIC_TYPE_ZIPLIST),
         ## merge
         expand(os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","merged-{omic_type}.tsv.gz"), omic_type=OMIC_TYPES),
         
@@ -135,12 +142,12 @@ rule evaluate_regulons:
         regulons = os.path.join(RESULTS_DIR,"files","{regulon_set}-{omic_type}"),
         eval_labels = os.path.join(RESULTS_DIR,"files","regulon_evaluation_labels")
     output:
-        os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{method_activity}","{regulon_set}-{dataset}-{omic_type}-shadow_{shadow}-{n_tails}_tailed.tsv.gz")
+        os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{method_activity}","{regulon_set}-{dataset}-{omic_type}-shadow_no-two_tailed.tsv.gz")
     params:
         eval_labels = os.path.join(RESULTS_DIR,"files","regulon_evaluation_labels","{dataset}.tsv.gz"),
         script_dir = SRC_DIR,
-        shadow = "{shadow}",
-        n_tails = "{n_tails}",
+        shadow = "no",
+        n_tails = "two",
         method_activity = "{method_activity}"
     shell:
         """
@@ -157,7 +164,7 @@ rule evaluate_regulons:
         
 rule combine_evaluations:
     input:
-        evaluations = [os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{method_activity}","{regulon_set}-{dataset}-{omic_type}-shadow_{shadow}-{n_tails}_tailed.tsv.gz").format(regulon_set=r, dataset=d, omic_type="{omic_type}", shadow=s, n_tails=n, method_activity=m) for r in REGULON_SETS for d in EVAL_DATASETS for s in SHADOWS for n in N_TAILS for m in METHODS_ACTIVITY]
+        evaluations = [os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{method_activity}","{regulon_set}-{dataset}-{omic_type}-shadow_no-two_tailed.tsv.gz").format(regulon_set=r, dataset=d, omic_type="{omic_type}", method_activity=m) for r in REGULON_SETS for d in EVAL_DATASETS for m in METHODS_ACTIVITY.keys()]
     output:
         os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","merged-{omic_type}.tsv.gz")
     params:

@@ -84,6 +84,8 @@ tcga_metadata = tcga_metadata.loc[tcga_metadata["n"]>=3]
 CANCER_TYPES_SPLIT = tcga_metadata["cancer_type"].values
 SAMPLE_TYPES_SPLIT = tcga_metadata["sample_type_clean"].values
 CANCER_TYPES_STN = tcga_metadata.loc[tcga_metadata["sample_type_clean"]=="SolidTissueNormal","cancer_type"].values
+CANCER_TYPES_PT = tcga_metadata.loc[tcga_metadata["sample_type_clean"]=="PrimaryTumor","cancer_type"].values
+CANCER_TYPES_CONCAT = {"SolidTissueNormal": CANCER_TYPES_STN, "PrimaryTumor": CANCER_TYPES_PT}
         
 ##### RULES #####
 rule all:
@@ -216,8 +218,8 @@ rule all:
         expand(os.path.join(PREP_DIR,"event_psi","{cancer}-{sample}-EX.tsv.gz"), zip, cancer=CANCER_TYPES_SPLIT, sample=SAMPLE_TYPES_SPLIT),
         expand(os.path.join(PREP_DIR,"genexpr_tpm","{cancer}-{sample}.tsv.gz"), zip, cancer=CANCER_TYPES_SPLIT, sample=SAMPLE_TYPES_SPLIT),
         ## concatenate by sample type
-        expand(os.path.join(PREP_DIR,"event_psi","PANCAN-{sample}-EX.tsv.gz"), sample=["SolidTissueNormal"]),
-        expand(os.path.join(PREP_DIR,"genexpr_tpm","PANCAN-{sample}.tsv.gz"), sample=["SolidTissueNormal"]),
+        expand(os.path.join(PREP_DIR,"event_psi","PANCAN-{sample}-EX.tsv.gz"), sample=["SolidTissueNormal","PrimaryTumor"]),
+        expand(os.path.join(PREP_DIR,"genexpr_tpm","PANCAN-{sample}.tsv.gz"), sample=["SolidTissueNormal","PrimaryTumor"]),
         
         # POSTAR3 preprocessing
         os.path.join(PREP_DIR,"clip_peaks_mapped","POSTAR3.tsv.gz"),
@@ -2021,7 +2023,7 @@ rule concatenate_tcga_splicing:
     input:
         tables = lambda wildcards: [
             os.path.join(PREP_DIR,"event_psi","{cancer}-{sample}-EX.tsv.gz").format(cancer=c, sample=wildcards.sample) 
-            for c in CANCER_TYPES_STN
+            for c in CANCER_TYPES_CONCAT[wildcards.sample]
         ]
     output:
         os.path.join(PREP_DIR,"event_psi","PANCAN-{sample}-EX.tsv.gz")
@@ -2041,14 +2043,18 @@ rule concatenate_tcga_genexpr:
     input:
         tables = lambda wildcards: [
             os.path.join(PREP_DIR,"genexpr_tpm","{cancer}-{sample}.tsv.gz").format(cancer=c, sample=wildcards.sample) 
-            for c in CANCER_TYPES_STN
+            for c in CANCER_TYPES_CONCAT[wildcards.sample]
         ]
     output:
         os.path.join(PREP_DIR,"genexpr_tpm","PANCAN-{sample}.tsv.gz")
     run:
         import pandas as pd
         
-        table = pd.concat([pd.read_table(f, index_col=0) for f in input.tables], axis=1)
+        table = []
+        for f in input.tables:
+            print(f)
+            table.append(pd.read_table(f, index_col=0))
+        table = pd.concat(table, axis=1)
         
         print(table.shape)
         

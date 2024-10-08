@@ -19,13 +19,14 @@ require(clusterProfiler)
 # regulons_path = file.path(RESULTS_DIR,"files","mlr_regulons_development-EX")
 # eval_labels_file = file.path(RESULTS_DIR,"files","regulon_evaluation_labels","ENCOREKO_K562.tsv.gz")
 # regulons_path = file.path(RESULTS_DIR,"files","experimentally_derived_regulons_pruned-EX")
+# regulons_path = file.path(RESULTS_DIR,"files","mlr_and_experimental_regulons-EX")
 
 # signature_file = file.path(PREP_DIR,'ground_truth_pert','ENASFS','delta_psi-EX.tsv.gz')
-# regulons_path = file.path(RESULTS_DIR,"files","mlr_and_experimental_regulons-EX")
+# regulons_path = file.path(RESULTS_DIR,"files","postar3_clip_regulons-EX")
 # eval_labels_file = file.path(RESULTS_DIR,"files","regulon_evaluation_labels","ENASFS.tsv.gz")
 # shadow_correction = "no"
 # n_tails = "two"
-# method_activity = "correlation_spearman"
+# method_activity = "gsea"
 
 ##### FUNCTIONS #####
 as_regulon_network = function(regulons){
@@ -67,6 +68,7 @@ load_networks = function(network_path, n_tails="two", patt=NULL){
                 network_file = basename(network_file),
                 study_accession = gsub("-","_",gsub(".tsv.gz","",network_file))
             )
+        gc()
         return(network)
     }, simplify=FALSE) %>% bind_rows()
     
@@ -98,27 +100,52 @@ prep_regulons = function(networks){
     return(regulons)
 }
 
-compute_correlations = function(signature, networks, cor_method){
+compute_correlations = function(signature, networks, cor_method, batch_size=NULL){
+    
+    avail_regulators = unique(networks[["regulator"]])
+    
+    if (!is.null(batch_size)){
+        regulators_batches = split(avail_regulators, ceiling(seq_along(avail_regulators) / batch_size))
+    }else{
+        regulators_batches = list(avail_regulators)
+    }
+    
     protein_activities = sapply(names(signature), function(sample_oi){
+            gc()
+            print(sample_oi)
+        
             x = signature[, sample_oi, drop=FALSE] %>%
                 rownames_to_column("target") %>%
                 drop_na()
-
-            activities = networks %>%
-                left_join(x, by="target") %>%
-                group_by(regulator) %>%
-                summarize(
-                    activity = cor(
-                        tfmode*likelihood, get(sample_oi), 
-                        method=cor_method, use="pairwise.complete.obs"
-                    )
-                ) %>%
-                ungroup() %>%
-                deframe()
-
+            
+            activities = lapply(regulators_batches, function(regulators_oi){
+                gc()
+                
+                print(regulators_oi)
+                
+                correlation = networks %>%
+                    filter(regulator%in%regulators_oi) %>%
+                    left_join(x, by="target") %>%
+                    group_by(regulator) %>%
+                    summarize(
+                        activity = cor(
+                            tfmode*likelihood, get(sample_oi), 
+                            method=cor_method, use="pairwise.complete.obs"
+                        )
+                    ) %>%
+                    ungroup()
+                    
+                gc()
+                return(correlation)
+            }) %>% 
+            bind_rows() %>%
+            deframe()
+            
+            gc()
             return(activities)
-        }, simplify=FALSE) %>%
+        }, simplify=FALSE) %>% 
         do.call(cbind, .)
+
     
     return(protein_activities)
 }
@@ -149,6 +176,7 @@ compute_enrichment = function(signature, networks_eval){
             s = sprintf("sample:%s and data length:%s", sample_oi, length(activities))
             print(s)
 
+            gc()
             return(activities)
         }, simplify=FALSE) %>%
         do.call(cbind, .)
@@ -156,31 +184,42 @@ compute_enrichment = function(signature, networks_eval){
     return(protein_activities)
 }
 
-compute_activity = function(signature, networks_eval, method_activity, shadow_correction="no"){
+compute_activity = function(signature, networks_eval, method_activity, shadow_correction="no", batch_size=NULL){
     
-    if (method_activity=="viper"){
-        
-        # run metaVIPER with all possible regulons
-        regulons = prep_regulons(networks_eval)
-        pleiotropy = (shadow_correction=="yes")
-        protein_activities = viper(signature, regulons, verbose=FALSE, pleiotropy=pleiotropy)
-    
-    } else if (method_activity=="correlation_pearson"){
-        
-        # correlate networks with each sample
-        protein_activities = compute_correlations(signature, networks_eval, "pearson")
-    
-    } else if (method_activity=="correlation_spearman"){
-        
-        # correlate networks with each sample
-        protein_activities = compute_correlations(signature, networks_eval, "spearman")
-
-    } else if (method_activity=="gsea"){
-        
-        protein_activities = compute_enrichment(signature, networks_eval)
-        
+    if (!is.null(batch_size)){
+        sample_batches = split(names(signature), ceiling(seq_along(names(signature)) / batch_size))
+    }else{
+        sample_batches = list(names(signature))
     }
+    
+    protein_activities = lapply(sample_batches, function(batch){
         
+        if (method_activity=="viper"){
+
+            # run metaVIPER with all possible regulons
+            regulons = prep_regulons(networks_eval)
+            pleiotropy = (shadow_correction=="yes")
+            protein_activities = viper(signature[, batch, drop=FALSE], regulons, verbose=FALSE, pleiotropy=pleiotropy)
+
+        } else if (method_activity=="correlation_pearson"){
+
+            # correlate networks with each sample
+            protein_activities = compute_correlations(signature[, batch, drop=FALSE], networks_eval, "pearson")
+
+        } else if (method_activity=="correlation_spearman"){
+
+            # correlate networks with each sample
+            protein_activities = compute_correlations(signature[, batch, drop=FALSE], networks_eval, "spearman")
+
+        } else if (method_activity=="gsea"){
+
+            protein_activities = compute_enrichment(signature[, batch, drop=FALSE], networks_eval)
+
+        }
+    
+    })
+    protein_activities = do.call(cbind, protein_activities)
+    
     return(protein_activities)
 }
 
@@ -431,7 +470,7 @@ main = function(){
     signature = read_tsv(signature_file)
     networks = load_networks(regulons_path, n_tails)
     eval_labels = read_tsv(eval_labels_file)
-    
+
     # prep
     ## signature
     signature = signature %>% as.data.frame()
