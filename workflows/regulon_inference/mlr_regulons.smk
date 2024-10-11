@@ -31,11 +31,13 @@ OMIC_TYPES = EVENT_TYPES # ["genexpr"] +
 GENEXPR_FILES = {
     "CardosoMoreira2020": os.path.join(PREP_DIR,'genexpr_tpm','CardosoMoreira2020.tsv.gz'),
     "PANCAN_STN": os.path.join(PREP_DIR,'genexpr_tpm','PANCAN-SolidTissueNormal.tsv.gz'),
+    "PANCAN_PT": os.path.join(PREP_DIR,'genexpr_tpm','PANCAN-PrimaryTumor.tsv.gz')
 }
 
 SPLICING_FILES = {
     "CardosoMoreira2020": os.path.join(PREP_DIR,'event_psi_imputed','CardosoMoreira2020-{omic_type}.tsv.gz'),
     "PANCAN_STN": os.path.join(PREP_DIR,'event_psi_imputed','PANCAN-SolidTissueNormal-{omic_type}.tsv.gz'),
+    "PANCAN_PT": os.path.join(PREP_DIR,'event_psi_imputed','PANCAN-PrimaryTumor-{omic_type}.tsv.gz')
 }
 
 DATASETS = list(SPLICING_FILES.keys())

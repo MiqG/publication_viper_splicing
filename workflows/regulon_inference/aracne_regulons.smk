@@ -14,11 +14,13 @@ OMIC_TYPES = EVENT_TYPES # ["genexpr"] +
 GENEXPR_FILES = {
     "CardosoMoreira2020": os.path.join(PREP_DIR,'genexpr_tpm','CardosoMoreira2020.tsv.gz'),
     "PANCAN_STN": os.path.join(PREP_DIR,'genexpr_tpm','PANCAN-SolidTissueNormal.tsv.gz'),
+    "PANCAN_PT": os.path.join(PREP_DIR,'genexpr_tpm','PANCAN-PrimaryTumor.tsv.gz')
 }
 
 SPLICING_FILES = {
     "CardosoMoreira2020": os.path.join(PREP_DIR,'event_psi_imputed','CardosoMoreira2020-{omic_type}.tsv.gz'),
     "PANCAN_STN": os.path.join(PREP_DIR,'event_psi_imputed','PANCAN-SolidTissueNormal-{omic_type}.tsv.gz'),
+    "PANCAN_PT": os.path.join(PREP_DIR,'event_psi_imputed','PANCAN-PrimaryTumor-{omic_type}.tsv.gz')
 }
 
 DATASETS = list(SPLICING_FILES.keys())
@@ -86,7 +88,7 @@ rule regulon_inference_aracne_java_threshold:
     threads: 12
     resources:
         runtime = 3600*12, # 12h 
-        memory = 5, # 5GB
+        memory = 15, # GB
     shell:
         """
         set -eo pipefail
@@ -121,7 +123,7 @@ rule regulon_inference_aracne_java_bootstrap:
     threads: 6
     resources:
         runtime = 3600*12, # 12h 
-        memory = 5, # 5GB
+        memory = 15, # GB
     shell:
         """
         set -eo pipefail
@@ -152,7 +154,7 @@ rule regulon_inference_aracne_prune_bootstraps:
     threads: 1
     resources:
         runtime = 3600*1, # 1 h
-        memory = 10 # 10 GB
+        memory = 15 # GB
     shell:
         """
         set -eo pipefail
@@ -180,7 +182,7 @@ rule regulon_inference_aracne_java_consolidation:
     threads: 12
     resources:
         runtime = 3600*12, # 12h 
-        memory = 20, # 15GB
+        memory = 20, # GB
     shell:
         """
         set -eo pipefail

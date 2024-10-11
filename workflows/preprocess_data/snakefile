@@ -150,7 +150,7 @@ rule all:
         expand(os.path.join(PREP_DIR,'ground_truth_pert','ENASFS','delta_psi-{event_type}.tsv.gz'), event_type=EVENT_TYPES),
         
         # impute event PSI
-        expand(os.path.join(PREP_DIR,'event_psi_imputed','{dataset}-{event_type}.tsv.gz'), dataset=["CardosoMoreira2020","PANCAN-SolidTissueNormal"], event_type=EVENT_TYPES),
+        expand(os.path.join(PREP_DIR,'event_psi_imputed','{dataset}-{event_type}.tsv.gz'), dataset=["CardosoMoreira2020","PANCAN-SolidTissueNormal","PANCAN-PrimaryTumor"], event_type=EVENT_TYPES),
         
         # compute summary stats
         expand(os.path.join(PREP_DIR,"summary_stats","event_psi_imputed","{dataset}-EX.tsv.gz"), dataset=DATASETS),
@@ -1036,6 +1036,11 @@ rule impute_psi:
         method = 'knn',
         method_kws = '\'{"n_neighbors":5}\'',
         features_as_rows = True
+    threads: 1
+    resources:
+        # runtime = 3600*6, # h 
+        runtime = 60*24, # h 
+        memory = 300, # GB
     shell:
         """
         python scripts/impute_nan.py \

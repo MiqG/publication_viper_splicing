@@ -66,7 +66,7 @@ def fit_single(x_genexpr, y_splicing, thresh_pvalue, thresh_fdr):
     return result
 
 
-def fit_all(regulators, targets, thresh_pvalue, thresh_fdr, n_jobs, batch_size=10000):
+def fit_all(regulators, targets, thresh_pvalue, thresh_fdr, n_jobs, batch_size=1000):
     
     n_targets = targets.shape[0]
     n_batches = int(np.ceil(n_targets / batch_size))
