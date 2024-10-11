@@ -112,7 +112,6 @@ compute_correlations = function(signature, networks, cor_method, batch_size=NULL
     
     protein_activities = sapply(names(signature), function(sample_oi){
             gc()
-            print(sample_oi)
         
             x = signature[, sample_oi, drop=FALSE] %>%
                 rownames_to_column("target") %>%
@@ -120,8 +119,6 @@ compute_correlations = function(signature, networks, cor_method, batch_size=NULL
             
             activities = lapply(regulators_batches, function(regulators_oi){
                 gc()
-                
-                print(regulators_oi)
                 
                 correlation = networks %>%
                     filter(regulator%in%regulators_oi) %>%

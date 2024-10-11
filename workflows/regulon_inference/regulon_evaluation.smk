@@ -41,6 +41,8 @@ REGULON_SETS = [
     "mlr_regulons_CardosoMoreira2020",
     "mlr_regulons_PANCAN_STN",
     "postar3_clip_regulons",
+    "postar3_and_experimental_regulons",
+    "experimental_without_postar3_regulons",
     "splicinglore_regulons",
     # empirical vs computational networks
     "aracne_and_experimental_regulons",
@@ -48,15 +50,15 @@ REGULON_SETS = [
     "aracne_and_mlr_regulons"
 ]
 
-METHODS_ACTIVITY = ["viper","correlation_pearson","correlation_spearman","gsea"]
-METHODS_ACTIVITY = {r: METHODS_ACTIVITY for r in REGULON_SETS}
-METHODS_ACTIVITY["postar3_clip_regulons"] = ["viper","gsea"]
-
 TOP_N = [100, 90, 80, 70, 60, 50, 40]
 ROBUSTNESS_EVAL_SETS = ["top{N}_experimentally_derived_regulons_pruned".format(N=n) for n in TOP_N]
 THRESH_DPSI = [5,10,15,20,25,30,35,40,45]
 THRESHOLDS_EVAL_SETS = ["dPSIthresh{thresh}_experimentally_derived_regulons_pruned".format(thresh=t) for t in THRESH_DPSI]
-#REGULON_SETS = REGULON_SETS + ROBUSTNESS_EVAL_SETS + THRESHOLDS_EVAL_SETS
+REGULON_SETS = REGULON_SETS + ROBUSTNESS_EVAL_SETS + THRESHOLDS_EVAL_SETS
+
+METHODS_ACTIVITY = ["viper","correlation_pearson","correlation_spearman","gsea"]
+METHODS_ACTIVITY = {r: METHODS_ACTIVITY for r in REGULON_SETS}
+METHODS_ACTIVITY["postar3_clip_regulons"] = ["viper","gsea"]
 
 # prepare lists for zip expand
 OMIC_TYPE_ZIPLIST = ["EX" for r in REGULON_SETS for m in METHODS_ACTIVITY[r] for e in EVAL_DATASETS]
@@ -164,7 +166,7 @@ rule evaluate_regulons:
         
 rule combine_evaluations:
     input:
-        evaluations = [os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{method_activity}","{regulon_set}-{dataset}-{omic_type}-shadow_no-two_tailed.tsv.gz").format(regulon_set=r, dataset=d, omic_type="{omic_type}", method_activity=m) for r in REGULON_SETS for d in EVAL_DATASETS for m in METHODS_ACTIVITY.keys()]
+        evaluations = [os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","{method_activity}","{regulon_set}-{dataset}-{omic_type}-shadow_no-two_tailed.tsv.gz").format(regulon_set=r, dataset=d, omic_type="{omic_type}", method_activity=m) for r in REGULON_SETS for d in EVAL_DATASETS for m in METHODS_ACTIVITY[r]]
     output:
         os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","merged-{omic_type}.tsv.gz")
     params:
