@@ -123,7 +123,7 @@ rule regulon_inference_aracne_java_bootstrap:
     threads: 6
     resources:
         runtime = 3600*12, # 12h 
-        memory = 15, # GB
+        memory = 60, # GB
     shell:
         """
         set -eo pipefail
@@ -154,7 +154,7 @@ rule regulon_inference_aracne_prune_bootstraps:
     threads: 1
     resources:
         runtime = 3600*1, # 1 h
-        memory = 15 # GB
+        memory = 60 # GB
     shell:
         """
         set -eo pipefail

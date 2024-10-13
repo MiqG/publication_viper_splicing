@@ -13,17 +13,17 @@ require(clusterProfiler)
 # ROOT = here::here()
 # PREP_DIR = file.path(ROOT,"data","prep")
 # RESULTS_DIR = file.path(ROOT,"results","regulon_inference")
-# signature_file = file.path(PREP_DIR,'ground_truth_pert','ENCOREKO',"HepG2",'log2_fold_change_tpm.tsv.gz')
 # signature_file = file.path(PREP_DIR,'ground_truth_pert','ENCOREKD',"K562",'delta_psi-EX.tsv.gz')
 # regulons_path = file.path(RESULTS_DIR,"files","aracne_and_experimental_regulons-genexpr")
 # regulons_path = file.path(RESULTS_DIR,"files","mlr_regulons_development-EX")
-# eval_labels_file = file.path(RESULTS_DIR,"files","regulon_evaluation_labels","ENCOREKO_K562.tsv.gz")
+# eval_labels_file = file.path(RESULTS_DIR,"files","regulon_evaluation_labels","ENASFS.tsv.gz")
 # regulons_path = file.path(RESULTS_DIR,"files","experimentally_derived_regulons_pruned-EX")
 # regulons_path = file.path(RESULTS_DIR,"files","mlr_and_experimental_regulons-EX")
 
+# precomputed_activity_file = file.path(RESULTS_DIR,"files","benchmark_sf_genexpr_foldchange","ENCOREKO_K562.tsv.gz")
 # signature_file = file.path(PREP_DIR,'ground_truth_pert','ENASFS','delta_psi-EX.tsv.gz')
-# regulons_path = file.path(RESULTS_DIR,"files","postar3_clip_regulons-EX")
-# eval_labels_file = file.path(RESULTS_DIR,"files","regulon_evaluation_labels","ENASFS.tsv.gz")
+# regulons_path = file.path(RESULTS_DIR,"files","top40_experimentally_derived_regulons_pruned-EX")
+# eval_labels_file = file.path(RESULTS_DIR,"files","regulon_evaluation_labels","ENCOREKO_K562.tsv.gz")
 # shadow_correction = "no"
 # n_tails = "two"
 # method_activity = "gsea"
@@ -162,17 +162,26 @@ compute_enrichment = function(signature, networks_eval){
                 deframe() %>%
                 sort(decreasing=TRUE)
             x = x[x!=0] # remove 0s to avoid errors
+            
+            # are detected splicing changes in network?
+            in_network = sum(names(x) %in% ontology[["gene"]]) > 1
+            if (in_network){
+                result = GSEA(geneList=x, TERM2GENE=ontology, pvalueCutoff=1.1)
 
-            result = GSEA(geneList=x, TERM2GENE=ontology, pvalueCutoff=1.1)
+                activities = result@result %>%
+                    as.tibble() %>% 
+                    distinct(Description, NES) %>%
+                    deframe()
 
-            activities = result@result %>%
-                as.tibble() %>% 
-                distinct(Description, NES) %>%
-                deframe()
+                s = sprintf("sample:%s and data length:%s", sample_oi, length(activities))
+                print(s)
+            } else {
+                print("No exon found in network, making activities placeholder...")
+                
+                regulators = unique(ontology[["term"]])
+                activities = setNames(rep(NA, length(regulators)), regulators)
+            }
         
-            s = sprintf("sample:%s and data length:%s", sample_oi, length(activities))
-            print(s)
-
             gc()
             return(activities)
         }, simplify=FALSE) %>%
@@ -433,9 +442,10 @@ evaluate_activities = function(protein_activities, eval_labels){
 parseargs = function(){
     
     option_list = list( 
-        make_option("--signature_file", type="character"),
-        make_option("--regulons_path", type="character"),
+        make_option("--signature_file", type="character", default=NULL),
+        make_option("--regulons_path", type="character", default=NULL),
         make_option("--eval_labels_file", type="character", default=NULL),
+        make_option("--precomputed_activity_file", type="character", default=NULL),
         make_option("--output_file", type="character"),
         make_option("--random_seed", type="integer", default=1234),
         make_option("--shadow_correction", type="character", default="no"),
@@ -455,6 +465,7 @@ main = function(){
     signature_file = args[["signature_file"]]
     regulons_path = args[["regulons_path"]]
     eval_labels_file = args[["eval_labels_file"]]
+    precomputed_activity_file = args[["precomputed_activity_file"]]
     random_seed = args[["random_seed"]]
     shadow_correction = args[["shadow_correction"]]
     n_tails = args[["n_tails"]]
@@ -464,49 +475,88 @@ main = function(){
     set.seed(args[["random_seed"]])
     
     # load
-    signature = read_tsv(signature_file)
-    networks = load_networks(regulons_path, n_tails)
     eval_labels = read_tsv(eval_labels_file)
-
+    if (is.null(precomputed_activity_file)){
+    
+        # we must compute protein activity here
+        signature = read_tsv(signature_file)
+        networks = load_networks(regulons_path, n_tails)
+    
+    } else {
+        
+        precomputed_activity = read_tsv(precomputed_activity_file)
+    
+    } 
+    
     # prep
-    ## signature
-    signature = signature %>% as.data.frame()
-    rownames(signature) = signature[,1]
-    signature = signature[,2:ncol(signature)]
-    signature = signature %>% 
-        dplyr::select(where(is.numeric))
-    
-    if (n_tails=="one"){
-        signature = abs(signature)
-    }
-    
-    # filter out networks found in the evaluation labels
-    eval_dataset = gsub(".tsv.gz","",basename(eval_labels_file))
-    networks_eval = networks %>% filter(!str_detect(study_accession, eval_dataset))
-    networks_kept = networks_eval %>% distinct(study_accession) %>% pull(study_accession)
-    sprintf("Will evaluate %s on networks from %s .", signature_file, paste0(networks_kept, collapse=", "))
-    
-    networks_per_regulator = networks_eval %>% 
-        distinct(regulator, network_file) %>%
-        count(regulator, name="n_networks_per_regulator")
+    if (is.null(precomputed_activity_file)){
 
-    # compute activity
-    sprintf("Computing activities with %s ...", method_activity)
-    protein_activity = compute_activity(signature, networks_eval, method_activity, shadow_correction)
+        ## signature
+        signature = signature %>% as.data.frame()
+        rownames(signature) = signature[,1]
+        signature = signature[,2:ncol(signature)]
+        signature = signature %>% 
+            dplyr::select(where(is.numeric))
+
+        if (n_tails=="one"){
+            signature = abs(signature)
+        }
+        
+        # filter out networks found in the evaluation labels
+        eval_dataset = gsub(".tsv.gz","",basename(eval_labels_file))
+        networks_eval = networks %>% filter(!str_detect(study_accession, eval_dataset))
+        networks_kept = networks_eval %>% distinct(study_accession) %>% pull(study_accession)
+        sprintf("Will evaluate %s on networks from %s .", signature_file, paste0(networks_kept, collapse=", "))
+
+        networks_per_regulator = networks_eval %>% 
+            distinct(regulator, network_file) %>%
+            count(regulator, name="n_networks_per_regulator")
+
+        # compute activity
+        sprintf("Computing activities with %s ...", method_activity)
+        protein_activity = compute_activity(signature, networks_eval, method_activity, shadow_correction)
+        
+    } else {
+        
+        # no need to compute protein activity
+        protein_activity = precomputed_activity %>% as.data.frame()
+        
+        # make compatible
+        rownames(protein_activity) = protein_activity[,1]
+        protein_activity = protein_activity[,2:ncol(protein_activity)]
+        protein_activity = protein_activity %>% dplyr::select(where(is.numeric))
+        
+    }
     
     # run viper and evaluate predicted protein activities
     print("Evaluating...")
     result = evaluate_activities(protein_activity, eval_labels)
-    result = result %>%
-        left_join(networks_per_regulator, by="regulator") %>%
-        mutate(
-            regulon_set_id = basename(regulons_path),
-            signature_id = basename(eval_labels_file) %>% gsub(".tsv.gz","",.),
-            shadow_correction = shadow_correction,
-            n_tails = n_tails,
-            method_activity = method_activity
-        )
-
+    
+    if (is.null(precomputed_activity_file)){
+        
+        result = result %>%
+                left_join(networks_per_regulator, by="regulator") %>%
+                mutate(
+                    regulon_set_id = basename(regulons_path),
+                    signature_id = basename(eval_labels_file) %>% gsub(".tsv.gz","",.),
+                    shadow_correction = shadow_correction,
+                    n_tails = n_tails,
+                    method_activity = method_activity
+                )
+        
+    } else {
+        
+        result = result %>%
+            mutate(
+                regulon_set_id = "precomputed",
+                signature_id = "precomputed",
+                shadow_correction = NA,
+                n_tails = NA,
+                method_activity = "precomputed"
+            )
+        
+    }
+    
     # save
     write_tsv(result, output_file)
 }
