@@ -22,6 +22,7 @@ require(ggrepel)
 require(proxy)
 require(umap)
 require(ggbeeswarm)
+require(ggvenn)
 
 # variables
 SETS_MAIN = c(
@@ -50,6 +51,7 @@ PAL_DUAL = c("grey","orange") # '#1B9E77''#7570B3'
 # RESULTS_DIR = file.path(ROOT,"results","regulon_inference")
 # SUPPORT_DIR = file.path(ROOT,"support")
 # regulons_dir = file.path(RESULTS_DIR,"files","experimentally_derived_regulons_pruned-EX")
+# regulons_clip_dir = file.path(RESULTS_DIR,"files","postar3_clip_regulons-EX")
 # evaluation_ex_file = file.path(RESULTS_DIR,"files","regulon_evaluation_scores","merged-EX.tsv.gz")
 # enrichments_file = file.path(RESULTS_DIR,"files","regulons_eda_gsea","experimentally_derived_regulons_pruned-EX.tsv.gz")
 # annotation_file = file.path(RAW_DIR,'VastDB','EVENT_INFO-hg38_noseqs.tsv')
@@ -75,6 +77,13 @@ plot_regulons = function(regulons, splicing_factors){
         theme_pubr(x.text.angle=45) +
         yscale("log10", .format=TRUE) +
         guides(fill="none") +
+        geom_text(
+            aes(y = 1, label=label), 
+            . %>% 
+            count(regulon_id) %>% 
+            mutate(label=paste0("n=",n)),
+            size=FONT_SIZE, family=FONT_FAMILY
+        ) +
         labs(x="Regulon ID", y="N. Targets per Regulator")
     
     plts[["regulons-n_regulators_per_target-box"]] = X %>%
@@ -84,6 +93,13 @@ plot_regulons = function(regulons, splicing_factors){
         geom_boxplot(width=0.5, outlier.shape=NA, color="black", fill=NA) +
         guides(fill="none") +
         theme_pubr(x.text.angle=45) +
+        geom_text(
+            aes(y = -1, label=label), 
+            . %>% 
+            count(regulon_id) %>% 
+            mutate(label=paste0("n=",n)),
+            size=FONT_SIZE, family=FONT_FAMILY
+        ) +
         labs(x="Regulon ID", y="N. Regulators per Target")
     
     # plts[["regulons-n_targets_per_regulator_vs_evaluation-scatter"]] = evaluation %>%
@@ -166,7 +182,7 @@ plot_protein_impact = function(protimp_freqs){
 # }
 
 
-plot_similarities = function(regulons_umap){
+plot_similarities = function(regulons_umap, network_simil){
     plts = list()
     
     X = regulons_umap
@@ -174,6 +190,22 @@ plot_similarities = function(regulons_umap){
     plts[["similarities-umap-scatter"]] = X %>%
         ggscatter(x="UMAP1", y="UMAP2", size=1) +
         theme(aspect.ratio=1)
+    
+    plts[["similarities-jaccard-box"]] = network_simil %>%
+        mutate(regulon_id = "Empirical") %>%
+        ggplot(aes(x=regulon_id, y=jaccard)) +
+        geom_quasirandom(size=0.1, color="orange", varwidth=0.5) +
+        geom_boxplot(width=0.5, outlier.shape=NA, color="black", fill=NA) +
+        guides(fill="none") +
+        theme_pubr(x.text.angle=45) +
+        geom_text(
+            aes(y = -0.01, label=label), 
+            . %>% 
+            count(regulon_id) %>% 
+            mutate(label=paste0("n=",n)),
+            size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        labs(x="Regulon ID", y="Jaccard Similarity")
     
     return(plts)
 }
@@ -215,12 +247,38 @@ plot_target_lengths = function(regulons, annot){
 }
 
 
-make_plots = function(regulons, protimp_freqs, regulons_umap, annot, splicing_factors){
+plot_emp_vs_clip_regulons = function(emp_vs_clip_interactions, emp_vs_clip_regulators){
+    
+    plts = list()
+    
+    plts[["emp_vs_clip-interactions-venn"]] = emp_vs_clip_interactions %>%
+        ggvenn(
+            c("emp","clip"),
+            stroke_color=NA, 
+            set_name_size = FONT_SIZE+0.5, text_size = FONT_SIZE) +
+        coord_fixed() +
+        theme_void()
+    
+    plts[["emp_vs_clip-regulators-venn"]] = emp_vs_clip_regulators %>%
+        ggvenn(
+            c("emp","clip"),
+            stroke_color=NA, 
+            set_name_size = FONT_SIZE+0.5, text_size = FONT_SIZE) +
+        coord_fixed() +
+        theme_void()
+    
+    return(plts)
+}
+
+
+make_plots = function(regulons, protimp_freqs, regulons_umap, annot, splicing_factors, network_simil,
+                      emp_vs_clip_interactions, emp_vs_clip_regulators){
     plts = list(
         plot_regulons(regulons, splicing_factors),
         plot_protein_impact(protimp_freqs),
-        plot_similarities(regulons_umap),
-        plot_target_lengths(regulons, annot)
+        plot_similarities(regulons_umap, network_simil),
+        plot_target_lengths(regulons, annot),
+        plot_emp_vs_clip_regulons(emp_vs_clip_interactions, emp_vs_clip_regulators)
     )
     plts = do.call(c,plts)
     return(plts)
@@ -261,7 +319,10 @@ save_plots = function(plts, figs_dir){
     save_plt(plts, "regulons-n_targets_per_regulator_vs_sf_class-box", '.pdf', figs_dir, width=3, height=4.5)
     save_plt(plts, "protein_impact-freqs-violin", '.pdf', figs_dir, width=6, height=6)
     save_plt(plts, "similarities-umap-scatter", '.pdf', figs_dir, width=5, height=5)
+    save_plt(plts, "similarities-jaccard-box", '.pdf', figs_dir, width=2, height=5)
     save_plt(plts, "target_lengths-regulators-scatter", '.pdf', figs_dir, width=5, height=6)
+    save_plt(plts, "emp_vs_clip-interactions-venn", '.pdf', figs_dir, width=5, height=5)
+    save_plt(plts, "emp_vs_clip-regulators-venn", '.pdf', figs_dir, width=5, height=5)
 }
 
 
@@ -284,6 +345,7 @@ parseargs = function(){
     
     option_list = list( 
         make_option("--regulons_dir", type="character"),
+        make_option("--regulons_clip_dir", type="character"),
         make_option("--protein_impact_file", type="character"),
         make_option("--annotation_file", type="character"),
         make_option("--splicing_factors_file", type="character"),
@@ -299,6 +361,7 @@ main = function(){
     args = parseargs()
     
     regulons_dir = args[["regulons_dir"]]
+    regulons_clip_dir = args[["regulons_clip_dir"]]
     protein_impact_file = args[["protein_impact_file"]]
     annotation_file = args[["annotation_file"]]
     splicing_factors_file = args[["splicing_factors_file"]]
@@ -307,12 +370,20 @@ main = function(){
     dir.create(figs_dir, recursive = TRUE)
     
     # load
+    ## empirical regulons
     regulons = lapply(list.files(regulons_dir, full.names=TRUE), function(regulons_file){
         regulon_id = basename(regulons_file) %>% gsub("-delta_psi.tsv.gz","",.)
         regulons = read_tsv(regulons_file) %>%
             mutate(regulon_id = regulon_id)
         return(regulons)
     }) %>% bind_rows()
+    ## CLIP regulons from POSTAR3
+    regulons_clip = lapply(list.files(regulons_clip_dir, full.names=TRUE), function(regulons_file){
+        regulon_id = basename(regulons_file) %>% gsub("-delta_psi.tsv.gz","",.)
+        regulons = read_tsv(regulons_file) %>%
+            mutate(regulon_id = regulon_id)
+        return(regulons)
+    }) %>% bind_rows()    
     protein_impact = read_tsv(protein_impact_file) %>%
             dplyr::rename(EVENT=EventID, term=ONTO) %>%
             dplyr::select(term,EVENT) %>%
@@ -373,10 +444,32 @@ main = function(){
     colnames(regulons_umap) = c("UMAP1", "UMAP2")
     regulons_umap = regulons_umap %>%
         as.data.frame() %>%
-        rownames_to_column("regulator") 
+        rownames_to_column("regulator")
+    
+    upper_triangle_indices = which(upper.tri(regulons_simil), arr.ind = TRUE)
+    network_simil = data.frame(
+        regulator_a = rownames(regulons_simil)[upper_triangle_indices[,"row"]],
+        regulator_b = colnames(regulons_simil)[upper_triangle_indices[,"col"]],
+        jaccard = regulons_simil[upper_triangle_indices]
+    )
+    
+    # empirical vs clip interactions
+    interactions_emp = regulons %>% distinct(regulator, target) %>% mutate(edge = paste0(regulator,"_",target))
+    interactions_clip = regulons_clip %>% distinct(regulator, target) %>% mutate(edge = paste0(regulator,"_",target))
+    ## overlap between interactions?
+    emp_vs_clip_interactions = list(
+        emp = interactions_emp[["edge"]],
+        clip = interactions_clip[["edge"]]
+    )
+    ## overlap between regulators?
+    emp_vs_clip_regulators = list(
+        emp = interactions_emp %>% distinct(regulator) %>% pull(regulator),
+        clip = interactions_clip %>% distinct(regulator) %>% pull(regulator)
+    )
     
     # plot
-    plts = make_plots(regulons, protimp_freqs, regulons_umap, annot, splicing_factors)
+    plts = make_plots(regulons, protimp_freqs, regulons_umap, annot, splicing_factors, network_simil,
+                      emp_vs_clip_interactions, emp_vs_clip_regulators)
     
     # make figdata
     figdata = make_figdata(regulons, protimp_freqs, regulons_umap, annot)
