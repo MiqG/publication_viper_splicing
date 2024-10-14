@@ -153,7 +153,7 @@ rule regulon_inference_aracne_prune_bootstraps:
         max_targets = PARAMS["ARACNE_BOOTSTRAP_MAX_TARGETS"]
     threads: 1
     resources:
-        runtime = 3600*1, # 1 h
+        runtime = 3600*24, # 24 h
         memory = 60 # GB
     shell:
         """
