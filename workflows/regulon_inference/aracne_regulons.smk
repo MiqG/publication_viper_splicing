@@ -48,7 +48,10 @@ rule all:
         expand(os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{omic_type}","pruned","network.txt"), dataset=DATASETS, omic_type=OMIC_TYPES),
         expand(os.path.join(RESULTS_DIR,"files","aracne_regulons","{dataset}-{omic_type}","pruned","regulons.tsv.gz"), dataset=DATASETS, omic_type=OMIC_TYPES),
         # make regulon set
-        expand(os.path.join(RESULTS_DIR,"files","aracne_regulons_{dataset}-{omic_type}"), omic_type=OMIC_TYPES, dataset=DATASETS)
+        expand(os.path.join(RESULTS_DIR,"files","aracne_regulons_{dataset}-{omic_type}"), omic_type=OMIC_TYPES, dataset=DATASETS),
+        
+        # combine regulon sets
+        expand(os.path.join(RESULTS_DIR,"files","aracne_regulons_combined-{omic_type}"), omic_type=OMIC_TYPES)
         
                
 # ----- ARACNe network reverse engineering -----
@@ -240,4 +243,28 @@ rule make_regulon_sets:
         print("Copied", filename)
             
         print("Done!")
+        
+        
+rule combine_regulon_sets:
+    input:
+        regulons_dir = [os.path.join(RESULTS_DIR,"files","aracne_regulons_{dataset}-{omic_type}").format(dataset=d, omic_type="{omic_type}") for d in DATASETS]
+    output:
+        regulons_dir = directory(os.path.join(RESULTS_DIR,"files","aracne_regulons_combined-{omic_type}"))
+    run:
+        import os
+        import shutil
+        
+        os.makedirs(output.regulons_dir, exist_ok=True)
+
+        for regulons_dir in input.regulons_dir:
+            # get all regulon files
+            regulon_files = [os.path.join(regulons_dir,f) for f in os.listdir(regulons_dir) if f.endswith("tsv.gz")]
+            
+            # copy each regulon file
+            for f in regulon_files:
+                filename = os.path.join(output.regulons_dir, os.path.basename(f))
+                shutil.copy(f, filename)
+                print("Copied", filename)
+        
+        print("Done!")   
         

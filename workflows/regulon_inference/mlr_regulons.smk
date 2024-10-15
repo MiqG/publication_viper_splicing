@@ -102,7 +102,7 @@ rule combine_regulon_sets:
     input:
         regulons_dir = [os.path.join(RESULTS_DIR,"files","mlr_regulons_{dataset}-{omic_type}").format(dataset=d, omic_type="{omic_type}") for d in DATASETS]
     output:
-        regulons_dir = directory(os.path.join(RESULTS_DIR,"files","mlr_regulons_{dataset}-{omic_type}"))
+        regulons_dir = directory(os.path.join(RESULTS_DIR,"files","mlr_regulons_combined-{omic_type}"))
     run:
         import os
         import shutil

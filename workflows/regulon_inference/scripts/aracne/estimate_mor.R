@@ -5,6 +5,7 @@
 # Script purpose
 # --------------
 
+Sys.setenv(VROOM_CONNECTION_SIZE = 500000)
 require(optparse)
 require(tidyverse)
 require(viper)
