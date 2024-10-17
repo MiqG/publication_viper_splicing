@@ -17,7 +17,6 @@ SAVE_PARAMS = {'sep':'\t', 'compression':'gzip', 'index':False}
 Development
 -----------
 import os
-from sso_targets import config
 import json
 cancer = 'LUAD'
 prep_clean_tcga_dir = os.path.join(config.ROOT,'data','prep','clean','TCGA')

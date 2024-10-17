@@ -18,9 +18,6 @@ from io import StringIO
 
 import multiprocessing as mp
 
-import matplotlib.pyplot as plt
-import seaborn as sns
-
 ##### FILE PROCESSING #####
 def create_required_dirs(file_name):
     dir_path = os.path.dirname(file_name)
