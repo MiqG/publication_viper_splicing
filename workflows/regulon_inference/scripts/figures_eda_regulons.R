@@ -23,6 +23,7 @@ require(proxy)
 require(umap)
 require(ggbeeswarm)
 require(ggvenn)
+require(purrr)
 
 # variables
 SETS_MAIN = c(
@@ -52,7 +53,6 @@ PAL_DUAL = c("grey","orange") # '#1B9E77''#7570B3'
 # SUPPORT_DIR = file.path(ROOT,"support")
 # regulons_dir = file.path(RESULTS_DIR,"files","experimentally_derived_regulons_pruned-EX")
 # regulons_clip_dir = file.path(RESULTS_DIR,"files","postar3_clip_regulons-EX")
-# evaluation_ex_file = file.path(RESULTS_DIR,"files","regulon_evaluation_scores","merged-EX.tsv.gz")
 # enrichments_file = file.path(RESULTS_DIR,"files","regulons_eda_gsea","experimentally_derived_regulons_pruned-EX.tsv.gz")
 # annotation_file = file.path(RAW_DIR,'VastDB','EVENT_INFO-hg38_noseqs.tsv')
 # protein_impact_file = file.path(RAW_DIR,'VastDB','PROT_IMPACT-hg38-v3.tab.gz')
@@ -101,17 +101,6 @@ plot_regulons = function(regulons, splicing_factors){
             size=FONT_SIZE, family=FONT_FAMILY
         ) +
         labs(x="Regulon ID", y="N. Regulators per Target")
-    
-    # plts[["regulons-n_targets_per_regulator_vs_evaluation-scatter"]] = evaluation %>%
-    #     left_join(
-    #         X %>%
-    #         count(regulon_id, regulator), 
-    #         by="regulator"
-    #     ) %>%
-    #     ggscatter(x="n", y="ranking_perc", alpha=0.5, size=1, color=PAL_DARK) +
-    #     xscale("log10", .format=TRUE) +
-    #     facet_wrap(~regulon_set+eval_direction) +
-    #     stat_cor()
     
     # RBP vs core spliceosome
     x = X %>%
@@ -163,23 +152,6 @@ plot_protein_impact = function(protimp_freqs){
     
     return(plts)
 }
-
-
-# plot_enrichments = function(enrichments){
-#     plts = list()
-    
-#     X = enrichments
-    
-#     terms_oi = X %>%
-#         count(Description) %>%
-#         slice_max(n, n=10) %>%
-#         pull(Description)
-    
-#     plts[["enrichments-"]] = enrichments %>%
-#         filter(Description %in% terms_oi)
-    
-#     return(plts)
-# }
 
 
 plot_similarities = function(regulons_umap, network_simil){
@@ -271,14 +243,30 @@ plot_emp_vs_clip_regulons = function(emp_vs_clip_interactions, emp_vs_clip_regul
 }
 
 
+plot_clip_eda = function(clip_distances){
+    plts = list()
+    
+    X = clip_distances
+    
+    plts[["clip_eda-distance_distr-hist"]] = X %>%
+        gghistogram(x="rel_distance", fill="rel_position", color=NA, bins=50) +
+        facet_wrap(~rel_position, scales="free") +
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Distance between CLIP peak to closest exon splice site ", y="N. CLIP Peaks")
+    
+    return(plts)
+}
+
+
 make_plots = function(regulons, protimp_freqs, regulons_umap, annot, splicing_factors, network_simil,
-                      emp_vs_clip_interactions, emp_vs_clip_regulators){
+                      emp_vs_clip_interactions, emp_vs_clip_regulators, clip_distances){
     plts = list(
         plot_regulons(regulons, splicing_factors),
         plot_protein_impact(protimp_freqs),
         plot_similarities(regulons_umap, network_simil),
         plot_target_lengths(regulons, annot),
-        plot_emp_vs_clip_regulons(emp_vs_clip_interactions, emp_vs_clip_regulators)
+        plot_emp_vs_clip_regulons(emp_vs_clip_interactions, emp_vs_clip_regulators),
+        plot_clip_eda(clip_distances)
     )
     plts = do.call(c,plts)
     return(plts)
@@ -323,6 +311,7 @@ save_plots = function(plts, figs_dir){
     save_plt(plts, "target_lengths-regulators-scatter", '.pdf', figs_dir, width=5, height=6)
     save_plt(plts, "emp_vs_clip-interactions-venn", '.pdf', figs_dir, width=5, height=5)
     save_plt(plts, "emp_vs_clip-regulators-venn", '.pdf', figs_dir, width=5, height=5)
+    save_plt(plts, "clip_eda-distance_distr-hist", '.pdf', figs_dir, width=7, height=5)
 }
 
 
@@ -403,31 +392,6 @@ main = function(){
         left_join(protein_impact, by=c("target"="EVENT")) %>%
         count(regulator, term_clean)
     
-    # evaluation = evaluation %>%
-    #     mutate(regulon_id = gsub("-","_",regulon_id)) %>%
-    #     filter(signature_id!=regulon_id) %>%
-    #     filter(!(str_detect(regulon_id,"ENASFS") & (signature_id=="ENASFS"))) %>%
-    #     # consider only signatures that we know activity 
-    #     # of the splicing factor was altered
-    #     filter(PERT_TYPE %in% c("KNOCKDOWN","KNOCKOUT","OVEREXPRESSION")) %>%
-    #     mutate(
-    #         pert_type_lab = case_when(
-    #             PERT_TYPE=="KNOCKDOWN" ~ "KD",
-    #             PERT_TYPE=="KNOCKOUT" ~ "KO",
-    #             PERT_TYPE=="OVEREXPRESSION" ~ "OE"
-    #         ),
-    #         regulon_set = gsub("-.*","",regulon_set_id)
-    #     ) %>%
-    #     group_by(omic_type, eval_direction, eval_type, regulon_set, n_tails, regulon_set_id, pert_type_lab, regulator) %>%
-    #     summarize(ranking_perc = median(ranking_perc, na.rm=TRUE)) %>%
-    #     ungroup() %>%
-    #     filter(regulon_set %in% SETS_MAIN) %>%
-    #     filter(n_tails=="two") %>%
-    #     group_by(omic_type, eval_direction, eval_type, regulon_set, regulator) %>%
-    #     summarize(ranking_perc = median(ranking_perc, na.rm=TRUE)) %>%
-    #     ungroup() %>%
-    #     mutate(regulon_set = factor(regulon_set, levels=SETS_MAIN))
-    
     # make embedding of common targets
     regulons_mat = regulons %>%
         distinct(regulator, target) %>%
@@ -453,6 +417,19 @@ main = function(){
         jaccard = regulons_simil[upper_triangle_indices]
     )
     
+    # CLIP peak distances to closest splice site
+    clip_distances = regulons_clip %>%
+        distinct(Start, End, peak_start, peak_end) %>%
+        mutate(
+            rel_position = ifelse(peak_start > End | peak_end < Start, "On Intron", "On Exon"),
+            rel_distance = pmin(
+              abs(peak_start - Start),
+              abs(peak_end - End),
+              abs(peak_end - Start),
+              abs(peak_start - End)
+            )
+        )
+    
     # empirical vs clip interactions
     interactions_emp = regulons %>% distinct(regulator, target) %>% mutate(edge = paste0(regulator,"_",target))
     interactions_clip = regulons_clip %>% distinct(regulator, target) %>% mutate(edge = paste0(regulator,"_",target))
@@ -469,7 +446,7 @@ main = function(){
     
     # plot
     plts = make_plots(regulons, protimp_freqs, regulons_umap, annot, splicing_factors, network_simil,
-                      emp_vs_clip_interactions, emp_vs_clip_regulators)
+                      emp_vs_clip_interactions, emp_vs_clip_regulators, clip_distances)
     
     # make figdata
     figdata = make_figdata(regulons, protimp_freqs, regulons_umap, annot)

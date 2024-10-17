@@ -13,35 +13,17 @@ require(scattermore)
 require(extrafont)
 
 # variables
-REGULON_SETS = c(
-    'aracne_regulons_CardosoMoreira2020',
-    'mlr_regulons_CardosoMoreira2020',
-    'aracne_regulons_PANCAN_STN',
-    'mlr_regulons_PANCAN_STN',
-    'experimentally_derived_regulons_pruned',
-    'aracne_and_experimental_regulons',
-    'mlr_and_experimental_regulons',
-    'aracne_and_mlr_regulons',
-    'top100_experimentally_derived_regulons_pruned',
-    'top90_experimentally_derived_regulons_pruned',
-    'top80_experimentally_derived_regulons_pruned',
-    'top70_experimentally_derived_regulons_pruned',
-    'top60_experimentally_derived_regulons_pruned',
-    'top50_experimentally_derived_regulons_pruned',
-    'top40_experimentally_derived_regulons_pruned'
-)
-
 SETS_MAIN = c(
-    'aracne_regulons_PANCAN_STN',
-    'mlr_regulons_PANCAN_STN',
+    'aracne_regulons_combined',
+    'mlr_regulons_combined',
     'experimentally_derived_regulons_pruned'
 )
 
 SETS_CLIP = c(
     "experimentally_derived_regulons_pruned",
-    "postar3_clip_regulons"
-    # postar3_and_experimental_regulons,
-    # experimental_without_postar3_regulons
+    "postar3_clip_regulons",
+    "postar3_and_experimental_regulons",
+    "experimental_without_postar3_regulons"
 )
 
 SETS_ROBUSTNESS = c(
@@ -65,6 +47,15 @@ SETS_THRESHOLDS = c(
     'dPSIthresh35_experimentally_derived_regulons_pruned',
     'dPSIthresh40_experimentally_derived_regulons_pruned',
     'dPSIthresh45_experimentally_derived_regulons_pruned'
+)
+
+SETS_COMPUTATIONAL = c(
+    'aracne_regulons_CardosoMoreira2020',
+    'mlr_regulons_CardosoMoreira2020',
+    'aracne_regulons_PANCAN_STN',
+    'mlr_regulons_PANCAN_STN',
+    'aracne_regulons_PANCAN_PT',
+    'mlr_regulons_PANCAN_PT'
 )
 
 SETS_LIKELIHOOD = c(
@@ -128,7 +119,8 @@ plot_evaluation = function(evaluation){
     
     # evaluation by dataset
     x = X %>%
-        group_by(regulon_set, method_activity, curves_type, eval_direction, eval_type, signature_id) %>%
+        group_by(regulon_set, method_activity, curves_type, eval_direction, eval_type, 
+                 signature_id, n_total_regulators, n_total_targets, in_empirical) %>%
         summarize(auc_roc = median(auc_roc, na.rm=TRUE)) %>%    
         ungroup()
     
@@ -150,6 +142,7 @@ plot_evaluation = function(evaluation){
             mutate(label=paste0("n=",n)),
             position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
         ) +
+        geom_hline(yintercept=0.5, linewidth=LINE_SIZE, linetype="dashed", color="black") +
         theme_pubr(x.text.angle = 45) +
         facet_wrap(~eval_direction) +  
         theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
@@ -173,6 +166,7 @@ plot_evaluation = function(evaluation){
             mutate(label=paste0("n=",n)),
             position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
         ) +
+        geom_hline(yintercept=0.5, linewidth=LINE_SIZE, linetype="dashed", color="black") +
         theme_pubr(x.text.angle = 45) +
         facet_wrap(~eval_direction) +  
         theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
@@ -197,6 +191,7 @@ plot_evaluation = function(evaluation){
             mutate(label=paste0("n=",n)),
             position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
         ) +
+        geom_hline(yintercept=0.5, linewidth=LINE_SIZE, linetype="dashed", color="black") +  
         theme_pubr(x.text.angle = 45) +
         facet_wrap(~eval_direction) +  
         theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
@@ -222,13 +217,14 @@ plot_evaluation = function(evaluation){
             mutate(label=paste0("n=",n)),
             position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
         ) +
+        geom_hline(yintercept=0.5, linewidth=LINE_SIZE, linetype="dashed", color="black") +
         theme_pubr(x.text.angle = 45) +
         facet_wrap(~eval_direction+signature_id) +  
         theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         labs(x="SF Class", y="ROC AUC", color="Inference Type", shape="Held-out Dataset")
     
     
-    # (TODO) CLIP benchmark
+    # CLIP benchmark
     plts[["evaluation-clip-median_auc_roc-box"]] = x %>%
         filter(eval_type=="real" & regulon_set%in%SETS_CLIP) %>%
         mutate(
@@ -242,12 +238,192 @@ plot_evaluation = function(evaluation){
                    position=position_jitterdodge(dodge.width=0.9, jitter.width=0.1)) +
         color_palette(PAL_METHODS_ACTIVITY) + 
         geom_text(
+            aes(y = 0.2, label=label), 
+            . %>% 
+            count(method_activity, regulon_set, eval_type, eval_direction) %>% 
+            mutate(label=paste0("n=",n)),
+            position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        geom_hline(yintercept=0.5, linewidth=LINE_SIZE, linetype="dashed", color="black") +
+        theme_pubr(x.text.angle = 45) +
+        facet_wrap(~eval_direction) +  
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Method", y="median(ROC AUC)", color="Inference Type", shape="Held-out Dataset")
+    
+    # evaluation thresholds
+    plts[["evaluation-threshold-median_auc_roc-box"]] = x %>%
+        filter(eval_type=="real" & regulon_set%in%SETS_THRESHOLDS) %>%
+        mutate(
+            regulon_set = factor(regulon_set, levels=SETS_THRESHOLDS),
+            method_activity = factor(method_activity, levels=METHODS_ACTIVITY)
+        ) %>%
+        ggplot(aes(x=regulon_set, y=auc_roc, group=interaction(regulon_set, method_activity))) +
+        geom_boxplot(aes(color=method_activity), fill=NA, outlier.shape=NA, 
+                     position=position_dodge2(0.9, preserve="single")) +
+        geom_point(aes(color=method_activity, shape=signature_id), size=0.5, 
+                   position=position_jitterdodge(dodge.width=0.9, jitter.width=0.1)) +
+        color_palette(PAL_METHODS_ACTIVITY) + 
+        geom_text(
+            aes(y = 0.2, label=label), 
+            . %>% 
+            count(method_activity, regulon_set, eval_type, eval_direction) %>% 
+            mutate(label=paste0("n=",n)),
+            position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        geom_text(
+            aes(y=0.3, label=n_total_regulators), 
+            . %>% distinct(method_activity, eval_direction, regulon_set, n_total_regulators), 
+            size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        geom_text(
+            aes(y=0.25, label=n_total_targets), 
+            . %>% distinct(method_activity, eval_direction, regulon_set, n_total_targets), 
+            size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        geom_hline(yintercept=0.5, linewidth=LINE_SIZE, linetype="dashed", color="black") +
+        theme_pubr(x.text.angle = 45) +
+        facet_wrap(~eval_direction, ncol=1) +  
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Method", y="median(ROC AUC)", color="Inference Type", shape="Held-out Dataset")
+    
+    
+    # evaluation robustness
+    plts[["evaluation-robustness-median_auc_roc-box"]] = x %>%
+        filter(eval_type=="real" & regulon_set%in%SETS_ROBUSTNESS) %>%
+        mutate(
+            regulon_set = factor(regulon_set, levels=SETS_ROBUSTNESS),
+            method_activity = factor(method_activity, levels=METHODS_ACTIVITY)
+        ) %>%
+        ggplot(aes(x=regulon_set, y=auc_roc, group=interaction(regulon_set, method_activity))) +
+        geom_boxplot(aes(color=method_activity), fill=NA, outlier.shape=NA, 
+                     position=position_dodge2(0.9, preserve="single")) +
+        geom_point(aes(color=method_activity, shape=signature_id), size=0.5, 
+                   position=position_jitterdodge(dodge.width=0.9, jitter.width=0.1)) +
+        color_palette(PAL_METHODS_ACTIVITY) + 
+        geom_text(
+            aes(y = 0.2, label=label), 
+            . %>% 
+            count(method_activity, regulon_set, eval_type, eval_direction) %>% 
+            mutate(label=paste0("n=",n)),
+            position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        geom_text(
+            aes(y=0.3, label=n_total_regulators), 
+            . %>% distinct(method_activity, eval_direction, regulon_set, n_total_regulators), 
+            size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        geom_text(
+            aes(y=0.25, label=n_total_targets), 
+            . %>% distinct(method_activity, eval_direction, regulon_set, n_total_targets), 
+            size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        geom_hline(yintercept=0.5, linewidth=LINE_SIZE, linetype="dashed", color="black") +
+        theme_pubr(x.text.angle = 45) +
+        facet_wrap(~eval_direction, ncol=1) +  
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Method", y="median(ROC AUC)", color="Inference Type", shape="Held-out Dataset")
+    
+    # troubleshooting of computational networks
+    ## evaluation considering splitting networks
+    plts[["evaluation-comp_split-median_auc_roc-box"]] = x %>%
+        filter(regulon_set%in%SETS_COMPUTATIONAL & eval_type=="real") %>%
+        mutate(
+            regulon_set = factor(regulon_set, levels=SETS_COMPUTATIONAL),
+            method_activity = factor(method_activity, levels=METHODS_ACTIVITY)
+        ) %>%
+        ggplot(aes(x=regulon_set, y=auc_roc, group=interaction(regulon_set, method_activity))) +
+        geom_boxplot(aes(color=method_activity), fill=NA, outlier.shape=NA, position=position_dodge(0.9)) +
+        geom_point(aes(color=method_activity, shape=signature_id), size=0.5, 
+                   position=position_jitterdodge(dodge.width=0.9, jitter.width=0.1)) +
+        color_palette(PAL_METHODS_ACTIVITY) + 
+        geom_text(
             aes(y = 0.3, label=label), 
             . %>% 
             count(method_activity, regulon_set, eval_type, eval_direction) %>% 
             mutate(label=paste0("n=",n)),
             position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
         ) +
+        geom_hline(yintercept=0.5, linewidth=LINE_SIZE, linetype="dashed", color="black") +
+        theme_pubr(x.text.angle = 45) +
+        facet_wrap(~eval_direction) +  
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Method", y="median(ROC AUC)", color="Inference Type", shape="Held-out Dataset")
+    
+    ## evaluation considering splitting networks and whether regulators are in empirical SF networks
+    plts[["evaluation-comp_best_vs_in_empirical-median_auc_roc-box"]] = X %>%
+        filter(eval_type=="real" & regulon_set=="mlr_regulons_PANCAN_PT" & eval_direction=="regulators") %>%
+        group_by(regulon_set, method_activity, curves_type, eval_direction, eval_type, 
+                 signature_id, n_total_regulators, n_total_targets, in_empirical, sf_class) %>%
+        summarize(auc_roc = median(auc_roc, na.rm=TRUE)) %>%    
+        ungroup() %>%        
+        mutate(
+            method_activity = factor(method_activity, levels=METHODS_ACTIVITY),
+            sf_class = factor(sf_class, levels=SF_CLASS)
+        ) %>%
+        ggplot(aes(x=sf_class, y=auc_roc, group=interaction(sf_class, method_activity))) +
+        geom_boxplot(aes(color=method_activity), fill=NA, outlier.shape=NA, position=position_dodge(0.9)) +
+        geom_point(aes(color=method_activity, shape=signature_id), size=0.5, 
+                   position=position_jitterdodge(dodge.width=0.9, jitter.width=0.1)) +
+        color_palette(PAL_METHODS_ACTIVITY) + 
+        geom_text(
+            aes(y = -0.1, label=label), 
+            . %>% 
+            count(sf_class, method_activity, regulon_set, eval_type, eval_direction, in_empirical) %>% 
+            mutate(label=paste0("n=",n)),
+            position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        geom_hline(yintercept=0.5, linewidth=LINE_SIZE, linetype="dashed", color="black") +
+        theme_pubr(x.text.angle = 45) +
+        facet_wrap(~eval_direction+in_empirical) +  
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="SF Class", y="ROC AUC", color="Inference Type", shape="Held-out Dataset")
+    
+    ## evaluation using best computational networks with empirical MoR and their likelihood
+    plts[["evaluation-comp_best_w_empirical_likelihood-median_auc_roc-box"]] = x %>%
+        filter(regulon_set%in%SETS_LIKELIHOOD & eval_type=="real") %>%
+        mutate(
+            regulon_set = factor(regulon_set, levels=SETS_LIKELIHOOD),
+            method_activity = factor(method_activity, levels=METHODS_ACTIVITY)
+        ) %>%
+        ggplot(aes(x=regulon_set, y=auc_roc, group=interaction(regulon_set, method_activity))) +
+        geom_boxplot(aes(color=method_activity), fill=NA, outlier.shape=NA, position=position_dodge(0.9)) +
+        geom_point(aes(color=method_activity, shape=signature_id), size=0.5, 
+                   position=position_jitterdodge(dodge.width=0.9, jitter.width=0.1)) +
+        color_palette(PAL_METHODS_ACTIVITY) + 
+        geom_text(
+            aes(y = 0.3, label=label), 
+            . %>% 
+            count(method_activity, regulon_set, eval_type, eval_direction) %>% 
+            mutate(label=paste0("n=",n)),
+            position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        geom_hline(yintercept=0.5, linewidth=LINE_SIZE, linetype="dashed", color="black") +
+        theme_pubr(x.text.angle = 45) +
+        facet_wrap(~eval_direction) +  
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Method", y="median(ROC AUC)", color="Inference Type", shape="Held-out Dataset")
+    
+    
+    ## evaluation combining ARACNe and MLR determined networks
+    plts[["evaluation-comp_best_w_empirical_likelihood-median_auc_roc-box"]] = x %>%
+        filter(regulon_set%in%SETS_MOR & eval_type=="real") %>%
+        mutate(
+            regulon_set = factor(regulon_set, levels=SETS_MOR),
+            method_activity = factor(method_activity, levels=METHODS_ACTIVITY)
+        ) %>%
+        ggplot(aes(x=regulon_set, y=auc_roc, group=interaction(regulon_set, method_activity))) +
+        geom_boxplot(aes(color=method_activity), fill=NA, outlier.shape=NA, position=position_dodge(0.9)) +
+        geom_point(aes(color=method_activity, shape=signature_id), size=0.5, 
+                   position=position_jitterdodge(dodge.width=0.9, jitter.width=0.1)) +
+        color_palette(PAL_METHODS_ACTIVITY) + 
+        geom_text(
+            aes(y = 0.3, label=label), 
+            . %>% 
+            count(method_activity, regulon_set, eval_type, eval_direction) %>% 
+            mutate(label=paste0("n=",n)),
+            position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        geom_hline(yintercept=0.5, linewidth=LINE_SIZE, linetype="dashed", color="black") +
         theme_pubr(x.text.angle = 45) +
         facet_wrap(~eval_direction) +  
         theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
@@ -292,21 +468,18 @@ save_plt = function(plts, plt_name, extension='.pdf',
 
 
 save_plots = function(plts, figs_dir){
-    omic_types = c("EX")
-    for (omic_type_oi in omic_types){
-        # main
-        save_plt(plts, sprintf("%s-evaluation-ranking_perc_vs_regulon_set_vs_pert_type-main-box", omic_type_oi), '.pdf', figs_dir, width=6.5, height=12)
-        save_plt(plts, sprintf("%s-evaluation-ranking_perc_vs_regulon_set-main-box", omic_type_oi), '.pdf', figs_dir, width=7, height=7)
-        # robustness
-        save_plt(plts, sprintf("%s-evaluation-ranking_perc_vs_regulon_set-robustness-box", omic_type_oi), '.pdf', figs_dir, width=12, height=7)
-        save_plt(plts, sprintf("%s-evaluation-ranking_perc_vs_regulon_set-dpsi_thresh-box", omic_type_oi), '.pdf', figs_dir, width=12, height=7)
-        # likelihood
-        save_plt(plts, sprintf("%s-evaluation-ranking_perc_vs_regulon_set-likelihood-box", omic_type_oi), '.pdf', figs_dir, width=7, height=7)
-        # mor
-        save_plt(plts, sprintf("%s-evaluation-ranking_perc_vs_regulon_set-mor-box", omic_type_oi), '.pdf', figs_dir, width=3.5, height=7)
-        # one-tailed
-        save_plt(plts, sprintf("%s-evaluation-ranking_perc_vs_regulon_set-main_one_tailed-box", omic_type_oi), '.pdf', figs_dir, width=7, height=7)
-    }
+    # main
+    save_plt(plts, sprintf("%s-evaluation-ranking_perc_vs_regulon_set_vs_pert_type-main-box", omic_type_oi), '.pdf', figs_dir, width=6.5, height=12)
+    save_plt(plts, sprintf("%s-evaluation-ranking_perc_vs_regulon_set-main-box", omic_type_oi), '.pdf', figs_dir, width=7, height=7)
+    # robustness
+    save_plt(plts, sprintf("%s-evaluation-ranking_perc_vs_regulon_set-robustness-box", omic_type_oi), '.pdf', figs_dir, width=12, height=7)
+    save_plt(plts, sprintf("%s-evaluation-ranking_perc_vs_regulon_set-dpsi_thresh-box", omic_type_oi), '.pdf', figs_dir, width=12, height=7)
+    # likelihood
+    save_plt(plts, sprintf("%s-evaluation-ranking_perc_vs_regulon_set-likelihood-box", omic_type_oi), '.pdf', figs_dir, width=7, height=7)
+    # mor
+    save_plt(plts, sprintf("%s-evaluation-ranking_perc_vs_regulon_set-mor-box", omic_type_oi), '.pdf', figs_dir, width=3.5, height=7)
+    # one-tailed
+    save_plt(plts, sprintf("%s-evaluation-ranking_perc_vs_regulon_set-main_one_tailed-box", omic_type_oi), '.pdf', figs_dir, width=7, height=7)
 }
 
 
@@ -366,10 +539,15 @@ main = function(){
         read_tsv(regulators_per_target_thresholds_file)
     ) %>% bind_rows()
     
+    # before summarizing, add whether an evaluated regulator is found in empirical SF networks
+    evaluation = evaluation %>%
+        mutate(in_empirical = regulator %in% targets_per_regulator[["regulator"]])
+    
+    # summarize targets per regulator and regulators per target
     targets_per_regulator = targets_per_regulator %>%
         group_by(regulon_set_id) %>%
         summarize(
-            n_targets_median = median(n_targets),
+            n_targets_median = median(count),
             n_total_regulators = n()
         ) %>%
         ungroup()
@@ -382,7 +560,7 @@ main = function(){
     regulators_per_target = regulators_per_target %>%
         group_by(regulon_set_id) %>%
         summarize(
-            n_regulators_median = median(n_regulators),
+            n_regulators_median = median(count),
             n_total_targets = n()
         ) %>%
         ungroup()
@@ -406,7 +584,10 @@ main = function(){
             )
         ) %>% 
         # drop summarized evaluation
-        filter(curves_type=="by_group" & n_tails=="two")
+        filter(curves_type=="by_group" & n_tails=="two") %>%
+        # stats robustness and thresholds networks
+        left_join(targets_per_regulator, by="regulon_set_id") %>%
+        left_join(regulators_per_target, by="regulon_set_id")
     
     # plot
     plts = make_plots(evaluation)

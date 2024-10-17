@@ -38,13 +38,14 @@ REGULON_SETS = [
     "experimentally_derived_regulons_pruned",
     "aracne_regulons_CardosoMoreira2020",
     "aracne_regulons_PANCAN_STN",
-    # "aracne_regulons_PANCAN_PT",
-    # "aracne_regulons_combined",
+    "aracne_regulons_PANCAN_PT",
+    "aracne_regulons_combined",
     "mlr_regulons_CardosoMoreira2020",
     "mlr_regulons_PANCAN_STN",
     "mlr_regulons_PANCAN_PT",
     "mlr_regulons_combined",
     "postar3_clip_regulons",
+    # clip vs empirical networks
     "postar3_and_experimental_regulons",
     "experimental_without_postar3_regulons",
     "splicinglore_regulons",
@@ -155,6 +156,12 @@ rule evaluate_regulons:
         shadow = "no",
         n_tails = "two",
         method_activity = "{method_activity}"
+    conda: "publication_viper_splicing"
+    threads: 1
+    resources:
+        # runtime = 3600*6, # h in seconds
+        runtime = 60*24, # h in minutes 
+        memory = 300, # GB
     shell:
         """
         nice Rscript {params.script_dir}/evaluate_activity.R \
@@ -206,6 +213,12 @@ rule figures_regulon_evaluation:
         targets_per_regulator_thresholds = os.path.join(RESULTS_DIR,"files","regulon_properties","dPSIthresh-targets_per_regulator-EX.tsv.gz")
     output:
         directory(os.path.join(RESULTS_DIR,"figures","regulon_evaluation"))
+    conda: "publication_viper_splicing"
+    threads: 1
+    resources:
+        # runtime = 3600*6, # h in seconds
+        runtime = 60*6, # h in minutes 
+        memory = 50, # GB
     shell:
         """
         Rscript scripts/figures_regulon_evaluation.R \
@@ -225,6 +238,12 @@ rule figures_inference_troubleshooting:
         mlr_and_experimental_path = os.path.join(RESULTS_DIR,"files","mlr_and_experimental_regulons-EX")
     output:
         directory(os.path.join(RESULTS_DIR,"figures","regulon_inference"))
+    conda: "publication_viper_splicing"
+    threads: 1
+    resources:
+        # runtime = 3600*6, # h in seconds
+        runtime = 60*6, # h in minutes 
+        memory = 50, # GB
     shell:
         """
         Rscript scripts/figures_inference_troubleshooting.R \

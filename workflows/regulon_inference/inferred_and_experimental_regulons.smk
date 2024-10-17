@@ -26,7 +26,7 @@ rule all:
         
 rule make_regulons_aracne_and_experimental:
     input:
-        aracne_regulons = os.path.join(RESULTS_DIR,"files","aracne_regulons_development-{omic_type}"),
+        aracne_regulons = os.path.join(RESULTS_DIR,"files","aracne_regulons_PANCAN_PT-{omic_type}"),
         experimental_regulons = os.path.join(RESULTS_DIR,"files","experimentally_derived_regulons_raw-{omic_type}")
     output:
         output_dir = directory(os.path.join(RESULTS_DIR,"files","aracne_and_experimental_regulons-{omic_type}"))
@@ -66,7 +66,7 @@ rule make_regulons_aracne_and_experimental:
         
 rule make_regulons_mlr_and_experimental:
     input:
-        mlr_regulons = os.path.join(RESULTS_DIR,"files","mlr_regulons_development-{omic_type}"),
+        mlr_regulons = os.path.join(RESULTS_DIR,"files","mlr_regulons_PANCAN_PT-{omic_type}"),
         experimental_regulons = os.path.join(RESULTS_DIR,"files","experimentally_derived_regulons_raw-{omic_type}")
     output:
         output_dir = directory(os.path.join(RESULTS_DIR,"files","mlr_and_experimental_regulons-{omic_type}"))
@@ -105,8 +105,8 @@ rule make_regulons_mlr_and_experimental:
         
 rule make_regulons_aracne_and_mlr:
     input:
-        aracne_regulons = os.path.join(RESULTS_DIR,"files","aracne_regulons_development-{omic_type}"),
-        mlr_regulons = os.path.join(RESULTS_DIR,"files","mlr_regulons_development-{omic_type}")
+        aracne_regulons = os.path.join(RESULTS_DIR,"files","aracne_regulons_PANCAN_PT-{omic_type}"),
+        mlr_regulons = os.path.join(RESULTS_DIR,"files","mlr_regulons_PANCAN_PT-{omic_type}")
     output:
         output_dir = directory(os.path.join(RESULTS_DIR,"files","aracne_and_mlr_regulons-{omic_type}"))
     run:
