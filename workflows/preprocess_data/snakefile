@@ -160,6 +160,8 @@ rule all:
         
         # impute event PSI
         expand(os.path.join(PREP_DIR,'event_psi_imputed','{dataset}-{event_type}.tsv.gz'), dataset=["CardosoMoreira2020","PANCAN-SolidTissueNormal","PANCAN-PrimaryTumor"], event_type=EVENT_TYPES),
+        # benchmark event imputation
+        expand(os.path.join(PREP_DIR,'event_psi_imputation_benchmark','{dataset}-{event_type}-k{k}.tsv.gz'), dataset=["CardosoMoreira2020"], event_type=EVENT_TYPES, k=["2","5","10","50","100"]),
         
         # compute summary stats
         expand(os.path.join(PREP_DIR,"summary_stats","event_psi_imputed","{dataset}-EX.tsv.gz"), dataset=DATASETS),
@@ -1135,6 +1137,31 @@ rule impute_psi:
     params:
         method = 'knn',
         method_kws = '\'{"n_neighbors":5}\'',
+        features_as_rows = True
+    threads: 1
+    resources:
+        # runtime = 3600*6, # h 
+        runtime = 60*24, # h 
+        memory = 300, # GB
+    shell:
+        """
+        python scripts/impute_nan.py \
+                    --input_file={input} \
+                    --output_file={output} \
+                    --method={params.method} \
+                    --method_kws={params.method_kws} \
+                    --features_as_rows={params.features_as_rows}
+        """
+        
+        
+rule psi_imputation_benchmark:
+    input:
+        os.path.join(PREP_DIR,'event_psi','{dataset}-{event_type}.tsv.gz')
+    output:
+        os.path.join(PREP_DIR,'event_psi_imputation_benchmark','{dataset}-{event_type}-k{k}.tsv.gz')
+    params:
+        method = 'knn',
+        method_kws = '\'{"n_neighbors":{k}}\'',
         features_as_rows = True
     threads: 1
     resources:
