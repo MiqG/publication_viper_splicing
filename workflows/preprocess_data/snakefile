@@ -224,6 +224,9 @@ rule all:
         # EDA data figures
         os.path.join(RESULTS_DIR,'figures','eda'),
         
+        # figures benchmark KNN imputation
+        os.path.join(RESULTS_DIR,'figures','benchmark_imputation'),
+        
         # TCGA for network inference
         ## split by cancer type and sample type
         expand(os.path.join(PREP_DIR,"event_psi","{cancer}-{sample}-EX.tsv.gz"), zip, cancer=CANCER_TYPES_SPLIT, sample=SAMPLE_TYPES_SPLIT),
@@ -2161,6 +2164,28 @@ rule figures_eda:
                     --ena_sfs_file={input.ena_sfs} \
                     --figs_dir={output}
         """
+        
+        
+rule figures_benchmark_imputation:
+    input:
+        original = os.path.join(PREP_DIR,'event_psi','CardosoMoreira2020-EX.tsv.gz'),
+        imputed = [os.path.join(PREP_DIR,'event_psi_imputation_benchmark','{dataset}-{event_type}-k{k}.tsv.gz').format(dataset="CardosoMoreira2020", event_type=e, k=k) 
+                   for e in EVENT_TYPES for k in ["2","5","10","50","100"]]
+    params:
+        imputed_joined = ",".join(
+            [os.path.join(PREP_DIR,'event_psi_imputation_benchmark','{dataset}-{event_type}-k{k}.tsv.gz').format(dataset="CardosoMoreira2020", event_type=e, k=k) 
+             for e in EVENT_TYPES for k in ["2","5","10","50","100"]]
+)
+    output:
+        directory(os.path.join(RESULTS_DIR,'figures','benchmark_imputation'))
+    shell:
+        """
+        Rscript scripts/figures_eda.R \
+                    --original_file={input.splicing_factors} \
+                    --imputed_files={params.imputed_joined} \
+                    --figs_dir={output}
+        """        
+        
         
 rule split_event_psi_by_cancer_and_sample_type:
     input:
