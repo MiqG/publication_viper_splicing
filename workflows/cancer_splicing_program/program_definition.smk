@@ -38,6 +38,7 @@ CANCER_TYPES_PTSTN = [
     'THCA',
     'UCEC'
 ]
+CANCER_TYPES_PTSTN.remove("STAD") # DEV
 CANCER_TYPES_METPT = ["BRCA","SKCM","THCA"]
 CANCER_TYPES_PT = metadata.loc[
     metadata["sample_type_clean"].isin(["PrimaryTumor","PrimaryBloodDerivedCancerPeripheralBlood"]),"cancer_type"
@@ -69,54 +70,93 @@ CANCER_TYPES_SURV = metadata.loc[
     ["cancer_type","sample_type_clean"]
 ]
 OMICS = ["protein_activity","genexpr_tpm"]
+
+# prepare lists for survival analysis with confounders
+CANCERS_MISSING_STAGING = [
+    'CESC','DLBC','GBM','LAML','LGG','OV','PCPG','PRAD','SARC','THYM','UCEC','UCS'
+]
+CANCERS_WITH_CONFOUNDERS = list(set(CANCER_TYPES_SURV["cancer_type"]) - set(CANCERS_MISSING_STAGING))
+SAMPLETYPES_WITH_CONFOUNDERS = [CANCER_TYPES_SURV.loc[CANCER_TYPES_SURV["cancer_type"]==c, "sample_type_clean"].values[0] for c in CANCERS_WITH_CONFOUNDERS]
+
+# prepare lists to zip for survival analyses
+SURV_ANALYSIS_CANCERS = CANCER_TYPES_SURV["cancer_type"].tolist() + CANCERS_WITH_CONFOUNDERS
+SURV_ANALYSIS_SAMPLETYPES = (
+    CANCER_TYPES_SURV["sample_type_clean"].tolist() + 
+    SAMPLETYPES_WITH_CONFOUNDERS
+)
+SURV_ANALYSIS_TYPES = ["survival_analysis" for c in CANCER_TYPES_SURV["cancer_type"].tolist()] + ["survival_analysis_with_confounders" for c in CANCERS_WITH_CONFOUNDERS]
+
+# prepare dictionaries to merge survival tables
+SURVIVAL_CANCERS = {
+    "survival_analysis": CANCER_TYPES_SURV["cancer_type"].tolist(),
+    "survival_analysis_with_confounders": CANCERS_WITH_CONFOUNDERS
+}
+SURVIVAL_SAMPLETYPES = {
+    "survival_analysis": CANCER_TYPES_SURV["sample_type_clean"].tolist(),
+    "survival_analysis_with_confounders": SAMPLETYPES_WITH_CONFOUNDERS
+}
+
 ##### RULES #####
 rule all:
     input:
-        # calculate signatures
-        expand(os.path.join(RESULTS_DIR,"files","signatures","{cancer}-PrimaryTumor_vs_SolidTissueNormal-EX.tsv.gz"), cancer=CANCER_TYPES_PTSTN),
-        expand(os.path.join(RESULTS_DIR,"files","signatures","{cancer}-Metastatic_vs_PrimaryTumor-EX.tsv.gz"), cancer=CANCER_TYPES_METPT),
-        expand(os.path.join(RESULTS_DIR,"files","signatures","{cancer}-{sample}-EX.tsv.gz"), zip, cancer=CANCER_TYPES, sample=SAMPLE_TYPES),
-
-        # compute viper SF activities
-        ## PT vs STN
-        expand(os.path.join(RESULTS_DIR,"files","protein_activity","{cancer}-{sample}-EX.tsv.gz"), cancer=CANCER_TYPES_PTSTN, sample=["PrimaryTumor_vs_SolidTissueNormal"]),
-        ## MET vs PT
-        expand(os.path.join(RESULTS_DIR,"files","protein_activity","{cancer}-{sample}-EX.tsv.gz"), cancer=CANCER_TYPES_METPT, sample=["Metastatic_vs_PrimaryTumor"]),
-        ## within
-        expand(os.path.join(RESULTS_DIR,"files","protein_activity","{cancer}-{sample}-EX.tsv.gz"), zip, cancer=CANCER_TYPES, sample=SAMPLE_TYPES),
-
-        # differential analyses
-        ## SF activities
-        expand(os.path.join(RESULTS_DIR,'files',"diff_protein_activity",'{cancer}-{comparison}.tsv.gz'), comparison=["PrimaryTumor_vs_SolidTissueNormal"], cancer=CANCER_TYPES_PTSTN),
-        expand(os.path.join(RESULTS_DIR,'files',"diff_protein_activity",'{cancer}-{comparison}.tsv.gz'), comparison=["Metastatic_vs_PrimaryTumor"], cancer=CANCER_TYPES_METPT),
-        ## gene expression
-        expand(os.path.join(RESULTS_DIR,'files',"diff_genexpr_tpm",'{cancer}-{comparison}.tsv.gz'), comparison=["PrimaryTumor_vs_SolidTissueNormal"], cancer=CANCER_TYPES_PTSTN),
-        expand(os.path.join(RESULTS_DIR,'files',"diff_genexpr_tpm",'{cancer}-{comparison}.tsv.gz'), comparison=["Metastatic_vs_PrimaryTumor"], cancer=CANCER_TYPES_METPT),
-        ## merge
-        expand(os.path.join(RESULTS_DIR,'files','PANCAN','{omic}-mannwhitneyu-{comparison}.tsv.gz'), comparison=DIFF_CANCER_TYPES.keys(), omic=OMICS),
-        ## define cancer program
-        os.path.join(RESULTS_DIR,'files','PANCAN','cancer_program.tsv.gz'),
-        
         # survival
         ## SF activity
-        expand(os.path.join(RESULTS_DIR,'files',"survival_analysis",'{omic}-{cancer}-{sample_type}-surv.tsv.gz'), zip, cancer=CANCER_TYPES_SURV["cancer_type"].values, sample_type=CANCER_TYPES_SURV["sample_type_clean"].values, omic=["protein_activity"]),
-        expand(os.path.join(RESULTS_DIR,'files',"survival_analysis",'{omic}-{cancer}-{sample_type}-cat.tsv.gz'), zip, cancer=CANCER_TYPES_SURV["cancer_type"].values, sample_type=CANCER_TYPES_SURV["sample_type_clean"].values, omic=["protein_activity"]),
+        expand(os.path.join(RESULTS_DIR,'files',"{survival_type}",'protein_activity-{cancer}-{sample_type}-surv.tsv.gz'), zip, cancer=SURV_ANALYSIS_CANCERS, sample_type=SURV_ANALYSIS_SAMPLETYPES, survival_type=SURV_ANALYSIS_TYPES),
+        expand(os.path.join(RESULTS_DIR,'files',"{survival_type}",'protein_activity-{cancer}-{sample_type}-cat.tsv.gz'), zip, cancer=SURV_ANALYSIS_CANCERS, sample_type=SURV_ANALYSIS_SAMPLETYPES, survival_type=SURV_ANALYSIS_TYPES),
         ## gene expression
-        expand(os.path.join(RESULTS_DIR,'files',"survival_analysis",'{omic}-{cancer}-{sample_type}-surv.tsv.gz'), zip, cancer=CANCER_TYPES_SURV["cancer_type"].values, sample_type=CANCER_TYPES_SURV["sample_type_clean"].values, omic=["genexpr_tpm"]),
-        expand(os.path.join(RESULTS_DIR,'files',"survival_analysis",'{omic}-{cancer}-{sample_type}-cat.tsv.gz'), zip, cancer=CANCER_TYPES_SURV["cancer_type"].values, sample_type=CANCER_TYPES_SURV["sample_type_clean"].values, omic=["genexpr_tpm"]),
+        expand(os.path.join(RESULTS_DIR,'files',"{survival_type}",'genexpr_tpm-{cancer}-{sample_type}-surv.tsv.gz'), zip, cancer=SURV_ANALYSIS_CANCERS, sample_type=SURV_ANALYSIS_SAMPLETYPES, survival_type=SURV_ANALYSIS_TYPES),
+        expand(os.path.join(RESULTS_DIR,'files',"{survival_type}",'genexpr_tpm-{cancer}-{sample_type}-cat.tsv.gz'), zip, cancer=SURV_ANALYSIS_CANCERS, sample_type=SURV_ANALYSIS_SAMPLETYPES, survival_type=SURV_ANALYSIS_TYPES),
         ## merge
-        expand(os.path.join(RESULTS_DIR,'files','PANCAN',"{omic}-survival_analysis-{surv_type}.tsv.gz"), surv_type=["surv","cat"], omic=OMICS),
+        expand(os.path.join(RESULTS_DIR,'files','PANCAN',"{omic}-{survival_type}-{surv_table}.tsv.gz"), surv_table=["surv","cat"], omic=OMICS, survival_type=list(set(SURV_ANALYSIS_TYPES))),
+        
+#         # calculate signatures
+#         expand(os.path.join(RESULTS_DIR,"files","signatures","{cancer}-PrimaryTumor_vs_SolidTissueNormal-EX.tsv.gz"), cancer=CANCER_TYPES_PTSTN),
+#         expand(os.path.join(RESULTS_DIR,"files","signatures","{cancer}-Metastatic_vs_PrimaryTumor-EX.tsv.gz"), cancer=CANCER_TYPES_METPT),
+#         expand(os.path.join(RESULTS_DIR,"files","signatures","{cancer}-{sample}-EX.tsv.gz"), zip, cancer=CANCER_TYPES, sample=SAMPLE_TYPES),
 
-        # cross regulation
-        expand(os.path.join(RESULTS_DIR,'files',"sf_cross_regulation",'{omic}-{cancer}-{sample_type}.tsv.gz'), zip, cancer=CANCER_TYPES_SURV["cancer_type"].values, sample_type=CANCER_TYPES_SURV["sample_type_clean"].values, omic=OMICS),
-        expand(os.path.join(RESULTS_DIR,'files','PANCAN',"{omic}-sf_cross_regulation.tsv.gz"), omic=OMICS),
+#         # compute viper SF activities
+#         ## PT vs STN
+#         expand(os.path.join(RESULTS_DIR,"files","protein_activity","{cancer}-{sample}-EX.tsv.gz"), cancer=CANCER_TYPES_PTSTN, sample=["PrimaryTumor_vs_SolidTissueNormal"]),
+#         ## MET vs PT
+#         expand(os.path.join(RESULTS_DIR,"files","protein_activity","{cancer}-{sample}-EX.tsv.gz"), cancer=CANCER_TYPES_METPT, sample=["Metastatic_vs_PrimaryTumor"]),
+#         ## within
+#         expand(os.path.join(RESULTS_DIR,"files","protein_activity","{cancer}-{sample}-EX.tsv.gz"), zip, cancer=CANCER_TYPES, sample=SAMPLE_TYPES),
 
-        # correl genexpr vs activity
-        expand(os.path.join(RESULTS_DIR,'files',"sf_activity_regulation",'genexpr_tpm_vs_activity-{cancer}-{sample_type}.tsv.gz'), zip, cancer=CANCER_TYPES_SURV["cancer_type"].values, sample_type=CANCER_TYPES_SURV["sample_type_clean"].values),
-        os.path.join(RESULTS_DIR,'files','PANCAN',"genexpr_tpm_vs_activity.tsv.gz"),
+#         # differential analyses
+#         ## SF activities
+#         expand(os.path.join(RESULTS_DIR,'files',"diff_protein_activity",'{cancer}-{comparison}.tsv.gz'), comparison=["PrimaryTumor_vs_SolidTissueNormal"], cancer=CANCER_TYPES_PTSTN),
+#         expand(os.path.join(RESULTS_DIR,'files',"diff_protein_activity",'{cancer}-{comparison}.tsv.gz'), comparison=["Metastatic_vs_PrimaryTumor"], cancer=CANCER_TYPES_METPT),
+#         ## gene expression
+#         ### Wilcoxon test
+#         expand(os.path.join(RESULTS_DIR,'files',"diff_genexpr_tpm",'{cancer}-{comparison}.tsv.gz'), comparison=["PrimaryTumor_vs_SolidTissueNormal"], cancer=CANCER_TYPES_PTSTN),
+#         expand(os.path.join(RESULTS_DIR,'files',"diff_genexpr_tpm",'{cancer}-{comparison}.tsv.gz'), comparison=["Metastatic_vs_PrimaryTumor"], cancer=CANCER_TYPES_METPT),
+#         ### DESeq2
+#         expand(os.path.join(RESULTS_DIR,'files',"diff_genexpr_counts_deseq2",'{cancer}-{comparison}.tsv.gz'), comparison=["PrimaryTumor_vs_SolidTissueNormal"], cancer=CANCER_TYPES_PTSTN),
+#         ## merge
+#         expand(os.path.join(RESULTS_DIR,'files','PANCAN','{omic}-mannwhitneyu-{comparison}.tsv.gz'), comparison=DIFF_CANCER_TYPES.keys(), omic=OMICS),
+#         ## define cancer program
+#         os.path.join(RESULTS_DIR,'files','PANCAN','cancer_program.tsv.gz'),
+        
+#         # survival
+#         ## SF activity
+#         expand(os.path.join(RESULTS_DIR,'files',"{survival_type}",'{omic}-{cancer}-{sample_type}-surv.tsv.gz'), zip, cancer=CANCER_TYPES_SURV["cancer_type"].values, sample_type=CANCER_TYPES_SURV["sample_type_clean"].values, omic=["protein_activity"], survival_type=SURV_ANALYSIS_TYPES),
+#         expand(os.path.join(RESULTS_DIR,'files',"{survival_type}",'{omic}-{cancer}-{sample_type}-cat.tsv.gz'), zip, cancer=CANCER_TYPES_SURV["cancer_type"].values, sample_type=CANCER_TYPES_SURV["sample_type_clean"].values, omic=["protein_activity"], survival_type=SURV_ANALYSIS_TYPES),
+#         ## gene expression
+#         expand(os.path.join(RESULTS_DIR,'files',"{survival_type}",'{omic}-{cancer}-{sample_type}-surv.tsv.gz'), zip, cancer=CANCER_TYPES_SURV["cancer_type"].values, sample_type=CANCER_TYPES_SURV["sample_type_clean"].values, omic=["genexpr_tpm"], survival_type=SURV_ANALYSIS_TYPES),
+#         expand(os.path.join(RESULTS_DIR,'files',"{survival_type}",'{omic}-{cancer}-{sample_type}-cat.tsv.gz'), zip, cancer=CANCER_TYPES_SURV["cancer_type"].values, sample_type=CANCER_TYPES_SURV["sample_type_clean"].values, omic=["genexpr_tpm"], survival_type=SURV_ANALYSIS_TYPES),
+#         ## merge
+#         expand(os.path.join(RESULTS_DIR,'files','PANCAN',"{omic}-{survival_type}-{surv_table}.tsv.gz"), surv_table=["surv","cat"], omic=OMICS, survival_type=SURV_ANALYSIS_TYPES),
 
-        # figures
-        os.path.join(RESULTS_DIR,"figures","cancer_program")
+#         # cross regulation
+#         expand(os.path.join(RESULTS_DIR,'files',"sf_cross_regulation",'{omic}-{cancer}-{sample_type}.tsv.gz'), zip, cancer=CANCER_TYPES_SURV["cancer_type"].values, sample_type=CANCER_TYPES_SURV["sample_type_clean"].values, omic=OMICS),
+#         expand(os.path.join(RESULTS_DIR,'files','PANCAN',"{omic}-sf_cross_regulation.tsv.gz"), omic=OMICS),
+
+#         # correl genexpr vs activity
+#         expand(os.path.join(RESULTS_DIR,'files',"sf_activity_regulation",'genexpr_tpm_vs_activity-{cancer}-{sample_type}.tsv.gz'), zip, cancer=CANCER_TYPES_SURV["cancer_type"].values, sample_type=CANCER_TYPES_SURV["sample_type_clean"].values),
+#         os.path.join(RESULTS_DIR,'files','PANCAN',"genexpr_tpm_vs_activity.tsv.gz"),
+
+#         # figures
+#         os.path.join(RESULTS_DIR,"figures","cancer_program")
         
 
 rule compute_signature_pt_vs_stn:
@@ -189,21 +229,21 @@ rule compute_signature_within:
         print("Done!")
 
 #ruleorder: combine_protein_activity > compute_protein_activity      
-rule compute_protein_activity:
-    input:
-        signature = os.path.join(RESULTS_DIR,"files","signatures","{cancer}-{sample}-EX.tsv.gz"),
-        regulons_path = os.path.join(REGULONS_DIR,"files","experimentally_derived_regulons_pruned-EX")
-    output:
-        os.path.join(RESULTS_DIR,"files","protein_activity","{cancer}-{sample}-EX.tsv.gz")
-    params:
-        script_dir = SRC_DIR
-    shell:
-        """
-        Rscript {params.script_dir}/compute_protein_activity.R \
-                    --signature_file={input.signature} \
-                    --regulons_path={input.regulons_path} \
-                    --output_file={output}
-        """
+# rule compute_protein_activity:
+#     input:
+#         signature = os.path.join(RESULTS_DIR,"files","signatures","{cancer}-{sample}-EX.tsv.gz"),
+#         regulons_path = os.path.join(REGULONS_DIR,"files","experimentally_derived_regulons_pruned-EX")
+#     output:
+#         os.path.join(RESULTS_DIR,"files","protein_activity","{cancer}-{sample}-EX.tsv.gz")
+#     params:
+#         script_dir = SRC_DIR
+#     shell:
+#         """
+#         Rscript {params.script_dir}/compute_protein_activity.R \
+#                     --signature_file={input.signature} \
+#                     --regulons_path={input.regulons_path} \
+#                     --output_file={output}
+#         """
 
         
 rule compute_differential_protein_activity:
@@ -257,8 +297,36 @@ rule compute_differential_genexpr:
                     --condition_b={params.condition_b} \
                     --output_file={output} \
                     --padj_method={params.padj_method} 
-        """    
+        """ 
         
+        
+rule compute_differential_genexpr_deseq2:
+    input:
+        genexpr = os.path.join("/home/manglada/databases/data/GDC/gene_counts","{cancer}.tsv.gz"),
+        metadata = os.path.join(PREP_DIR,'metadata','{cancer}.tsv.gz')
+    output:
+        os.path.join(RESULTS_DIR,'files',"diff_genexpr_counts_deseq2",'{cancer}-{comparison}.tsv.gz')
+    params:
+        script_dir = SRC_DIR,
+        padj_method = "fdr",
+        condition_a = lambda wildcards: DIFF_CONDITIONS[wildcards.comparison]["a"],
+        condition_b = lambda wildcards: DIFF_CONDITIONS[wildcards.comparison]["b"],
+        comparison_col = "sample_type_clean",
+        sample_col = "sampleID"
+    threads: 10
+    shell:
+        """
+        Rscript {params.script_dir}/run_deseq2.R \
+                    --data_file={input.genexpr} \
+                    --metadata_file={input.metadata} \
+                    --sample_col={params.sample_col} \
+                    --comparison_col={params.comparison_col} \
+                    --condition_a={params.condition_a} \
+                    --condition_b={params.condition_b} \
+                    --output_file={output} \
+                    --n_jobs={threads} \
+                    --padj_method={params.padj_method} 
+        """          
         
 rule combine_differential_results:
     input:
@@ -362,12 +430,13 @@ rule survival_analysis_protein_activity:
         protein_activity = os.path.join(RESULTS_DIR,"files","protein_activity","{cancer}-{sample_type}-EX.tsv.gz"),
         metadata = os.path.join(RAW_DIR,'UCSCXena','TCGA','phenotype','Survival_SupplementalTable_S1_20171025_xena_sp.gz')
     output:
-        surv = os.path.join(RESULTS_DIR,'files',"survival_analysis",'protein_activity-{cancer}-{sample_type}-surv.tsv.gz'),
-        cat = os.path.join(RESULTS_DIR,'files',"survival_analysis",'protein_activity-{cancer}-{sample_type}-cat.tsv.gz')
+        surv = os.path.join(RESULTS_DIR,'files',"{survival_type}",'protein_activity-{cancer}-{sample_type}-surv.tsv.gz'),
+        cat = os.path.join(RESULTS_DIR,'files',"{survival_type}",'protein_activity-{cancer}-{sample_type}-cat.tsv.gz')
     params:
         sample_col = "sample",
         surv_event_col = "OS",
-        surv_time_col = "OS.time"
+        surv_time_col = "OS.time",
+        consider_confounders = lambda wildcards: "True" if wildcards.survival_type=="survival_analysis_with_confounders" else "False"
     shell:
         """
         Rscript scripts/survival_analysis.R \
@@ -376,6 +445,7 @@ rule survival_analysis_protein_activity:
                     --sample_col={params.sample_col} \
                     --surv_event_col={params.surv_event_col} \
                     --surv_time_col={params.surv_time_col} \
+                    --consider_confounders={params.consider_confounders} \
                     --output_surv_file={output.surv} \
                     --output_cat_file={output.cat}
         """
@@ -387,12 +457,13 @@ rule survival_analysis_genexpr_tpm:
         metadata = os.path.join(RAW_DIR,'UCSCXena','TCGA','phenotype','Survival_SupplementalTable_S1_20171025_xena_sp.gz'),
         sfs = os.path.join(SUPPORT_DIR,"splicing_factors","splicing_factors-ensembl.txt")
     output:
-        surv = os.path.join(RESULTS_DIR,'files',"survival_analysis",'genexpr_tpm-{cancer}-{sample_type}-surv.tsv.gz'),
-        cat = os.path.join(RESULTS_DIR,'files',"survival_analysis",'genexpr_tpm-{cancer}-{sample_type}-cat.tsv.gz')
+        surv = os.path.join(RESULTS_DIR,'files',"{survival_type}",'genexpr_tpm-{cancer}-{sample_type}-surv.tsv.gz'),
+        cat = os.path.join(RESULTS_DIR,'files',"{survival_type}",'genexpr_tpm-{cancer}-{sample_type}-cat.tsv.gz')
     params:
         sample_col = "sample",
         surv_event_col = "OS",
-        surv_time_col = "OS.time"
+        surv_time_col = "OS.time",
+        consider_confounders = lambda wildcards: "True" if wildcards.survival_type=="survival_analysis_with_confounders" else "False"
     shell:
         """
         Rscript scripts/survival_analysis.R \
@@ -402,6 +473,7 @@ rule survival_analysis_genexpr_tpm:
                     --surv_event_col={params.surv_event_col} \
                     --surv_time_col={params.surv_time_col} \
                     --features_oi_file={input.sfs} \
+                    --consider_confounders={params.consider_confounders} \
                     --output_surv_file={output.surv} \
                     --output_cat_file={output.cat}
         """
@@ -409,9 +481,11 @@ rule survival_analysis_genexpr_tpm:
     
 rule merge_survival_analysis:
     input:
-        surv_files = [os.path.join(RESULTS_DIR,'files',"survival_analysis",'{omic}-{cancer}-{sample_type}-{surv_type}.tsv.gz').format(cancer=cancer, sample_type=sample_type, surv_type="{surv_type}", omic="{omic}") for cancer, sample_type in CANCER_TYPES_SURV.values]
+        surv_files = lambda wildcards: [
+            os.path.join(RESULTS_DIR,'files',"{survival_type}",'{omic}-{cancer}-{sample_type}-{surv_table}.tsv.gz').format(cancer=cancer, sample_type=sample_type, surv_table="{surv_table}", omic="{omic}", survival_type="{survival_type}") 
+            for cancer, sample_type in zip(SURVIVAL_CANCERS[wildcards.survival_type], SURVIVAL_SAMPLETYPES[wildcards.survival_type])]
     output:
-        os.path.join(RESULTS_DIR,'files','PANCAN',"{omic}-survival_analysis-{surv_type}.tsv.gz")
+        os.path.join(RESULTS_DIR,'files','PANCAN',"{omic}-{survival_type}-{surv_table}.tsv.gz")
     run:
         import os
         import pandas as pd
