@@ -61,7 +61,12 @@ plot_tumorigenesis = function(protein_activity){
         geom_violin(aes(fill=driver_type), color=NA, position=position_dodge(0.9)) +
         geom_boxplot(width=0.1, outlier.size=0.1, fill=NA, color="black", position=position_dodge(0.9)) +
         fill_palette(PAL_DRIVER_TYPE) +
-        stat_compare_means(method="wilcox.test", label="p.signif", size=FONT_SIZE, family=FONT_FAMILY) + 
+        stat_compare_means(method="wilcox.test", label="p.format", size=FONT_SIZE, family=FONT_FAMILY) + 
+        geom_text(
+            aes(y=-3, label=label, group=driver_type),
+            . %>% count(cell_line_name, driver_type) %>% mutate(label=paste0("n=",n)),
+            size=FONT_SIZE, family=FONT_FAMILY, position=position_dodge(0.9)
+        ) +
         theme_pubr() +
         labs(x="Cell Line", y="Protein Activity", fill="Driver Type")
 
@@ -86,7 +91,12 @@ plot_tumorigenesis = function(protein_activity){
         geom_violin(aes(fill=driver_type), color=NA, position=position_dodge(0.9)) +
         geom_boxplot(width=0.1, outlier.size=0.1, fill=NA, color="black", position=position_dodge(0.9)) +
         fill_palette(PAL_DRIVER_TYPE) +
-        stat_compare_means(method="wilcox.test", label="p.signif", size=FONT_SIZE, family=FONT_FAMILY) + 
+        stat_compare_means(method="wilcox.test", label="p.format", size=FONT_SIZE, family=FONT_FAMILY) + 
+        geom_text(
+            aes(y=-3, label=label, group=driver_type),
+            . %>% count(cell_line_name, driver_type) %>% mutate(label=paste0("n=",n)),
+            size=FONT_SIZE, family=FONT_FAMILY, position=position_dodge(0.9)
+        ) +
         theme_pubr() +
         labs(x="Cell Line", y="Protein Activity", fill="Driver Type")
     

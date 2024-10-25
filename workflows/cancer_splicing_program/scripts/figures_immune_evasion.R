@@ -13,6 +13,8 @@ require(ggrepel)
 require(survival)
 require(survminer)
 require(readxl)
+require(clusterProfiler)
+require(ggbeeswarm)
 
 # variables
 RANDOM_SEED = 1234
@@ -41,7 +43,9 @@ FONT_FAMILY = "Arial"
 # human2mouse_file = file.path(RAW_DIR,"BIOMART","human2mouse.tsv")
 # survival_analysis_file = file.path(RESULTS_DIR,'files',"survival_analysis",'splicing-EX-Riaz2017-PRE-surv.tsv.gz')
 # protein_impact_file = file.path(RAW_DIR,'VastDB','PROT_IMPACT-hg38-v3.tab.gz')
+# msigdb_dir = file.path(RAW_DIR,'MSigDB','msigdb_v7.4','msigdb_v7.4_files_to_download_locally','msigdb_v7.4_GMTs')
 # figs_dir = file.path(RESULTS_DIR,"figures","immune_evasion-EX")
+# driver_types_file = file.path(RESULTS_DIR,'files','PANCAN','cancer_program.tsv.gz')
 
 ##### FUNCTIONS #####
 load_regulons = function(regulons_path, patt=NULL){
@@ -131,15 +135,58 @@ plot_diff_response = function(diff_response, immune_screen, splicing){
         plts[[sprintf("diff_response-psi_vs_survival-km-%s",event_gene)]] = plts[[sprintf("diff_response-psi_vs_survival-km-%s",event_gene)]][["plot"]]
     }
     
+    # immune screen response to perturbing regulators of exon_oi
+    regulators_exon_oi = c("SF3B3","PRPF8","SRSF1")
+    plts[["diff_response-immune_screen_score_reglators_oi-bar"]] = immune_screen %>%
+        filter(Comparison=="ICB vs NSG") %>%
+        mutate(
+            label = sprintf("%s (%s)", human_symbol, Gene)
+        ) %>%
+        arrange(score) %>%
+        ggbarplot(x="label", y="score", fill="darkred", color=NA) +
+        # ggplot(aes(x=Comparison, y=score)) +
+        # geom_quasirandom(color="darkred", size=0.1, varwidth=0.5) +
+        geom_text_repel(
+            aes(label=label), . %>% filter(human_symbol%in%regulators_exon_oi),
+            size=FONT_SIZE, family=FONT_FAMILY, segment.size=0.1, min.segment.length=0.001
+        ) +
+        theme_pubr() +
+        labs(x="", y="Fitness Score Gene KO")
+    
+    return(plts)
+}
+
+
+plot_enrichments = function(enrichment_targets_oi){
+    plts = list()
+    
+    X = enrichment_targets_oi
+    
+    terms_oi = X %>%
+        slice_max(GeneRatio, n=10) %>%
+        pull(Description) %>%
+        unique()
+    
+    plts[["reactome_enrichments-targets_regulators_exon_oi-bar"]] = X %>%
+        filter(Description %in% terms_oi) %>%
+        arrange(GeneRatio) %>%
+        ggbarplot(x="Description", y="GeneRatio", fill="darkred", color=NA,
+                  position=position_dodge(0.9)) +
+        geom_text(aes(label=Count), 
+                  size=FONT_SIZE, family=FONT_FAMILY, position=position_dodge(0.9), hjust=-0.1) +
+        labs(x="Description", y="GeneRatio", fill="Driver Type") +
+        coord_flip()
+
     return(plts)
 }
 
 
 make_plots = function(
-    diff_response, immune_screen, splicing
+    diff_response, immune_screen, splicing, enrichment_targets_oi
 ){
     plts = list(
-        plot_diff_response(diff_response, immune_screen, splicing)
+        plot_diff_response(diff_response, immune_screen, splicing),
+        plot_enrichments(enrichment_targets_oi)
     )
     plts = do.call(c,plts)
     return(plts)
@@ -179,6 +226,8 @@ save_plots = function(plts, figs_dir){
     save_plt(plts, "diff_response-median_diff_vs_pvalue-scatter", '.pdf', figs_dir, width=4, height=4)
     save_plt(plts, "diff_response-median_diff_vs_immune_screen_score-scatter", '.pdf', figs_dir, width=8, height=6)
     save_plt(plts, "diff_response-psi_vs_survival-km-HsaEX1036341_SEC22B", '.pdf', figs_dir, width=5, height=7, format=FALSE)
+    save_plt(plts, "diff_response-immune_screen_score_reglators_oi-bar", '.pdf', figs_dir, width=5, height=4)
+    save_plt(plts, "reactome_enrichments-targets_regulators_exon_oi-bar", '.pdf', figs_dir, width=16, height=4)
 }
 
 
@@ -258,6 +307,11 @@ main = function(){
                                    "In the CDS (uncertain)",term_clean),
                    term_clean=replace_na(term_clean, "Unknown")
             )
+    ontologies = list(
+        "reactome" = read.gmt(file.path(msigdb_dir,"c2.cp.reactome.v7.4.symbols.gmt"))
+    )
+    driver_types = read_tsv(driver_types_file)
+
     # prep
     regulons = regulons %>% 
         bind_rows() %>%
@@ -325,9 +379,28 @@ main = function(){
         ) %>%
         left_join(annot, by="EVENT")
         
+    # analysis on splicing networks regulating HsaEX1036341_SEC22B
+    exon_oi = "HsaEX1036341"
+    
+    ## who are its regulators?
+    ### 'ENSG00000174231''ENSG00000136450''ENSG00000189091' | 'PRPF8' 'SRSF1' 'SF3B3'
+    regulators_oi = regulons %>% filter(target %in% exon_oi) %>% pull(regulator)
+    targets_oi = regulons %>% filter(regulator %in% regulators_oi) %>% pull(target)
+    genes_targets_oi = annot %>% filter(EVENT %in% targets_oi) %>% pull(GENE) %>% unique()
+    
+    ## which pathways this regulators control?
+    enrichment_targets_oi = enricher(genes_targets_oi, TERM2GENE=ontologies[["reactome"]]) %>%
+        as.data.frame() %>%
+        filter(p.adjust < THRESH_FDR) %>%
+        rowwise() %>%
+        mutate(GeneRatio = eval(parse(text=GeneRatio))) %>%
+        ungroup()
+    
+    geneset_sizes = ontologies[["reactome"]] %>%
+        count(term)
     
     # plot
-    plts = make_plots(diff_response, immune_screen, splicing)
+    plts = make_plots(diff_response, immune_screen, splicing, enrichment_targets_oi)
     
     # make figdata
     figdata = make_figdata(diff_response, immune_screen, splicing)

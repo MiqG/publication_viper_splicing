@@ -14,8 +14,12 @@ require(extrafont)
 
 # variables
 SETS_MAIN = c(
-    'aracne_regulons_combined',
-    'mlr_regulons_combined',
+    'aracne_regulons_CardosoMoreira2020',
+    'mlr_regulons_CardosoMoreira2020',
+    'aracne_regulons_PANCAN_STN',
+    'mlr_regulons_PANCAN_STN',
+    'aracne_regulons_PANCAN_PT',
+    'mlr_regulons_PANCAN_PT',
     'experimentally_derived_regulons_pruned'
 )
 
@@ -120,7 +124,7 @@ plot_evaluation = function(evaluation){
     # evaluation by dataset
     x = X %>%
         group_by(regulon_set, method_activity, curves_type, eval_direction, eval_type, 
-                 signature_id, n_total_regulators, n_total_targets, in_empirical) %>%
+                 signature_id, n_total_regulators, n_total_targets) %>%
         summarize(auc_roc = median(auc_roc, na.rm=TRUE)) %>%    
         ungroup()
     
@@ -323,7 +327,7 @@ plot_evaluation = function(evaluation){
         theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         labs(x="Method", y="median(ROC AUC)", color="Inference Type", shape="Held-out Dataset")
     
-    # troubleshooting of computational networks
+    # computational networks
     ## evaluation considering splitting networks
     plts[["evaluation-comp_split-median_auc_roc-box"]] = x %>%
         filter(regulon_set%in%SETS_COMPUTATIONAL & eval_type=="real") %>%
@@ -339,7 +343,7 @@ plot_evaluation = function(evaluation){
         geom_text(
             aes(y = 0.3, label=label), 
             . %>% 
-            count(method_activity, regulon_set, eval_type, eval_direction) %>% 
+            count(method_activity, regulon_set, eval_direction) %>% 
             mutate(label=paste0("n=",n)),
             position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
         ) +
@@ -405,7 +409,7 @@ plot_evaluation = function(evaluation){
     
     
     ## evaluation combining ARACNe and MLR determined networks
-    plts[["evaluation-comp_best_w_empirical_likelihood-median_auc_roc-box"]] = x %>%
+    plts[["evaluation-comp_best_aracne_mlr-median_auc_roc-box"]] = x %>%
         filter(regulon_set%in%SETS_MOR & eval_type=="real") %>%
         mutate(
             regulon_set = factor(regulon_set, levels=SETS_MOR),
@@ -468,18 +472,40 @@ save_plt = function(plts, plt_name, extension='.pdf',
 
 
 save_plots = function(plts, figs_dir){
-    # main
-    save_plt(plts, sprintf("%s-evaluation-ranking_perc_vs_regulon_set_vs_pert_type-main-box", omic_type_oi), '.pdf', figs_dir, width=6.5, height=12)
-    save_plt(plts, sprintf("%s-evaluation-ranking_perc_vs_regulon_set-main-box", omic_type_oi), '.pdf', figs_dir, width=7, height=7)
-    # robustness
-    save_plt(plts, sprintf("%s-evaluation-ranking_perc_vs_regulon_set-robustness-box", omic_type_oi), '.pdf', figs_dir, width=12, height=7)
-    save_plt(plts, sprintf("%s-evaluation-ranking_perc_vs_regulon_set-dpsi_thresh-box", omic_type_oi), '.pdf', figs_dir, width=12, height=7)
-    # likelihood
-    save_plt(plts, sprintf("%s-evaluation-ranking_perc_vs_regulon_set-likelihood-box", omic_type_oi), '.pdf', figs_dir, width=7, height=7)
-    # mor
-    save_plt(plts, sprintf("%s-evaluation-ranking_perc_vs_regulon_set-mor-box", omic_type_oi), '.pdf', figs_dir, width=3.5, height=7)
-    # one-tailed
-    save_plt(plts, sprintf("%s-evaluation-ranking_perc_vs_regulon_set-main_one_tailed-box", omic_type_oi), '.pdf', figs_dir, width=7, height=7)
+    
+    # overall
+    save_plt(plts, "evaluation-general-median_auc_roc-box", '.pdf', figs_dir, width=9, height=8.5)
+    
+    # by held out dataset
+    save_plt(plts, "evaluation-held_out_ds-raw_auc_roc-box", '.pdf', figs_dir, width=12, height=8)
+    
+    # by SF class
+    save_plt(plts, "evaluation-sf_class-raw_auc_roc-box", '.pdf', figs_dir, width=4, height=6)
+    
+    # by SF class and held out dataset
+    save_plt(plts, "evaluation-sf_class_vs_held_out_ds-raw_auc_roc-box", '.pdf', figs_dir, width=12, height=12)
+    
+    # CLIP eval
+    save_plt(plts, "evaluation-clip-median_auc_roc-box", '.pdf', figs_dir, width=8, height=9)
+    
+    # thresholds empirical SF
+    save_plt(plts, "evaluation-threshold-median_auc_roc-box", '.pdf', figs_dir, width=10, height=14)
+    
+    # robustness empirical SF
+    save_plt(plts, "evaluation-robustness-median_auc_roc-box", '.pdf', figs_dir, width=10, height=14)
+    
+    # computational- by network
+    save_plt(plts, "evaluation-comp_split-median_auc_roc-box", '.pdf', figs_dir, width=10, height=8)
+
+    # computational best with empirical MoR and SF class
+    save_plt(plts, "evaluation-comp_best_vs_in_empirical-median_auc_roc-box", '.pdf', figs_dir, width=7, height=7)
+    
+    # computational best with empirical MoR
+    save_plt(plts, "evaluation-comp_best_w_empirical_likelihood-median_auc_roc-box", '.pdf', figs_dir, width=7, height=8)
+    
+    # combine aracne and MLR
+    save_plt(plts, "evaluation-comp_best_aracne_mlr-median_auc_roc-box", '.pdf', figs_dir, width=4, height=7)
+    
 }
 
 

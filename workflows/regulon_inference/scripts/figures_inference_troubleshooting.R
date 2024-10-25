@@ -32,7 +32,7 @@ PAL_EVAL = setNames(c("#EB9486","#7E7F9A"), c(TRUE, FALSE))
 # experimental_pruned_path = file.path(RESULTS_DIR,"files","experimentally_derived_regulons_pruned-EX")
 # aracne_and_experimental_path = file.path(RESULTS_DIR,"files","aracne_and_experimental_regulons-EX")
 # mlr_and_experimental_path = file.path(RESULTS_DIR,"files","mlr_and_experimental_regulons-EX")
-# figs_dir = file.path(RESULTS_DIR,"figures","regulon_inference")
+# figs_dir = file.path(RESULTS_DIR,"figures","inference_troubleshooting")
 
 ##### FUNCTIONS #####
 load_networks = function(network_path, patt=NULL){

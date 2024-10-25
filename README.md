@@ -31,15 +31,24 @@ Repurposing VIPER to estimate differential splicing factor activity.
             - from fibroblasts to cancer
     6. `prepare_submission`: prepare supplementary tables
 
-## Requirements (TODO)
-- python
-- R
-    - CRAN
-    - bioconductor
-    - github
-
 ## Usage
+### 1. Install environment
+We recommend installing mamba miniforge rather than conda in your corresponding OS: https://github.com/conda-forge/miniforge.
+```shell
+mamba env create -f environment.yml
+```
+This may take a while
+
+### 2. Run snakemake with the `publication_viper_splicing` environment
 All workflows were written as `snakemake` pipelines. Refer to each specific workflow to run them.
+
+```shell
+# run locally
+snakemake -s {snakefile path} --cores {n_cpus} --use-conda
+
+# cluster job submission example (SGE scheduler)
+snakemake --cluster "qsub -cwd -pe smp {threads} -l virtual_free={resources.memory}G,h_rt={resources.runtime} -q long,short" --use-conda --jobs 30 -s {snakefile path}
+```
 
 ## Authors
 - [Miquel Anglada Girotto](https://orcid.org/0000-0003-1885-8649)

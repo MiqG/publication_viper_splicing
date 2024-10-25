@@ -27,8 +27,10 @@ run_deseq2 = function(count_data, metadata, sample_col, comparison_col, conditio
     rownames(count_data) = count_data[,1]
     count_data = count_data[,2:ncol(count_data)]
     count_data = count_data %>% 
-        dplyr::select(where(is.numeric))
-
+        dplyr::select(where(is.numeric)) %>% 
+        mutate_if(is.numeric, replace_na, replace = 0) %>%
+        mutate_if(is.numeric, as.integer)
+    
     # Match metadata and count data by sample column
     common_samples = intersect(metadata[["sampleID"]],colnames(count_data))
     col_data = metadata %>%
@@ -49,13 +51,34 @@ run_deseq2 = function(count_data, metadata, sample_col, comparison_col, conditio
     dds = dds[rowSums(counts(dds)) > 1, ]
     
     # Run DESeq2 analysis
-    dds = DESeq(dds, parallel= TRUE, BPPARAM=bpparam)
+    dds = DESeq(dds, parallel=TRUE, BPPARAM=bpparam)
     
     # Extract results for condition_a vs condition_b
     result = results(dds, contrast = c(comparison_col, condition_a, condition_b), pAdjustMethod = padj_method)
     
     # Turn result into a tibble
     result_df = as_tibble(result, rownames = "gene")
+    
+    # add info
+    ## normalized counts
+    normalized_counts = counts(dds, normalized=TRUE) %>% as.data.frame()
+    mean_counts_a = rowMeans(normalized_counts[, col_data[[comparison_col]] == condition_a], na.rm = TRUE)
+    mean_counts_b = rowMeans(normalized_counts[, col_data[[comparison_col]] == condition_b], na.rm = TRUE)
+    median_counts_a = matrixStats::rowMedians(as.matrix(normalized_counts[, col_data[[comparison_col]] == condition_a]), na.rm = TRUE)
+    median_counts_b = matrixStats::rowMedians(as.matrix(normalized_counts[, col_data[[comparison_col]] == condition_b]), na.rm = TRUE)
+    
+    ## add
+    result_df = result_df %>%
+        mutate(
+            comparison_col = comparison_col,
+            condition_a = condition_a,
+            condition_b = condition_b,
+            `condition_a-mean` = mean_counts_a[gene],
+            `condition_b-mean` = mean_counts_b[gene],
+            `condition_a-median` = median_counts_a[gene],
+            `condition_b-median` = median_counts_b[gene]
+        )
+    
     
     return(result_df)
 }

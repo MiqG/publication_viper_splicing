@@ -100,15 +100,15 @@ rule all:
         # Quantify splicing and mRNA levels with vast-tools
         expand(os.path.join(TCGA_DIR,"{cancer_type}","vast_out",".done","{sample}"), zip, sample=SAMPLES, cancer_type=CANCER_TYPES),
 
+        Remove fastq files
+        expand(os.path.join(TCGA_DIR,"fastqs",".done_rm","{sample}"), sample=SAMPLES),
+        
         # Combine into single tables
         expand(os.path.join(TCGA_DIR,"{cancer_type}","vast_out",".done_combine-{n_samples}"), zip, cancer_type=N_SAMPLES.keys(), n_samples=N_SAMPLES.values()),
 
         # Tidy PSI
         expand(os.path.join(".done","{cancer_type}.done"), cancer_type=set(CANCER_TYPES)),
         expand(os.path.join(TCGA_DIR,"{cancer_type}","vast_out","PSI-minN_1-minSD_0-noVLOW-min_ALT_use25-Tidy.tab.gz"), cancer_type=set(CANCER_TYPES)),
-        
-        # Remove fastq files
-        expand(os.path.join(TCGA_DIR,"fastqs",".done_rm","{sample}"), sample=SAMPLES),
         
         
 rule create_manifests:
@@ -424,9 +424,10 @@ rule vasttools_combine:
         bin_dir="~/repositories/vast-tools/",
         vast_out = os.path.join(TCGA_DIR,"{cancer_type}","vast_out"),
         folder = os.path.join(TCGA_DIR,"{cancer_type}","vast_out",t)
-    threads: 16
+    threads: 10
     resources:
-        runtime = 3600*24, # 24h
+        runtime = 3600*48, # 24h in seconds
+        #runtime = 60*24, # 24h in minutes
         memory = 90
     shell:
         """
@@ -435,9 +436,9 @@ rule vasttools_combine:
         # group results
         echo "Grouping results..."
         mkdir -p {params.folder}/to_combine
-        ln -s {params.vast_out}/*/to_combine/* {params.folder}/to_combine/
+        ln -sf {params.vast_out}/*/to_combine/* {params.folder}/to_combine/
         mkdir -p {params.folder}/expr_out
-        ln -s {params.vast_out}/*/expr_out/* {params.folder}/expr_out/
+        ln -sf {params.vast_out}/*/expr_out/* {params.folder}/expr_out/
 
         # combine runs
         echo "Combining runs..."
@@ -448,18 +449,24 @@ rule vasttools_combine:
                     --keep_raw_reads \
                     --keep_raw_incl \
                     --output {params.folder} \
-                    --TPM
+                    --TPM \
+                    -C
 
         # compress outputs
         echo "Compressing outputs..."
         gzip -f {params.folder}/raw_incl/*
         gzip -f {params.folder}/raw_reads/*
         gzip -f {params.folder}/*.tab
-
+        
+        # remove existing results, just in case
+        rm -fr {params.vast_out}/raw_incl
+        rm -fr {params.vast_out}/raw_reads
+        rm -f {params.vast_out}/*.tab.gz        
+        
         # move results from tmp to vast_out
-        mv {params.folder}/raw_incl {params.vast_out}/
-        mv {params.folder}/raw_reads {params.vast_out}/
-        mv {params.folder}/*.tab.gz {params.vast_out}/
+        mv -f {params.folder}/raw_incl {params.vast_out}/
+        mv -f {params.folder}/raw_reads {params.vast_out}/
+        mv -f {params.folder}/*.tab.gz {params.vast_out}/
 
         # remove tmp directory
         echo "Removing grouped results..."
@@ -480,7 +487,8 @@ rule vasttools_tidy:
         bin_dir="~/repositories/vast-tools/"
     threads: 1
     resources:
-        runtime = 3600*12, # 12h
+        runtime = 3600*12, # 12h in seconds
+        #runtime = 60*12, # 12h in minutes
         memory = 40
     shell:
         """
@@ -489,7 +497,7 @@ rule vasttools_tidy:
         echo "Tidying up..."
         {params.bin_dir}/vast-tools tidy <(zcat {input}) -min_N 1 -min_SD 0 --min_ALT_use 25 --noVLOW --log -outFile {output.tidy}
         gzip --force {output.tidy}
-        mv {output.tidy}.gz {output.tidy}
+        mv -f {output.tidy}.gz {output.tidy}
         
         echo "Done!"
         """

@@ -125,6 +125,7 @@ rule all:
         expand(os.path.join(PREP_DIR,"event_psi","{cancer}-ALTD.tsv.gz"), cancer=CANCER_TYPES),
         expand(os.path.join(PREP_DIR,"event_psi","{cancer}-INT.tsv.gz"), cancer=CANCER_TYPES),
         expand(os.path.join(PREP_DIR,'genexpr_tpm','{cancer}.tsv.gz'), cancer=CANCER_TYPES),
+        expand(os.path.join(PREP_DIR,'genexpr_counts','{cancer}.tsv.gz'), cancer=CANCER_TYPES),
         expand(os.path.join(PREP_DIR,"mutations","{cancer}.tsv.gz"), cancer=CANCER_TYPES),
         os.path.join(PREP_DIR,"metadata","PANCAN.tsv.gz"),
         
@@ -161,6 +162,7 @@ rule all:
         # impute event PSI
         expand(os.path.join(PREP_DIR,'event_psi_imputed','{dataset}-{event_type}.tsv.gz'), dataset=["CardosoMoreira2020","PANCAN-SolidTissueNormal","PANCAN-PrimaryTumor"], event_type=EVENT_TYPES),
         # benchmark event imputation
+        expand(os.path.join(PREP_DIR,'event_psi_imputation_benchmark','{dataset}-{event_type}.tsv.gz'), dataset=["CardosoMoreira2020"], event_type=EVENT_TYPES),
         expand(os.path.join(PREP_DIR,'event_psi_imputation_benchmark','{dataset}-{event_type}-k{k}.tsv.gz'), dataset=["CardosoMoreira2020"], event_type=EVENT_TYPES, k=["2","5","10","50","100"]),
         
         # compute summary stats
@@ -564,14 +566,16 @@ rule preprocess_TCGA:
     input:
         metadata = os.path.join(RAW_DIR,"TCGA","metadata","{cancer}.tsv.gz"),
         psi = os.path.join(RAW_DIR,"TCGA","{cancer}","vast_out",'PSI-minN_1-minSD_0-noVLOW-min_ALT_use25-Tidy.tab.gz'),
-        genexpr = lambda wildcards: os.path.join(RAW_DIR,"TCGA","{cancer}","vast_out",'TPM-hg38-{n_samples}.tab.gz').format(cancer='{cancer}', n_samples=TCGA_N_SAMPLES[wildcards.cancer])
+        genexpr = lambda wildcards: os.path.join(RAW_DIR,"TCGA","{cancer}","vast_out",'TPM-hg38-{n_samples}.tab.gz').format(cancer='{cancer}', n_samples=TCGA_N_SAMPLES[wildcards.cancer]),
+        counts = lambda wildcards: os.path.join(RAW_DIR,"TCGA","{cancer}","vast_out",'COUNTS-hg38-{n_samples}.tab.gz').format(cancer='{cancer}', n_samples=TCGA_N_SAMPLES[wildcards.cancer])
     output:
         metadata = os.path.join(PREP_DIR,"metadata","{cancer}.tsv.gz"),
         psi_EX = os.path.join(PREP_DIR,"event_psi","{cancer}-EX.tsv.gz"),
         psi_ALTA = os.path.join(PREP_DIR,"event_psi","{cancer}-ALTA.tsv.gz"),
         psi_ALTD = os.path.join(PREP_DIR,"event_psi","{cancer}-ALTD.tsv.gz"),
         psi_INT = os.path.join(PREP_DIR,"event_psi","{cancer}-INT.tsv.gz"),
-        genexpr = os.path.join(PREP_DIR,'genexpr_tpm','{cancer}.tsv.gz')      
+        genexpr = os.path.join(PREP_DIR,'genexpr_tpm','{cancer}.tsv.gz'),
+        counts = os.path.join(PREP_DIR,'genexpr_counts','{cancer}.tsv.gz')
     run:
         import gc
         import pandas as pd
@@ -582,6 +586,7 @@ rule preprocess_TCGA:
         metadata = pd.read_table(input.metadata)
         psi = pd.read_table(input.psi, index_col=0)
         genexpr = pd.read_table(input.genexpr, index_col=[0,1])
+        counts = pd.read_table(input.counts, index_col=[0,1])
 
         gc.collect()
 
@@ -621,6 +626,7 @@ rule preprocess_TCGA:
         print("Processing TPM matrix...")
         ## remove vast-tools' suffix
         genexpr.columns = [c.replace('_1','') for c in genexpr.columns]
+        counts.columns = [c.replace('_1','') for c in counts.columns]
         
         ## log-transform
         genexpr = np.log2(genexpr + 1)
@@ -632,10 +638,13 @@ rule preprocess_TCGA:
                 psis["EX"].columns
             ).intersection(
                 genexpr.columns
+            ).intersection(
+                counts.columns
             )
         )
         psis = {e: psis[e][common_samples].copy() for e in event_types}
         genexpr = genexpr[common_samples].copy()
+        counts = counts[common_samples].copy()
         metadata = metadata.loc[metadata["file_id"].isin(common_samples)]
         
         ## rename columns
@@ -646,6 +655,9 @@ rule preprocess_TCGA:
             for e in event_types
         }
         genexpr = genexpr.rename(
+            columns=metadata.set_index("file_id")["sampleID"].to_dict()
+        ).copy()        
+        counts = counts.rename(
             columns=metadata.set_index("file_id")["sampleID"].to_dict()
         ).copy()        
             
@@ -661,6 +673,9 @@ rule preprocess_TCGA:
         
         ## TPMs
         genexpr.reset_index().drop(columns='NAME').to_csv(output.genexpr, **SAVE_PARAMS)
+        
+        ## counts
+        counts.reset_index().drop(columns='NAME').to_csv(output.counts, **SAVE_PARAMS)
         
         print("Done!")
 
@@ -1156,10 +1171,43 @@ rule impute_psi:
                     --features_as_rows={params.features_as_rows}
         """
         
+rule inject_missing_values:
+    input:
+        psi = os.path.join(PREP_DIR,'event_psi','{dataset}-{event_type}.tsv.gz')
+    output:
+        psi = os.path.join(PREP_DIR,'event_psi_imputation_benchmark','{dataset}-{event_type}.tsv.gz')
+    run:
+        import pandas as pd
+        import numpy as np
         
+        # load
+        psi = pd.read_table(input.psi, index_col=0)
+        
+        # inject
+        def inject_missing_values(df, missing_percentage=0.2):
+            df_copy = df.copy()
+            for col in df_copy.columns:
+                # Get indices where values are not already missing
+                non_missing_indices = df_copy.loc[df_copy[col].notnull()].index
+                # Calculate the number of missing values to inject
+                num_missing = int(len(non_missing_indices) * missing_percentage)
+                # Randomly select indices to set as missing
+                missing_indices = np.random.choice(non_missing_indices, num_missing, replace=False)
+                # Inject missing values
+                df_copy.loc[missing_indices, col] = np.nan
+            return df_copy
+        
+        psi = inject_missing_values(psi)
+        
+        # save
+        psi.reset_index().to_csv(output.psi, **SAVE_PARAMS)
+        
+        print("Done!")
+        
+    
 rule psi_imputation_benchmark:
     input:
-        os.path.join(PREP_DIR,'event_psi','{dataset}-{event_type}.tsv.gz')
+        os.path.join(PREP_DIR,'event_psi_imputation_benchmark','{dataset}-{event_type}.tsv.gz')
     output:
         os.path.join(PREP_DIR,'event_psi_imputation_benchmark','{dataset}-{event_type}-k{k}.tsv.gz')
     params:
@@ -2169,6 +2217,7 @@ rule figures_eda:
 rule figures_benchmark_imputation:
     input:
         original = os.path.join(PREP_DIR,'event_psi','CardosoMoreira2020-EX.tsv.gz'),
+        synthetic = os.path.join(PREP_DIR,'event_psi_imputation_benchmark','CardosoMoreira2020-EX.tsv.gz'),
         imputed = [os.path.join(PREP_DIR,'event_psi_imputation_benchmark','{dataset}-{event_type}-k{k}.tsv.gz').format(dataset="CardosoMoreira2020", event_type=e, k=k) 
                    for e in EVENT_TYPES for k in ["2","5","10","50","100"]]
     params:
@@ -2180,8 +2229,9 @@ rule figures_benchmark_imputation:
         directory(os.path.join(RESULTS_DIR,'figures','benchmark_imputation'))
     shell:
         """
-        Rscript scripts/figures_eda.R \
-                    --original_file={input.splicing_factors} \
+        Rscript scripts/figures_benchmark_imputation.R \
+                    --original_file={input.original} \
+                    --synthetic_file={input.synthetic} \
                     --imputed_files={params.imputed_joined} \
                     --figs_dir={output}
         """        
