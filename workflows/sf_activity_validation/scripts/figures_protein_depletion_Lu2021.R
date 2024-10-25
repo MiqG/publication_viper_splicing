@@ -60,7 +60,7 @@ plot_genexpr_gene_oi = function(genexpr, metadata, gene_oi){
         geom_boxplot(fill=NA, width=0.25, outlier.size=0.1) +
         color_palette(PAL_CELL_LINES) +
         theme_pubr() +
-        stat_compare_means(method="t.test", label="p.signif", size=FONT_SIZE, family=FONT_FAMILY, ref.group="DMSO") + 
+        stat_compare_means(method="t.test", label="p.format", size=FONT_SIZE, family=FONT_FAMILY, ref.group="DMSO") + 
         labs(x="Condition", y="log2(TPM+1)", color="Cell Line", subtitle=gene_oi)
     
     plts[["genexpr-MS023_vs_dmso-box"]] = X  %>%
@@ -70,7 +70,7 @@ plot_genexpr_gene_oi = function(genexpr, metadata, gene_oi){
         geom_boxplot(fill=NA, width=0.25, outlier.size=0.1) +
         color_palette(PAL_CELL_LINES) +
         theme_pubr() +
-        stat_compare_means(method="t.test", label="p.signif", size=FONT_SIZE, family=FONT_FAMILY, ref.group="DMSO") + 
+        stat_compare_means(method="t.test", label="p.format", size=FONT_SIZE, family=FONT_FAMILY, ref.group="DMSO") + 
         labs(x="Condition", y="log2(TPM+1)", color="Cell Line", subtitle=gene_oi)
     
     names(plts) = sprintf("%s-%s",names(plts),gene_oi)
@@ -95,7 +95,7 @@ plot_activity_gene_oi = function(protein_activity, metadata, gene_oi){
         geom_boxplot(fill=NA, width=0.25, outlier.size=0.1) +
         color_palette(PAL_CELL_LINES) +
         theme_pubr() +
-        stat_compare_means(method="t.test", label="p.signif", size=FONT_SIZE, family=FONT_FAMILY, ref.group="DMSO") + 
+        stat_compare_means(method="t.test", label="p.format", size=FONT_SIZE, family=FONT_FAMILY, ref.group="DMSO") + 
         labs(x="Condition", y="Protein Activity", color="Cell Line", subtitle=gene_oi)
     
     plts[["activity-MS023_vs_dmso-box"]] = X %>%
@@ -105,7 +105,7 @@ plot_activity_gene_oi = function(protein_activity, metadata, gene_oi){
         geom_boxplot(fill=NA, width=0.25, outlier.size=0.1) +
         color_palette(PAL_CELL_LINES) +
         theme_pubr() +
-        stat_compare_means(method="t.test", label="p.signif", size=FONT_SIZE, family=FONT_FAMILY, ref.group="DMSO") + 
+        stat_compare_means(method="t.test", label="p.format", size=FONT_SIZE, family=FONT_FAMILY, ref.group="DMSO") + 
         labs(x="Condition", y="Protein Activity", color="Cell Line", subtitle=gene_oi)
     
     X = protein_activity %>%
