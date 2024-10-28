@@ -35,13 +35,16 @@ PAL_DRIVER_TYPE = c(
 # PREP_DIR = file.path(ROOT,'data','prep')
 # SUPPORT_DIR = file.path(ROOT,"support")
 # RESULTS_DIR = file.path(ROOT,"results","cancer_splicing_program")
+# genexpr_file = file.path(PREP_DIR,"genexpr_tpm","tumorigenesis.tsv.gz")
+# annotation_file = file.path(RAW_DIR,'VastDB','EVENT_INFO-hg38_noseqs.tsv')
+# splicing_file = file.path(PREP_DIR,"event_psi","tumorigenesis-EX.tsv.gz")
 # protein_activity_file = file.path(RESULTS_DIR,"files","protein_activity","tumorigenesis-EX.tsv.gz")
 # metadata_file = file.path(PREP_DIR,"metadata","tumorigenesis.tsv.gz")
 # driver_types_file = file.path(RESULTS_DIR,'files','PANCAN','cancer_program.tsv.gz')
 # figs_dir = file.path(RESULTS_DIR,"figures","tumorigenesis-EX")
 
 ##### FUNCTIONS #####
-plot_tumorigenesis = function(protein_activity){
+plot_tumorigenesis = function(protein_activity, genexpr, splicing){
     plts = list()
     
     X = protein_activity %>%
@@ -69,6 +72,41 @@ plot_tumorigenesis = function(protein_activity){
         ) +
         theme_pubr() +
         labs(x="Cell Line", y="Protein Activity", fill="Driver Type")
+
+    # genexpr
+    X = genexpr %>%
+        drop_na(driver_type) %>%
+        filter(GENE %in% X[["GENE"]]) %>%
+        group_by(cell_line_name, driver_type, study_accession, GENE) %>%
+        summarize(genexpr_tpm = median(genexpr_tpm)) %>%
+        ungroup() %>%
+        filter(study_accession=="PRJNA193487") %>%
+        mutate(cell_line_name=factor(
+            cell_line_name, levels=c("BJ_PRIMARY","BJ_IMMORTALIZED",
+                                     "BJ_TRANSFORMED","BJ_METASTATIC")
+        ))
+    ctl_genexpr = genexpr %>%
+        filter(cell_line_name=="BJ_PRIMARY") %>%
+        distinct(genexpr_tpm, GENE) %>%
+        dplyr::rename(ctl_tpm = genexpr_tpm)
+    X = X %>%
+        left_join(ctl_genexpr, by="GENE") %>%
+        mutate(genexpr_tpm_fc = genexpr_tpm - ctl_tpm)
+
+    plts[["tumorigenesis-cell_line_vs_genexpr_fc-violin"]] = X %>%
+        filter(cell_line_name!="BJ_PRIMARY") %>%
+        ggplot(aes(x=cell_line_name, y=genexpr_tpm_fc, group=interaction(cell_line_name,driver_type))) +
+        geom_violin(aes(fill=driver_type), color=NA, position=position_dodge(0.9)) +
+        geom_boxplot(width=0.1, outlier.size=0.1, fill=NA, color="black", position=position_dodge(0.9)) +
+        fill_palette(PAL_DRIVER_TYPE) +
+        stat_compare_means(method="wilcox.test", label="p.format", size=FONT_SIZE, family=FONT_FAMILY) + 
+        geom_text(
+            aes(y=-1.5, label=label, group=driver_type),
+            . %>% count(cell_line_name, driver_type) %>% mutate(label=paste0("n=",n)),
+            size=FONT_SIZE, family=FONT_FAMILY, position=position_dodge(0.9)
+        ) +
+        theme_pubr() +
+        labs(x="Cell Line", y="Gene Expression log2FC", fill="Driver Type")
 
     # random control
     X = protein_activity %>%
@@ -105,10 +143,10 @@ plot_tumorigenesis = function(protein_activity){
 
 
 make_plots = function(
-    protein_activiy
+    protein_activiy, genexpr, splicing
 ){
     plts = list(
-        plot_tumorigenesis(protein_activiy)
+        plot_tumorigenesis(protein_activiy, genexpr, splicing)
     )
     plts = do.call(c,plts)
     return(plts)
@@ -144,6 +182,7 @@ save_plt = function(plts, plt_name, extension='.pdf',
 
 save_plots = function(plts, figs_dir){
     save_plt(plts, "tumorigenesis-cell_line_vs_activity-violin", '.pdf', figs_dir, width=6, height=6)
+    save_plt(plts, "tumorigenesis-cell_line_vs_genexpr_fc-violin", '.pdf', figs_dir, width=6, height=6)
     save_plt(plts, "tumorigenesis-cell_line_vs_activity-random-violin", '.pdf', figs_dir, width=6, height=6)
 }
 
@@ -190,6 +229,9 @@ main = function(){
     dir.create(figs_dir, recursive = TRUE)
     
     # load
+    annot = read_tsv(annotation_file)
+    genexpr = read_tsv(genexpr_file)
+    splicing = read_tsv(splicing_file)
     protein_activity = read_tsv(protein_activity_file)
     metadata = read_tsv(metadata_file)
     driver_types = read_tsv(driver_types_file)
@@ -230,8 +272,59 @@ main = function(){
         ungroup() %>%
         left_join(driver_types, by=c("regulator"="ENSEMBL"))
     
+    genexpr = genexpr %>%
+        filter(ID%in%driver_types[["ENSEMBL"]]) %>%
+        pivot_longer(-ID, names_to="sampleID", values_to="genexpr_tpm") %>%
+        left_join(metadata, by="sampleID") %>%
+        drop_na(condition, genexpr_tpm) %>%
+        filter(study_accession=="PRJNA193487") %>%
+        mutate(
+            condition_lab = sprintf(
+                "%s (%s%s) (%s%s) | %s | %s", condition, pert_time, pert_time_units, 
+                pert_concentration, pert_concentration_units, cell_line_name, study_accession
+            )
+        ) %>%
+        
+        # summarize replicates
+        group_by(condition_lab, condition, pert_time, pert_time_units, 
+                 pert_concentration, pert_concentration_units, cell_line_name, study_accession,
+                 PERT_ENSEMBL, PERT_GENE, ID) %>%
+        summarize(
+            genexpr_tpm = median(genexpr_tpm, na.rm=TRUE),
+        ) %>%
+        ungroup() %>%
+        left_join(driver_types, by=c("ID"="ENSEMBL")) %>%
+        drop_na(driver_type)
+
+    events_oi = annot %>% filter(GENE%in%driver_types[["GENE"]]) %>% distinct(EVENT,GENE)
+    splicing = splicing %>%
+        filter(EVENT%in%events_oi[["EVENT"]]) %>%
+        pivot_longer(-EVENT, names_to="sampleID", values_to="event_psi") %>%
+        left_join(metadata, by="sampleID") %>%
+        drop_na(condition, event_psi) %>%
+        filter(study_accession=="PRJNA193487") %>%
+        mutate(
+            condition_lab = sprintf(
+                "%s (%s%s) (%s%s) | %s | %s", condition, pert_time, pert_time_units, 
+                pert_concentration, pert_concentration_units, cell_line_name, study_accession
+            )
+        ) %>%
+        
+        # summarize replicates
+        group_by(condition_lab, condition, pert_time, pert_time_units, 
+                 pert_concentration, pert_concentration_units, cell_line_name, study_accession,
+                 PERT_ENSEMBL, PERT_GENE, EVENT) %>%
+        summarize(
+            event_psi = median(event_psi, na.rm=TRUE),
+        ) %>%
+        ungroup() %>%
+        left_join(annot %>% distinct(EVENT,GENE)) %>%
+        left_join(driver_types, by="GENE") %>%
+        drop_na(driver_type)
+        
+    
     # plot
-    plts = make_plots(protein_activity)
+    plts = make_plots(protein_activity, genexpr, splicing)
     
     # make figdata
     figdata = make_figdata(protein_activity)

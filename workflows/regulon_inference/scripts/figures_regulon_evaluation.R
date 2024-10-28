@@ -72,6 +72,11 @@ SETS_MOR = c(
     'aracne_and_mlr_regulons'
 )
 
+SETS_SPLICINGLORE = c(
+    "experimentally_derived_regulons_pruned",
+    "splicinglore_regulons"
+)
+
 METHODS_ACTIVITY = c(
     "gsea",
     "correlation_spearman",
@@ -113,6 +118,7 @@ PAL_METHODS_ACTIVITY = c(
 # regulators_per_target_thresholds_file = file.path(RESULTS_DIR,"files","regulon_properties","dPSIthresh-regulators_per_target-EX.tsv.gz")
 # targets_per_regulator_thresholds_file = file.path(RESULTS_DIR,"files","regulon_properties","dPSIthresh-targets_per_regulator-EX.tsv.gz")
 # splicing_factors_file = file.path(SUPPORT_DIR,"splicing_factors","splicing_factors.tsv")
+# metadata_splicinglore_file = file.path(RESULTS_DIR,"files","splicinglore_regulons-benchmarkable.tsv.gz")
 # figs_dir = file.path(RESULTS_DIR,"figures","regulon_evaluation")
 
 ##### FUNCTIONS #####
@@ -178,7 +184,7 @@ plot_evaluation = function(evaluation){
 
     # evaluation by SF class of empirical splicing networks
     plts[["evaluation-sf_class-raw_auc_roc-box"]] = X %>%
-        filter(eval_type=="real" & regulon_set=="experimentally_derived_regulons_pruned" & eval_direction=="regulators") %>%
+        filter(eval_type=="real" & regulon_set=="experimentally_derived_regulons_pruned" & eval_direction=="perturbations") %>%
         mutate(
             method_activity = factor(method_activity, levels=METHODS_ACTIVITY),
             sf_class = factor(sf_class, levels=SF_CLASS)
@@ -204,7 +210,7 @@ plot_evaluation = function(evaluation){
 
     # evaluation by SF class and held-out datasets of empirical splicing networks
     plts[["evaluation-sf_class_vs_held_out_ds-raw_auc_roc-box"]] = X %>%
-        filter(eval_type=="real" & regulon_set=="experimentally_derived_regulons_pruned" & eval_direction=="regulators") %>%
+        filter(eval_type=="real" & regulon_set=="experimentally_derived_regulons_pruned" & eval_direction=="perturbations") %>%
         mutate(
             method_activity = factor(method_activity, levels=METHODS_ACTIVITY),
             sf_class = factor(sf_class, levels=SF_CLASS)
@@ -355,7 +361,7 @@ plot_evaluation = function(evaluation){
     
     ## evaluation considering splitting networks and whether regulators are in empirical SF networks
     plts[["evaluation-comp_best_vs_in_empirical-median_auc_roc-box"]] = X %>%
-        filter(eval_type=="real" & regulon_set=="mlr_regulons_PANCAN_PT" & eval_direction=="regulators") %>%
+        filter(eval_type=="real" & regulon_set=="mlr_regulons_PANCAN_PT" & eval_direction=="perturbations") %>%
         group_by(regulon_set, method_activity, curves_type, eval_direction, eval_type, 
                  signature_id, n_total_regulators, n_total_targets, in_empirical, sf_class) %>%
         summarize(auc_roc = median(auc_roc, na.rm=TRUE)) %>%    
@@ -437,9 +443,47 @@ plot_evaluation = function(evaluation){
 }
 
 
-make_plots = function(evaluation){
+plot_evaluation_splicinglore = function(evaluation, metadata_splicinglore){
+    plts = list()
+    
+    X = evaluation %>%
+        filter(regulon_set%in%SETS_SPLICINGLORE & GENE%in%metadata_splicinglore[["PERT_GENE"]]) %>%
+        mutate(
+            in_benchmark = PERT_ID %in% metadata_splicinglore[["PERT_ID_BENCHMARK"]],
+            in_benchmark = ifelse(regulon_set!="splicinglore_regulons",FALSE,in_benchmark)
+        )
+    
+    plts[["eval_splicinglore-held_out_ds-raw_auc_roc-box"]] = X %>%
+        filter(eval_type=="real") %>%
+        mutate(
+            method_activity = factor(method_activity, levels=METHODS_ACTIVITY)
+        ) %>%
+        ggplot(aes(x=regulon_set, y=auc_roc, group=interaction(regulon_set, method_activity))) +
+        geom_boxplot(aes(color=method_activity), fill=NA, outlier.shape=NA, position=position_dodge(0.9)) +
+        geom_point(aes(color=method_activity, shape=signature_id), size=0.5, 
+                   position=position_jitterdodge(dodge.width=0.9, jitter.width=0.1)) +
+        color_palette(PAL_METHODS_ACTIVITY) + 
+        geom_text(
+            aes(y = -0.1, label=label), 
+            . %>% 
+            count(regulon_set, method_activity, eval_type, eval_direction, in_benchmark) %>% 
+            mutate(label=paste0("n=",n)),
+            position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        geom_hline(yintercept=0.5, linewidth=LINE_SIZE, linetype="dashed", color="black") +
+        theme_pubr(x.text.angle = 45) +
+        facet_wrap(~eval_direction+in_benchmark) +  
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Held-out Dataset", y="ROC AUC", color="Inference Type", shape="Held-out Dataset")
+    
+    
+    print("Done!")
+}
+
+make_plots = function(evaluation, metadata_splicinglore){
     plts = list(
-        plot_evaluation(evaluation)
+        plot_evaluation(evaluation),
+        plot_evaluation_splicinglore(evaluation, metadata_splicinglore)
     )
     plts = do.call(c,plts)
     return(plts)
@@ -480,7 +524,7 @@ save_plots = function(plts, figs_dir){
     save_plt(plts, "evaluation-held_out_ds-raw_auc_roc-box", '.pdf', figs_dir, width=12, height=8)
     
     # by SF class
-    save_plt(plts, "evaluation-sf_class-raw_auc_roc-box", '.pdf', figs_dir, width=4, height=6)
+    save_plt(plts, "evaluation-sf_class-raw_auc_roc-box", '.pdf', figs_dir, width=5, height=6)
     
     # by SF class and held out dataset
     save_plt(plts, "evaluation-sf_class_vs_held_out_ds-raw_auc_roc-box", '.pdf', figs_dir, width=12, height=12)
@@ -506,6 +550,8 @@ save_plots = function(plts, figs_dir){
     # combine aracne and MLR
     save_plt(plts, "evaluation-comp_best_aracne_mlr-median_auc_roc-box", '.pdf', figs_dir, width=4, height=7)
     
+    # by held out dataset
+    save_plt(plts, "eval_splicinglore-held_out_ds-raw_auc_roc-box", '.pdf', figs_dir, width=12, height=10)    
 }
 
 
@@ -555,6 +601,7 @@ main = function(){
     # load
     evaluation = read_tsv(evaluation_ex_file)
     splicing_factors = read_tsv(splicing_factors_file)
+    metadata_splicinglore = read_tsv(metadata_splicinglore_file)
     
     targets_per_regulator = list(
         read_tsv(targets_per_regulator_robustness_file),
@@ -600,26 +647,27 @@ main = function(){
     evaluation = evaluation %>%
         mutate(
             regulon_set = gsub("-.*","",regulon_set_id)
-        ) %>%
-        left_join(splicing_factors, by=c("regulator"="ENSEMBL")) %>%
+        ) %>% 
+        # drop summarized evaluation
+        filter(curves_type=="by_group" & n_tails=="two") %>%
+        # stats robustness and thresholds networks
+        left_join(targets_per_regulator, by="regulon_set_id") %>%
+        left_join(regulators_per_target, by="regulon_set_id") %>%
+        separate(PERT_ID, c("study_accession","cell_line","PERT_ENSEMBL","PERT_TYPE"), remove=FALSE, sep="___") %>%
+        left_join(splicing_factors, by=c("PERT_ENSEMBL"="ENSEMBL")) %>%
         mutate(
             sf_class = case_when(
                 !is.na(spliceosome_db_complex) ~ "Core",
                 in_go_rbp ~ "RBP",
                 TRUE ~ "Other"
             )
-        ) %>% 
-        # drop summarized evaluation
-        filter(curves_type=="by_group" & n_tails=="two") %>%
-        # stats robustness and thresholds networks
-        left_join(targets_per_regulator, by="regulon_set_id") %>%
-        left_join(regulators_per_target, by="regulon_set_id")
+        )
     
     # plot
-    plts = make_plots(evaluation)
+    plts = make_plots(evaluation, metadata_splicinglore)
     
     # make figdata
-    figdata = make_figdata(evaluation)
+    figdata = make_figdata(evaluation, metadata_splicinglore)
     
     # save
     save_plots(plts, figs_dir)
