@@ -91,3 +91,6 @@ In case you want to run the workflows on your cluster, refer to [snakemake docum
 - [Samuel Miravet-Verde](https://orcid.org/0000-0002-1542-5912)
 - [Andrea Califano](https://orcid.org/0000-0003-4742-3679)
 - [Luis Serrano](https://orcid.org/0000-0002-5276-1392)
+
+## Citation
+Anglada-Girotto, M., Moakley, D. F., Zhang, C., Miravet-Verde, S., Califano, A., & Serrano, L. (2024). Disentangling the splicing factor programs underlying complex molecular phenotypes. bioRxiv, 2024-06.
