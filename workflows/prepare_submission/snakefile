@@ -57,7 +57,9 @@ rule supplementary_tables:
         # ENA SF perturbation datasets
         suptab02_pert_datasets = os.path.join(RESULTS_DIR,'prepare_submission','files',"ENASFS.tsv.gz"),
         # Identified cancer splicing programs
-        suptab03_cancer_splicing_programs = os.path.join(PROGRAM_DIR,'files','PANCAN','cancer_program.tsv.gz')
+        suptab03_cancer_splicing_programs = os.path.join(PROGRAM_DIR,'files','PANCAN','cancer_program.tsv.gz'),
+        # ReactomeDB enrichment targets
+        suptab04_program_targets_enrichments = os.path.join(PROGRAM_DIR,'figures','cancer_program','figdata','cancer_program','enrichments_reactome.tsv.gz'),
     output:
         directory(os.path.join(RESULTS_DIR,'prepare_submission','files','supplementary_tables'))
     run:
