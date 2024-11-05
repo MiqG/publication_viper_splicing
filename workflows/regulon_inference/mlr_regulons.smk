@@ -1,20 +1,3 @@
-"""
-Author: Miquel Anglada Girotto
-Contact: miquelangladagirotto [at] gmail [dot] com
-
-Outline
--------
-1. Associations
-    - Spearman correlation
-    - Mutual information (ARACNe-AP)
-    - Linear models
-
-2. Define regulons from associations
-    - association threshold
-    - association DPI
-
-"""
-
 import os
 
 # variables
