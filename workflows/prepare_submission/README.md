@@ -1,13 +1,16 @@
 # Prepare supplementary tables for submission
 
-Once run all workflows, this workflow collects the supplementary tables for the publication.
+Once all workflows have been run, this workflow generates the supplementary tables for the publication.
 
-## Important remarks
-
-Make sure to have all packages required to run the scripts.
-
-## Recommendations
+## Expected outputs
+```{shell}
+$ tree results/prepare_submission/
+results/prepare_submission/
+└── files
+    ├── ENASFS.tsv.gz
+    └── supplementary_tables
+        ├── suptab01_consensus_list_splicing_factors.tsv.gz
+        ├── suptab02_pert_datasets.tsv.gz
+        ├── suptab03_cancer_splicing_programs.tsv.gz
+        └── suptab04_program_targets_enrichments.tsv.gz
 ```
-snakemake --cores 6
-```
-In case you want to run the rules on your cluster, refer to [snakemake documentation](https://snakemake.readthedocs.io/en/stable/executing/cluster.html).

@@ -4,26 +4,30 @@
 Repurposing VIPER to estimate differential splicing factor activity.
 
 ## Structure
-- `config.yaml`
-- `environment.yaml`
+- `config.yaml`: important paths used througout the workflows to be set by the user.
+- `environment.yaml`: conda/mamba environment specification file.
 - `data`: where data will be downloaded.
 - `results`: where results will be outputed.
 - `src`: project-wide scripts.
 - `support`: supporting files which creation is hard to automate.
 - `workflows`
-    1. `obtain_data`: raw data download
-    2. `preprocess_data`:
+    1. `obtain_data` ([Details](https://github.com/MiqG/publication_viper_splicing/tree/main/workflows/obtain_data)): raw data download
+    
+    2. `preprocess_data` ([Details](https://github.com/MiqG/publication_viper_splicing/tree/main/workflows/preprocess_data)):
         - quantification of gene expression and exon inclusion
-    3. `regulon_inference`: benchmark of SF-exon network inference approaches
+    
+    3. `regulon_inference` ([Details](https://github.com/MiqG/publication_viper_splicing/tree/main/workflows/regulon_inference)): benchmark of SF-exon network inference approaches
         - experimentally derived regulons
         - aracne regulons
         - regulon evaluation
         - regulon eda
-    4. `sf_activity_validation`: validation of splicing factor activity estimation
+    
+    4. `sf_activity_validation` ([Details](https://github.com/MiqG/publication_viper_splicing/tree/main/workflows/sf_activity_validation)): validation of splicing factor activity estimation
         - protein perturbations
         - combinatorial perturbations
         - SF3b complex
-    5. `cancer_splicing_program`: recurrent cancer-driver-like splicing program
+    
+    5. `cancer_splicing_program` ([Details](https://github.com/MiqG/publication_viper_splicing/tree/main/workflows/cancer_splicing_program)): recurrent cancer-driver-like splicing program
         - definition using TCGA
         - patient prognosis
         - hallmarks
@@ -31,9 +35,11 @@ Repurposing VIPER to estimate differential splicing factor activity.
             - immune evasion
         - tumorigenesis
             - from fibroblasts to cancer
-    6. `prepare_submission`: prepare supplementary tables
+    
+    6. `prepare_submission` ([Details](https://github.com/MiqG/publication_viper_splicing/tree/main/workflows/prepare_submission)): prepare supplementary tables
 
-## Installation
+
+## Installation and requirements
 #### Environment
 We recommend installing mamba miniforge rather than conda in your corresponding OS: https://github.com/conda-forge/miniforge.
 ```shell
@@ -58,8 +64,9 @@ tar -xvzf vastdb.hs2.20.12.19.tar.gz
 
 Update `config.yaml` file accordingly with the path to the vast-tools directory and to the VastDB genome assembly.
 
-#### TCGA
+#### TCGA restricted data access
 Obtain a GDC token file to download data (see: https://docs.gdc.cancer.gov/Data/Data_Security/Data_Security/) and place its path in `config.yaml`.
+
 
 ## Usage
 All workflows were written as `snakemake` pipelines. To execute each workflow:
@@ -84,6 +91,3 @@ In case you want to run the workflows on your cluster, refer to [snakemake docum
 - [Samuel Miravet-Verde](https://orcid.org/0000-0002-1542-5912)
 - [Andrea Califano](https://orcid.org/0000-0003-4742-3679)
 - [Luis Serrano](https://orcid.org/0000-0002-5276-1392)
-
-## License
-

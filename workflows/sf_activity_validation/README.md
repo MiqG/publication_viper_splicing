@@ -1,6 +1,6 @@
 # Validation of SF activity estimation with VIPER and SF-exon networks
 
-This set of Snakemake workflows validate estimation of splicing factor activity using empirical splicing factor networks and VIPER for different datasets of increasing complexity. This workflows use raw, preprocessed files and splicing factor networks from `results/regulon_inference` to populate `results/sf_activity_activation`.
+This set of Snakemake workflows validate estimation of splicing factor activity using empirical splicing factor networks and VIPER for different datasets of increasing complexity. These workflows use raw, preprocessed files and splicing factor networks from `results/regulon_inference` to populate `results/sf_activity_activation`.
 
 ## Outline
 1. Protein depletion: 
