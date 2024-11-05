@@ -2,12 +2,17 @@ import os
 import pandas as pd
 import numpy as np
 
+# unpack config
+configfile: "../../config.yaml"
+PATHS = config["PATHS"]
+VASTDB_DIR = PATHS["VAST_TOOLS"]["VASTDB"]
+VAST_TOOLS_DIR = PATHS["VAST_TOOLS"]["BIN"]
+
 # variables
 ROOT = os.path.dirname(os.path.dirname(os.getcwd()))
 RAW_DIR = os.path.join(ROOT,"data","raw")
 SUPPORT_DIR = os.path.join(ROOT,"support")
 DATASET_DIR = os.path.join(RAW_DIR,"ENA","tumorigenesis")
-VASTDB_DIR = os.path.join(RAW_DIR,'VastDB')
 
 # parameters
 SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
@@ -100,7 +105,7 @@ rule download_paired:
         end = "{end}",
         url = lambda wildcards: URLS_PAIRED[wildcards.sample],
         fastqs_dir = os.path.join(DATASET_DIR,'fastqs'),
-        bin_dir="~/repositories/vast-tools/"
+        bin_dir=VAST_TOOLS_DIR
     output:
         download_done = os.path.join(DATASET_DIR,'fastqs','.done','{sample}_{end}_paired')
     threads: 1
@@ -132,7 +137,7 @@ rule download_single:
         end = "{end}",
         url = lambda wildcards: URLS_SINGLE[wildcards.sample],
         fastqs_dir = os.path.join(DATASET_DIR,'fastqs'),
-        bin_dir="~/repositories/vast-tools/"
+        bin_dir=VAST_TOOLS_DIR
     output:
         download_done = os.path.join(DATASET_DIR,'fastqs','.done','{sample}_{end}_single')
     threads: 1
@@ -163,10 +168,10 @@ rule align_paired:
     params:
         sample = '{sample}',
         fastqs_dir = os.path.join(DATASET_DIR,'fastqs'),
-        bin_dir="~/repositories/vast-tools/",
+        bin_dir=VAST_TOOLS_DIR,
         vast_out = directory(os.path.join(DATASET_DIR,'vast_out','{sample}'))
     input:
-        dbDir = os.path.join(VASTDB_DIR,'assemblies'),
+        dbDir = VASTDB_DIR,
         download_done = [os.path.join(DATASET_DIR,'fastqs','.done','{sample}_{end}_paired').format(end=end, sample='{sample}') for end in ["1","2"]]
     output:
         align_done = touch(os.path.join(DATASET_DIR,'vast_out','.done','{sample}_paired'))
@@ -200,10 +205,10 @@ rule align_single:
     params:
         sample = '{sample}',
         fastqs_dir = os.path.join(DATASET_DIR,'fastqs'),
-        bin_dir="~/repositories/vast-tools/",
+        bin_dir=VAST_TOOLS_DIR,
         vast_out = directory(os.path.join(DATASET_DIR,'vast_out','{sample}'))
     input:
-        dbDir = os.path.join(VASTDB_DIR,'assemblies'),
+        dbDir = VASTDB_DIR,
         download_done = [os.path.join(DATASET_DIR,'fastqs','.done','{sample}_{end}_single').format(end=end, sample='{sample}') for end in ["1"]]
     output:
         align_done = touch(os.path.join(DATASET_DIR,'vast_out','.done','{sample}_single'))
@@ -268,11 +273,11 @@ rule groups_merge_low_coverage:
 rule merge_low_coverage:
     input:
         group = os.path.join(DATASET_DIR,"vast_out","to_merge","metadata","{group}.tsv"),
-        dbDir = os.path.join(VASTDB_DIR,'assemblies')
+        dbDir = VASTDB_DIR
     output:
         merge_done = touch(os.path.join(DATASET_DIR,"vast_out","to_merge",".done","{group}"))
     params:
-        bin_dir="~/repositories/vast-tools/",
+        bin_dir=VAST_TOOLS_DIR,
         folder = os.path.join(DATASET_DIR,'vast_out'),
         group = "{group}",
         samples = lambda wildcards: MERGE_GROUPS[wildcards.group]
@@ -317,13 +322,13 @@ rule merge_low_coverage:
 rule vasttools_combine:
     input:
         done = [os.path.join(DATASET_DIR,'vast_out','.done','{sample}_paired').format(sample=sample) for sample in SAMPLES_PAIRED_NOTMERGE] + [os.path.join(DATASET_DIR,'vast_out','.done','{sample}_single').format(sample=sample) for sample in SAMPLES_SINGLE_NOTMERGE] + [os.path.join(DATASET_DIR,"vast_out","to_merge",".done","{sample}").format(sample=sample) for sample in list(MERGE_GROUPS.keys())],
-        dbDir = os.path.join(VASTDB_DIR,'assemblies')
+        dbDir = VASTDB_DIR
     output:
         touch(os.path.join(DATASET_DIR,'vast_out','.done','vasttools_combine-{n_samples}').format(n_samples=N_SAMPLES)),
         tpm = os.path.join(DATASET_DIR,'vast_out','TPM-hg38-{n_samples}.tab.gz').format(n_samples=N_SAMPLES),
         psi = os.path.join(DATASET_DIR,'vast_out','INCLUSION_LEVELS_FULL-hg38-{n_samples}.tab.gz').format(n_samples=N_SAMPLES)
     params:
-        bin_dir="~/repositories/vast-tools/",
+        bin_dir=VAST_TOOLS_DIR,
         folder = os.path.join(DATASET_DIR,'vast_out'),
         samples_merged = list(MERGE_GROUPS.keys()),
         samples_notmerged = SAMPLES_SINGLE_NOTMERGE + SAMPLES_PAIRED_NOTMERGE
@@ -386,7 +391,7 @@ rule vasttools_tidy:
         touch('.done/tumorigenesis.done'),
         tidy = os.path.join(DATASET_DIR,'vast_out','PSI-minN_1-minSD_0-noVLOW-min_ALT_use25-Tidy.tab.gz')
     params:
-        bin_dir="~/repositories/vast-tools/"
+        bin_dir=VAST_TOOLS_DIR
     threads: 1
     resources:
         runtime = 3600*12, # 12h

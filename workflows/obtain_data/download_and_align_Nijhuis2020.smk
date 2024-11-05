@@ -2,13 +2,18 @@ import os
 import pandas as pd
 import numpy as np
 
+# unpack config
+configfile: "../../config.yaml"
+PATHS = config["PATHS"]
+VASTDB_DIR = PATHS["VAST_TOOLS"]["VASTDB"]
+VAST_TOOLS_DIR = PATHS["VAST_TOOLS"]["BIN"]
+
 # variables
 ROOT = os.path.dirname(os.path.dirname(os.getcwd()))
 RAW_DIR = os.path.join(ROOT,"data","raw")
 SUPPORT_DIR = os.path.join(ROOT,"support")
 ARTICLES_DIR = os.path.join(RAW_DIR,'articles')
 ARTICLE_DIR = os.path.join(ARTICLES_DIR,'Nijhuis2020')
-VASTDB_DIR = os.path.join(RAW_DIR,'VastDB')
 
 # parameters
 SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
@@ -161,8 +166,7 @@ rule download:
         sample = '{sample}',
         end = "{end}",
         url = lambda wildcards: URLS[wildcards.sample],
-        fastqs_dir = os.path.join(ARTICLE_DIR,'fastqs'),
-        bin_dir="~/repositories/vast-tools/"
+        fastqs_dir = os.path.join(ARTICLE_DIR,'fastqs')
     output:
         download_done = os.path.join(ARTICLE_DIR,'fastqs','.done','{sample}_{end}')
     threads: 1
@@ -193,10 +197,10 @@ rule align:
     params:
         sample = '{sample}',
         fastqs_dir = os.path.join(ARTICLE_DIR,'fastqs'),
-        bin_dir="~/repositories/vast-tools/",
+        bin_dir=VAST_TOOLS_DIR,
         vast_out = directory(os.path.join(ARTICLE_DIR,'vast_out','{sample}'))
     input:
-        dbDir = os.path.join(VASTDB_DIR,'assemblies'),
+        dbDir = VASTDB_DIR,
         download_done = [os.path.join(ARTICLE_DIR,'fastqs','.done','{sample}_{end}').format(end=end, sample='{sample}') for end in ENDS]
     output:
         align_done = touch(os.path.join(ARTICLE_DIR,'vast_out','.done','{sample}'))
@@ -229,13 +233,13 @@ rule align:
 rule vasttools_combine:
     input:
         done = [os.path.join(ARTICLE_DIR,'vast_out','.done','{sample}').format(sample=sample) for sample in SAMPLES],
-        dbDir = os.path.join(VASTDB_DIR,'assemblies')
+        dbDir = VASTDB_DIR
     output:
         touch(os.path.join(ARTICLE_DIR,'vast_out','.done','vasttools_combine-{n_samples}').format(n_samples=N_SAMPLES)),
         tpm = os.path.join(ARTICLE_DIR,'vast_out','TPM-hg38-{n_samples}.tab.gz').format(n_samples=N_SAMPLES),
         psi = os.path.join(ARTICLE_DIR,'vast_out','INCLUSION_LEVELS_FULL-hg38-{n_samples}.tab.gz').format(n_samples=N_SAMPLES)
     params:
-        bin_dir="~/repositories/vast-tools/",
+        bin_dir=VAST_TOOLS_DIR,
         folder = os.path.join(ARTICLE_DIR,'vast_out')
     threads: 16
     resources:
@@ -285,7 +289,7 @@ rule vasttools_tidy:
         touch('.done/Nijhuis2020.done'),
         tidy = os.path.join(ARTICLE_DIR,'vast_out','PSI-minN_1-minSD_0-noVLOW-min_ALT_use25-Tidy.tab.gz')
     params:
-        bin_dir="~/repositories/vast-tools/"
+        bin_dir=VAST_TOOLS_DIR
     threads: 1
     resources:
         runtime = 3600*12, # 12h

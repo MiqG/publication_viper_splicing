@@ -9,7 +9,7 @@ Repurposing VIPER to estimate differential splicing factor activity.
 - `src`: project-wide scripts.
 - `support`: supporting files which creation is hard to automate.
 - `workflows`
-    1. `obtain_data`: data download
+    1. `obtain_data`: raw data download
     2. `preprocess_data`:
         - quantification of gene expression and exon inclusion
     3. `regulon_inference`: benchmark of SF-exon network inference approaches
@@ -31,24 +31,49 @@ Repurposing VIPER to estimate differential splicing factor activity.
             - from fibroblasts to cancer
     6. `prepare_submission`: prepare supplementary tables
 
-## Usage
-### 1. Install environment
+## Installation
+#### Environment
 We recommend installing mamba miniforge rather than conda in your corresponding OS: https://github.com/conda-forge/miniforge.
 ```shell
-mamba env create -f environment.yml
+mamba env create -f environment.yaml
 ```
-This may take a while
 
-### 2. Run snakemake with the `publication_viper_splicing` environment
-All workflows were written as `snakemake` pipelines. Refer to each specific workflow to run them.
+#### `vast-tools`
+Based on https://github.com/vastgroup/vast-tools?tab=readme-ov-file#installation.
 
-```shell
-# run locally
-snakemake -s {snakefile path} --cores {n_cpus} --use-conda
-
-# cluster job submission example (SGE scheduler)
-snakemake --cluster "qsub -cwd -pe smp {threads} -l virtual_free={resources.memory}G,h_rt={resources.runtime} -q long,short" --use-conda --jobs 30 -s {snakefile path}
+Clone vast-tools repository in your desired path:
+```{shell}
+cd ~/repositories # or your desired path
+git clone https://github.com/vastgroup/vast-tools.git
 ```
+
+Download VastDB Homo sapiens (Hs2) genome assembly in your desired path:
+```{shell}
+cd ~/projects/publication_viper/data/raw/VastDB/assemblies # or your desired path
+wget https://vastdb.crg.eu/libs/vastdb.hs2.20.12.19.tar.gz
+tar -xvzf vastdb.hs2.20.12.19.tar.gz
+```
+
+Update `config.yaml` file accordingly with the path to the vast-tools directory and to the VastDB genome assembly.
+
+#### TCGA
+Obtain a GDC token file to download data (see: https://docs.gdc.cancer.gov/Data/Data_Security/Data_Security/) and place its path in `config.yaml`.
+
+## Usage
+All workflows were written as `snakemake` pipelines. To execute each workflow:
+
+1. activate the project's environment
+```{shell}
+mamba activate publication_viper_splicing
+```
+
+2. use the following command format:
+```{shell}
+snakemake -s <workflow_name>.smk --cores <number_of_cores>
+```
+
+In case you want to run the workflows on your cluster, refer to [snakemake documentation](https://snakemake.readthedocs.io/en/stable/executing/cluster.html).
+
 
 ## Authors
 - [Miquel Anglada Girotto](https://orcid.org/0000-0003-1885-8649)

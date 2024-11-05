@@ -2,10 +2,16 @@ import os
 import pandas as pd
 import numpy as np
 
+# unpack config
+configfile: "../../config.yaml"
+PATHS = config["PATHS"]
+VASTDB_DIR = PATHS["VAST_TOOLS"]["VASTDB"]
+VAST_TOOLS_DIR = PATHS["VAST_TOOLS"]["BIN"]
+
+# variables
 ROOT = os.path.dirname(os.path.dirname(os.getcwd()))
 DATA_DIR = os.path.join(ROOT,'data',"raw")
 SUPPORT_DIR = os.path.join(ROOT,'support')
-VASTDB_DIR = os.path.join(DATA_DIR,"VastDB")
 CCLE_DIR = os.path.join(DATA_DIR,'CCLE')
 
 # prep metadata
@@ -65,8 +71,7 @@ rule download_CCLE:
         sample = "{sample}",
         end = "{end}",
         url = lambda wildcards: URLS_CCLE[wildcards.sample],
-        fastqs_dir = os.path.join(CCLE_DIR,"fastqs"),
-        bin_dir="~/repositories/vast-tools/"
+        fastqs_dir = os.path.join(CCLE_DIR,"fastqs")
     output:
         os.path.join(CCLE_DIR,'fastqs','{sample}_{end}.fastq.gz'),
         download_done = touch(os.path.join(CCLE_DIR,'fastqs','.done','{sample}_{end}'))
@@ -95,10 +100,10 @@ rule quantify_psi_vasttools:
     params:
         sample = '{sample}',
         fastqs_dir = os.path.join(CCLE_DIR,'fastqs'),
-        bin_dir="~/repositories/vast-tools/",
+        bin_dir=VAST_TOOLS_DIR,
         vast_out = directory(os.path.join(CCLE_DIR,'vast_out','{sample}'))
     input:
-        dbDir = os.path.join(VASTDB_DIR,'assemblies'),
+        dbDir = VASTDB_DIR,
         download_done = [os.path.join(CCLE_DIR,'fastqs','.done','{sample}_{end}').format(end=end, sample='{sample}') for end in ENDS]
     output:
         align_done = touch(os.path.join(CCLE_DIR,'vast_out','.done','{sample}'))
@@ -152,13 +157,13 @@ rule delete_fastqs_CCLE:
 rule vasttools_combine_CCLE:
     input:
         [os.path.join(CCLE_DIR,'vast_out','{sample}').format(sample=sample) for sample in SAMPLES_CCLE],
-        dbDir = os.path.join(VASTDB_DIR,'assemblies')
+        dbDir = VASTDB_DIR
     output:
         touch(os.path.join(CCLE_DIR,'vast_out','.done','vasttools_combine')),
         tpm = os.path.join(CCLE_DIR,'vast_out','TPM-hg38-1019.tab.gz'),
         psi = os.path.join(CCLE_DIR,'vast_out','INCLUSION_LEVELS_FULL-hg38-1019.tab.gz')
     params:
-        bin_dir="~/repositories/vast-tools/",
+        bin_dir=VAST_TOOLS_DIR,
         folder = os.path.join(CCLE_DIR,'vast_out')
     threads: 16
     resources:
@@ -204,7 +209,7 @@ rule vasttools_tidy_CCLE:
         '.done/CCLE.done',
         tidy = os.path.join(CCLE_DIR,'vast_out','PSI-minN_1-minSD_0-noVLOW-min_ALT_use25-Tidy.tab.gz')
     params:
-        bin_dir="~/repositories/vast-tools/"
+        bin_dir=VAST_TOOLS_DIR
     threads: 1
     resources:
         runtime = 43200, # 12h

@@ -1,36 +1,60 @@
-# Download data
+# Obtain Data - Download and Alignment Workflows
+This set of Snakemake workflows automates the download and alignment of raw `.fastq` files to populate the `data/raw` directory. Each workflow targets specific datasets and prepares the data for downstream analysis.
+
+Make sure you completed the installation instructions of prerequisites and configuration for this project.
 
 ## Outline
+
+The workflows provided include:
+
 1. `download_and_align_CardosoMoreira2020.smk`
-2. `download_and_align_ena_sf.smk`
-3. `download_and_align_ENCORE_KD.smk`
-4. `download_and_align_ENCORE_KO.smk`
-5. `download_and_align_Nijhuis2020.smk`
-6. `download_and_align_Lu2021.smk`
-7. `download_and_align_TCGA.smk`
+    - downloads and aligns RNA-seq reads with vast-tools producing a dataset-level exon inclusion table (PSI) and gene expression table (TPM)
+    - outputs in `data/raw/articles/CardosoMoreira2020`
+
+2. `download_and_align_TCGA.smk`
+    - downloads and aligns RNA-seq reads with vast-tools producing a cancer cohort-level exon inclusion table (PSI) and gene expression table (TPM)
+    - **requires** token file to download raw reads from controlled-access files
+    - outputs in `data/raw/TCGA`
+
+3. `download_and_align_ena_sf.smk`
+    - selects studies from ENA containing perturbation datasets
+    - downloads and aligns RNA-seq reads with vast-tools producing a dataset-level exon inclusion table (PSI) and gene expression table (TPM)
+    - outputs in `data/raw/ENA/splicing_factors`
+
+4. `download_and_align_ENCORE_KD.smk`
+    - downloads and aligns RNA-seq reads with vast-tools producing a dataset-level exon inclusion table (PSI) and gene expression table (TPM)
+    - outputs in `data/raw/ENCODE/ENCORE`
+
+5. `download_and_align_ENCORE_KO.smk`
+    - downloads and aligns RNA-seq reads with vast-tools producing a dataset-level exon inclusion table (PSI) and gene expression table (TPM)
+    - outputs in `data/raw/ENCODE/ENCORE/CRISPRKO`
+
+6. `download_and_align_Nijhuis2020.smk`
+    - downloads and prepares proteomics LFQ intensities into a single table
+    - downloads and aligns RNA-seq reads with vast-tools producing a dataset-level exon inclusion table (PSI) and gene expression table (TPM)
+    - outputs in `data/raw/articles/Nijhuis2020`
+
+7. `download_and_align_Lu2021.smk`
+    - downloads and aligns RNA-seq reads with vast-tools producing a dataset-level exon inclusion table (PSI) and gene expression table (TPM)
+    - outputs in `data/raw/articles/Lu2021`
+
 8. `download_and_align_CCLE.smk`
+    - downloads and aligns RNA-seq reads with vast-tools producing a dataset-level exon inclusion table (PSI) and gene expression table (TPM)
+    - outputs in `data/raw/CCLE`
+
 9. `download_and_align_Riaz2017.smk`
+    - downloads and aligns RNA-seq reads with vast-tools producing a dataset-level exon inclusion table (PSI) and gene expression table (TPM)
+    - outputs in `data/raw/articles/Riaz2017`
+
 10. `download_and_align_tumorigenesis.smk`
+    - downloads and aligns RNA-seq reads with vast-tools producing a dataset-level exon inclusion table (PSI) and gene expression table (TPM)
+    - outputs in `data/raw/ENA/tumorigenesis`
 
-## Important remarks
+11. `download_splicinglore.smk`
+    - downloads SplicingLore database
+    - outputs in `data/raw/SplicingLore`
 
-Make sure to have all packages required to run the scripts.
-
-## Recommendations
-Run the workflows using
-```
-snakemake -s download_and_align_CardosoMoreira2020.smk --cores 6
-snakemake -s download_and_align_ena_sf.smk --cores 6
-snakemake -s download_and_align_ENCORE_KD.smk --cores 6
-snakemake -s download_and_align_ENCORE_KO.smk --cores 6
-snakemake -s download_and_align_Nijhuis2020.smk --cores 6
-snakemake -s download_and_align_Lu2021.smk --cores 6
-snakemake -s download_and_align_TCGA.smk --cores 6
-snakemake -s download_and_align_CCLE.smk --cores 6
-snakemake -s download_and_align_Riaz2017.smk --cores 6
-snakemake -s download_and_align_tumorigenesis.smk --cores 6
-```
-In case you want to run the workflows on your cluster, refer to [snakemake documentation](https://snakemake.readthedocs.io/en/stable/executing/cluster.html).
+In this case, workflows are independent from each other; feel free to execute them in any other order.
 
 ## Notes
 ### ENA query used to search for transcriptomic perturbation experiments of SFs

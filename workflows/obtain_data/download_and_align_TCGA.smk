@@ -1,12 +1,18 @@
 import os
 import pandas as pd
 
+# unpack config
+configfile: "../../config.yaml"
+PATHS = config["PATHS"]
+VASTDB_DIR = PATHS["VAST_TOOLS"]["VASTDB"]
+VAST_TOOLS_DIR = PATHS["VAST_TOOLS"]["BIN"]
+TOKEN_FILE = PATHS["TCGA_TOKEN"]
+
+# variables
 ROOT = os.path.dirname(os.path.dirname(os.getcwd()))
 SUPPORT_DIR = os.path.join(ROOT,"support")
 DATA_DIR = os.path.join(ROOT,"data","raw")
 TCGA_DIR = os.path.join(DATA_DIR,"TCGA")
-VASTDB_DIR = os.path.join(DATA_DIR,"VastDB")
-TOKEN_FILE = os.path.join(SUPPORT_DIR,".private","gdc-user-token.txt")
 
 # load metadata
 ## reads info
@@ -310,14 +316,14 @@ rule prepare_fastq:
 # NOTE: different stepSize=24 and trimLen=48, and bypass strand guessing with --nc
 rule align:
     input:
-        dbDir = os.path.join(VASTDB_DIR,"assemblies"),
+        dbDir = VASTDB_DIR,
         download_done = os.path.join(TCGA_DIR,"{cancer_type}","fastqs",".done","{sample}")
     output:
         align_done = touch(os.path.join(TCGA_DIR,"{cancer_type}","vast_out",".done","{sample}"))
     params:
         sample = "{sample}",
         fastqs_dir = os.path.join(TCGA_DIR,"{cancer_type}","fastqs"),
-        bin_dir="~/repositories/vast-tools",
+        bin_dir=VAST_TOOLS_DIR,
         sequencer = lambda wildcards: SEQUENCER[wildcards.sample],
         data_format = lambda wildcards: DATA_FORMATS[wildcards.sample],
         vast_out = directory(os.path.join(TCGA_DIR,"{cancer_type}","vast_out","{sample}"))
@@ -415,13 +421,13 @@ t = t.strftime('%Y%m%d%H%M%S')
 rule vasttools_combine:
     input:
         done = lambda wildcards: [os.path.join(TCGA_DIR,"{cancer_type}","vast_out",".done","{sample}").format(cancer_type=wildcards.cancer_type, sample=sample) for sample in  metadata.loc[metadata["cancer_type"]==wildcards.cancer_type,"file_id"]],
-        dbDir = os.path.join(VASTDB_DIR,"assemblies")
+        dbDir = VASTDB_DIR
     output:
         touch(os.path.join(TCGA_DIR,"{cancer_type}","vast_out",".done_combine-{n_samples}")),
         tpm = os.path.join(TCGA_DIR,"{cancer_type}","vast_out","TPM-hg38-{n_samples}.tab.gz"),
         psi = os.path.join(TCGA_DIR,"{cancer_type}","vast_out","INCLUSION_LEVELS_FULL-hg38-{n_samples}.tab.gz")
     params:
-        bin_dir="~/repositories/vast-tools/",
+        bin_dir=VAST_TOOLS_DIR,
         vast_out = os.path.join(TCGA_DIR,"{cancer_type}","vast_out"),
         folder = os.path.join(TCGA_DIR,"{cancer_type}","vast_out",t)
     threads: 10
@@ -484,7 +490,7 @@ rule vasttools_tidy:
         touch(os.path.join(".done","{cancer_type}.done")),
         tidy = os.path.join(TCGA_DIR,"{cancer_type}","vast_out","PSI-minN_1-minSD_0-noVLOW-min_ALT_use25-Tidy.tab.gz")
     params:
-        bin_dir="~/repositories/vast-tools/"
+        bin_dir=VAST_TOOLS_DIR
     threads: 1
     resources:
         runtime = 3600*12, # 12h in seconds
