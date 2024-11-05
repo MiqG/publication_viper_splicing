@@ -1,4 +1,5 @@
 # Obtain Data - Download and Alignment Workflows
+
 This set of Snakemake workflows automates the download and alignment of raw `.fastq` files to populate the `data/raw` directory. Each workflow targets specific datasets and prepares the data for downstream analysis.
 
 Make sure you completed the installation instructions of prerequisites and configuration for this project.

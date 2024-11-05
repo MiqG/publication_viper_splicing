@@ -4,6 +4,8 @@
 Repurposing VIPER to estimate differential splicing factor activity.
 
 ## Structure
+- `config.yaml`
+- `environment.yaml`
 - `data`: where data will be downloaded.
 - `results`: where results will be outputed.
 - `src`: project-wide scripts.
