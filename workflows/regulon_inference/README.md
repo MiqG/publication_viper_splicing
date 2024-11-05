@@ -62,7 +62,6 @@ This set of Snakemake workflows make up a pipeline for constructing and evaluati
     - EDA of inferred empirical splicing factor networks
     - outputs in `results/regulon_inference/files`
     
-    
 ## Notes
 To run `aracne_regulons.smk`, adapted ARACNe-AP was obtained from https://github.com/chaolinzhanglab/ARACNe-AP and `scripts/aracne/filter_arachne_bootstraps.pl` and `scripts/aracne/estimate_mor.R` were obtained from https://github.com/chaolinzhanglab/mras.
 
@@ -112,19 +111,8 @@ results/regulon_inference/
     │   ├── ENCOREKD-K562-delta_psi.tsv.gz
     │   ├── ENCOREKO-HepG2-delta_psi.tsv.gz
     │   └── ENCOREKO-K562-delta_psi.tsv.gz
-    ├── aracne_and_experimental_regulons-genexpr
-    │   ├── ENASFS-metaexperiment0-log2fc_tpm.tsv.gz
-    │   ├── ENASFS-metaexperiment1-log2fc_tpm.tsv.gz
-    │   ├── ENASFS-metaexperiment2-log2fc_tpm.tsv.gz
-    │   ├── ENASFS-metaexperiment3-log2fc_tpm.tsv.gz
-    │   ├── ENCOREKD-HepG2-log2fc_tpm.tsv.gz
-    │   ├── ENCOREKD-K562-log2fc_tpm.tsv.gz
-    │   ├── ENCOREKO-HepG2-log2fc_tpm.tsv.gz
-    │   └── ENCOREKO-K562-log2fc_tpm.tsv.gz
     ├── aracne_and_mlr_regulons-EX
     │   └── PANCAN_PT.tsv.gz
-    ├── aracne_and_mlr_regulons-genexpr
-    │   └── CardosoMoreira2020.tsv.gz
     ├── aracne_regulons
     │   ├── CardosoMoreira2020-EX
     │   │   ├── bootstrapNetwork_1o16trgvqmt17tec7b1ma8njof.txt
