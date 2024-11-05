@@ -58,10 +58,9 @@ This set of Snakemake workflows make up a pipeline for constructing and evaluati
         
 3. Regulon Evaluation workflow (`regulon_evaluation.smk`): computes performance evaluation metrics for each type of network
     
-4. Regulon EDA
-    - `regulon_eda.smk`: 
-        - EDA of inferred empirical splicing factor networks
-        - outputs in `results/regulon_inference/files`
+4. Regulon EDA (`regulon_eda.smk`): 
+    - EDA of inferred empirical splicing factor networks
+    - outputs in `results/regulon_inference/files`
     
     
 ## Notes
