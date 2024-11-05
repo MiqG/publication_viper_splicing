@@ -26,6 +26,13 @@ LINE_SIZE = 0.25
 FONT_SIZE = 2 # for additional labels
 FONT_FAMILY = "Arial"
 
+PAL_DRIVER_TYPE = c(
+    "Random Genes"="darkgreen",
+    "Not Driver-like"="grey",
+    "Oncogenic"="#F6AE2D",
+    "Tumor suppressor"="#6C98B3"
+)
+
 # Development
 # -----------
 # ROOT = here::here()
@@ -46,6 +53,7 @@ FONT_FAMILY = "Arial"
 # msigdb_dir = file.path(RAW_DIR,'MSigDB','msigdb_v7.4','msigdb_v7.4_files_to_download_locally','msigdb_v7.4_GMTs')
 # figs_dir = file.path(RESULTS_DIR,"figures","immune_evasion-EX")
 # driver_types_file = file.path(RESULTS_DIR,'files','PANCAN','cancer_program.tsv.gz')
+# splicing_factors_file = file.path(SUPPORT_DIR,"splicing_factors","splicing_factors.tsv")
 
 ##### FUNCTIONS #####
 load_regulons = function(regulons_path, patt=NULL){
@@ -112,8 +120,49 @@ plot_diff_response = function(diff_response, immune_screen, splicing){
             y="Fitness Score Gene KO",
             color="Exon Impact"
         )
-        
+    
+    # how do their putative regulators contribute to ICB?
+    exon_order = X %>% arrange(score) %>% pull(label)
+    interactions_oi = regulons %>%
+        filter(target%in%X[["EVENT"]]) %>%
+        left_join(annot %>% distinct(GENE,ENSEMBL), by=c("regulator"="ENSEMBL")) %>%
+        left_join(immune_screen, by=c("GENE"="human_symbol")) %>%
+        left_join(driver_types %>% distinct(GENE, driver_type), by="GENE") %>%
+        left_join(
+            X %>%
+                mutate(target_score = score) %>%
+                distinct(EVENT, label, target_score), 
+            by=c("target"="EVENT")
+        ) %>%
+        mutate(
+            label = factor(label, levels=exon_order),
+            driver_type = replace_na(driver_type, "Not Driver-like")
+        )
+    
+    plts[["diff_response-immune_screen_score_putative_regulators-strip"]] = interactions_oi %>%
+        filter(Comparison=="ICB vs NSG" & driver_type=="Tumor suppressor") %>%
+        ggstripchart(x="label", y="score", color="driver_type") +
+        geom_boxplot(aes(color=driver_type), fill=NA) +
+        color_palette(PAL_DRIVER_TYPE) +
+        geom_text(
+            aes(y=2, label=signif(target_score,2)),
+            . %>% distinct(label, target_score),
+            size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        labs(x="Target Exon", y="Fitness Score Regulator SF KO", color="Driver Type") +
+        coord_flip()
+    
+    plts[["diff_response-putative_regulators_freq-box"]] = interactions_oi %>%
+        filter(driver_type!="Not Driver-like") %>%
+        distinct(score, driver_type, regulator) %>%
+        drop_na() %>%
+        ggstripchart(x="driver_type", y="score", color="driver_type", fill=NA) +
+        stat_compare_means(method="wilcox.test") +
+        color_palette(PAL_DRIVER_TYPE)
+    
+    # kaplan meier plots
     EXONS_OI = events_oi %>% slice_max(abs(score), n=1) %>% pull(EVENT)
+    EXONS_OI = X %>% slice_min(score, n=5) %>% pull(EVENT)
     for (event_oi in EXONS_OI){
         x = splicing %>%
             filter(EVENT %in% event_oi) %>%
@@ -138,7 +187,7 @@ plot_diff_response = function(diff_response, immune_screen, splicing){
     # immune screen response to perturbing regulators of exon_oi
     regulators_exon_oi = c("SF3B3","PRPF8","SRSF1")
     plts[["diff_response-immune_screen_score_reglators_oi-bar"]] = immune_screen %>%
-        filter(Comparison=="ICB vs NSG") %>%
+        filter(Comparison=="ICB vs NSG" & human_symbol%in%(interactions_oi %>% filter(driver_type=="Tumor suppressor") %>% pull(GENE))) %>%
         mutate(
             label = sprintf("%s (%s)", human_symbol, Gene)
         ) %>%
@@ -311,7 +360,8 @@ main = function(){
         "reactome" = read.gmt(file.path(msigdb_dir,"c2.cp.reactome.v7.4.symbols.gmt"))
     )
     driver_types = read_tsv(driver_types_file)
-
+    splicing_factors = read_tsv(splicing_factors_file)
+    
     # prep
     regulons = regulons %>% 
         bind_rows() %>%
