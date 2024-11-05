@@ -81,7 +81,7 @@ mamba activate publication_viper_splicing
 snakemake -s <workflow_name>.smk --cores <number_of_cores>
 ```
 
-In case you want to run the workflows on your cluster, refer to [snakemake documentation](https://snakemake.readthedocs.io/en/stable/executing/cluster.html).
+In case you want to run the workflows on your cluster, refer to [snakemake documentation](https://snakemake.readthedocs.io/en/stable/executing/cluster.html) to adapt the command according to your job submission scheduler.
 
 
 ## Authors

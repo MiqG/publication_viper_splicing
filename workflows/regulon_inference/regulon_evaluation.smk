@@ -156,7 +156,6 @@ rule evaluate_regulons:
         shadow = "no",
         n_tails = "two",
         method_activity = "{method_activity}"
-    conda: "publication_viper_splicing"
     threads: 1
     resources:
         # runtime = 3600*6, # h in seconds
@@ -213,7 +212,6 @@ rule figures_regulon_evaluation:
         targets_per_regulator_thresholds = os.path.join(RESULTS_DIR,"files","regulon_properties","dPSIthresh-targets_per_regulator-EX.tsv.gz")
     output:
         directory(os.path.join(RESULTS_DIR,"figures","regulon_evaluation"))
-    conda: "publication_viper_splicing"
     threads: 1
     resources:
         # runtime = 3600*6, # h in seconds
@@ -238,7 +236,6 @@ rule figures_inference_troubleshooting:
         mlr_and_experimental_path = os.path.join(RESULTS_DIR,"files","mlr_and_experimental_regulons-EX")
     output:
         directory(os.path.join(RESULTS_DIR,"figures","regulon_inference"))
-    conda: "publication_viper_splicing"
     threads: 1
     resources:
         # runtime = 3600*6, # h in seconds
