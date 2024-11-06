@@ -77,6 +77,7 @@ rule compute_jaccard_distances:
 rule figures_eda_regulons:
     input:
         regulons = os.path.join(RESULTS_DIR,"files","experimentally_derived_regulons_pruned-{event_type}"),
+        regulons_clip = os.path.join(RESULTS_DIR,"files","postar3_clip_regulons-EX"),
         protein_impact = os.path.join(RAW_DIR,'VastDB','PROT_IMPACT-hg38-v3.tab.gz'),
         annotation = os.path.join(RAW_DIR,'VastDB','EVENT_INFO-hg38_noseqs.tsv'),
         splicing_factors = os.path.join(SUPPORT_DIR,"splicing_factors","splicing_factors.tsv")
@@ -86,6 +87,7 @@ rule figures_eda_regulons:
         """
         Rscript scripts/figures_eda_regulons.R \
                     --regulons_dir={input.regulons} \
+                    --regulons_clip_dir={input.regulons_clip} \
                     --protein_impact_file={input.protein_impact} \
                     --annotation_file={input.annotation} \
                     --splicing_factors_file={input.splicing_factors} \

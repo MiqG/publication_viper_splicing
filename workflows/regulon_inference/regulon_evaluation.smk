@@ -84,8 +84,8 @@ rule all:
         expand(os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","merged-{omic_type}.tsv.gz"), omic_type=OMIC_TYPES),
         
         # make figures
-        #os.path.join(RESULTS_DIR,"figures","regulon_evaluation"),
-        #os.path.join(RESULTS_DIR,"figures","regulon_inference")
+        os.path.join(RESULTS_DIR,"figures","regulon_evaluation"),
+        os.path.join(RESULTS_DIR,"figures","regulon_inference")
         
         
 rule make_evaluation_labels:
@@ -206,6 +206,8 @@ rule combine_evaluations:
 rule figures_regulon_evaluation:
     input:
         evaluation_ex = os.path.join(RESULTS_DIR,"files","regulon_evaluation_scores","merged-EX.tsv.gz"),
+        splicing_factors = os.path.join(SUPPORT_DIR,"splicing_factors","splicing_factors.tsv"),
+        metadata_splicinglore = os.path.join(RESULTS_DIR,"files","splicinglore_regulons-benchmarkable.tsv.gz"),
         regulators_per_target_robustness = os.path.join(RESULTS_DIR,"files","regulon_properties","regulators_per_target-EX.tsv.gz"),
         targets_per_regulator_robustness = os.path.join(RESULTS_DIR,"files","regulon_properties","targets_per_regulator-EX.tsv.gz"),
         regulators_per_target_thresholds = os.path.join(RESULTS_DIR,"files","regulon_properties","dPSIthresh-regulators_per_target-EX.tsv.gz"),
@@ -220,6 +222,8 @@ rule figures_regulon_evaluation:
     shell:
         """
         Rscript scripts/figures_regulon_evaluation.R \
+                    --splicing_factors_file={input.splicing_factors} \
+                    --metadata_splicinglore_file={input.metadata_splicinglore} \
                     --evaluation_ex_file={input.evaluation_ex} \
                     --regulators_per_target_robustness_file={input.regulators_per_target_robustness} \
                     --targets_per_regulator_robustness_file={input.targets_per_regulator_robustness} \

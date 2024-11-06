@@ -477,7 +477,7 @@ plot_evaluation_splicinglore = function(evaluation, metadata_splicinglore){
         labs(x="Held-out Dataset", y="ROC AUC", color="Inference Type", shape="Held-out Dataset")
     
     
-    print("Done!")
+    return(plts)
 }
 
 make_plots = function(evaluation, metadata_splicinglore){
@@ -490,7 +490,7 @@ make_plots = function(evaluation, metadata_splicinglore){
 }
 
 
-make_figdata = function(evaluation){
+make_figdata = function(evaluation, metadata_splicinglore){
     figdata = list(
         "regulon_evaluation" = list(
             "evaluation" = evaluation
@@ -574,6 +574,8 @@ parseargs = function(){
     
     option_list = list( 
         make_option("--evaluation_ex_file", type="character"),
+        make_option("--splicing_factors_file", type="character"),
+        make_option("--metadata_splicinglore_file", type="character"),
         make_option("--regulators_per_target_robustness_file", type="character"),
         make_option("--targets_per_regulator_robustness_file", type="character"),
         make_option("--regulators_per_target_thresholds_file", type="character"),
@@ -590,6 +592,8 @@ main = function(){
     args = parseargs()
     
     evaluation_ex_file = args[["evaluation_ex_file"]]
+    splicing_factors_file = args[["splicing_factors_file"]]
+    metadata_splicinglore_file = args[["metadata_splicinglore_file"]]
     regulators_per_target_robustness_file = args[["regulators_per_target_robustness_file"]]
     targets_per_regulator_robustness_file = args[["targets_per_regulator_robustness_file"]]
     regulators_per_target_thresholds_file = args[["regulators_per_target_thresholds_file"]]
