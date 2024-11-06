@@ -85,7 +85,10 @@ rule figures_immune_evasion:
         immune_screen = os.path.join(SUPPORT_DIR,"supplementary_tables_literature","Dubrot2022-suptabs-41590_2022_1315_MOESM2_ESM.xlsx"), # Sup. Tab. 13
         human2mouse = os.path.join(RAW_DIR,"BIOMART","human2mouse.tsv"),
         survival_analysis = os.path.join(RESULTS_DIR,'files',"survival_analysis",'splicing-{omic_type}-Riaz2017-PRE-surv.tsv.gz'),
-        protein_impact = os.path.join(RAW_DIR,'VastDB','PROT_IMPACT-hg38-v3.tab.gz')
+        protein_impact = os.path.join(RAW_DIR,'VastDB','PROT_IMPACT-hg38-v3.tab.gz'),
+        msigdb_dir = os.path.join(RAW_DIR,'MSigDB','msigdb_v7.4','msigdb_v7.4_files_to_download_locally','msigdb_v7.4_GMTs'),
+        driver_types = os.path.join(RESULTS_DIR,'files','PANCAN','cancer_program.tsv.gz'),
+        splicing_factors = os.path.join(SUPPORT_DIR,"splicing_factors","splicing_factors.tsv")
     output:
         directory(os.path.join(RESULTS_DIR,"figures","immune_evasion-{omic_type}"))
     shell:
@@ -100,5 +103,8 @@ rule figures_immune_evasion:
                     --human2mouse_file={input.human2mouse} \
                     --survival_analysis_file={input.survival_analysis} \
                     --protein_impact_file={input.protein_impact} \
+                    --msigdb_dir={input.msigdb_dir} \
+                    --driver_types_file={input.driver_types} \
+                    --splicing_factors_file={input.splicing_factors} \
                     --figs_dir={output}
         """

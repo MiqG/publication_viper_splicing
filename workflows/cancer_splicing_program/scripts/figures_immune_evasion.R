@@ -76,7 +76,7 @@ load_regulons = function(regulons_path, patt=NULL){
 }
 
 
-plot_diff_response = function(diff_response, immune_screen, splicing){
+plot_diff_response = function(diff_response, immune_screen, splicing, regulons, driver_types, annot){
     plts = list()
     
     X = diff_response
@@ -231,10 +231,10 @@ plot_enrichments = function(enrichment_targets_oi){
 
 
 make_plots = function(
-    diff_response, immune_screen, splicing, enrichment_targets_oi
+    diff_response, immune_screen, splicing, enrichment_targets_oi, regulons, driver_types, annot
 ){
     plts = list(
-        plot_diff_response(diff_response, immune_screen, splicing),
+        plot_diff_response(diff_response, immune_screen, splicing, regulons, driver_types, annot),
         plot_enrichments(enrichment_targets_oi)
     )
     plts = do.call(c,plts)
@@ -243,7 +243,7 @@ make_plots = function(
 
 
 make_figdata = function(
-    diff_response, immune_screen, splicing
+    diff_response, immune_screen, splicing, enrichment_targets_oi, regulons, driver_types, annot
 ){
     figdata = list(
         "tumorigenesis" = list(
@@ -307,6 +307,9 @@ parseargs = function(){
         make_option("--human2mouse_file", type="character"),
         make_option("--survival_analysis_file", type="character"),
         make_option("--protein_impact_file", type="character"),
+        make_option("--msigdb_dir", type="character"),
+        make_option("--driver_types_file", type="character"),
+        make_option("--splicing_factors_file", type="character"),
         make_option("--figs_dir", type="character")
     )
 
@@ -328,6 +331,9 @@ main = function(){
     human2mouse_file = args[["human2mouse_file"]]
     survival_analysis_file = args[["survival_analysis_file"]]
     protein_impact_file = args[["protein_impact_file"]]
+    msigdb_dir = args[["msigdb_dir"]]
+    driver_types_file = args[["driver_types_file"]]
+    splicing_factors_file = args[["splicing_factors_file"]]
     figs_dir = args[["figs_dir"]]
     
     set.seed(RANDOM_SEED)    
@@ -450,10 +456,10 @@ main = function(){
         count(term)
     
     # plot
-    plts = make_plots(diff_response, immune_screen, splicing, enrichment_targets_oi)
+    plts = make_plots(diff_response, immune_screen, splicing, enrichment_targets_oi, regulons, driver_types, annot)
     
     # make figdata
-    figdata = make_figdata(diff_response, immune_screen, splicing)
+    figdata = make_figdata(diff_response, immune_screen, splicing, enrichment_targets_oi, regulons, driver_types, annot)
 
     # save
     save_plots(plts, figs_dir)
