@@ -1103,7 +1103,8 @@ make_plots = function(
     driver_activity, driver_genexpr, 
     sf_crossreg_activity, sf_crossreg_genexpr, 
     enrichments_reactome, immune_screen, sf_activity_vs_genexpr, regulons_jaccard,
-    n_samples
+    n_samples,
+    splicing_factors, rbpdb
 ){
     plts = list(
         plot_driver_selection(driver_activity, driver_genexpr, diff_activity, diff_genexpr),
@@ -1116,7 +1117,8 @@ make_plots = function(
         plot_sf_crossreg(driver_genexpr, sf_crossreg_genexpr, regulons_jaccard, "-genexpr"),
         plot_enrichments(enrichments_reactome, immune_screen),
         plot_comparison(diff_activity, diff_genexpr, survival_activity, survival_genexpr, sf_activity_vs_genexpr),
-        plot_n_samples(n_samples)
+        plot_n_samples(n_samples),
+        plot_eda_programs(driver_activity, splicing_factors, rbpdb)
     )
     plts = do.call(c,plts)
     return(plts)
@@ -1133,7 +1135,8 @@ make_figdata = function(
     driver_activity, driver_genexpr, 
     sf_crossreg_activity, sf_crossreg_genexpr, 
     enrichments_reactome, immune_screen, sf_activity_vs_genexpr, regulons_jaccard,
-    n_samples
+    n_samples,
+    splicing_factors, rbpdb
 ){
     figdata = list(
         "cancer_program" = list(
@@ -1255,11 +1258,15 @@ parseargs = function(){
     option_list = list( 
         make_option("--diff_activity_file", type="character"),
         make_option("--diff_genexpr_file", type="character"),
+        make_option("--diff_genexpr_deseq_file", type="character"),
         make_option("--survival_activity_file", type="character"),
         make_option("--survival_genexpr_file", type="character"),
+        make_option("--survival_activity_conf_file", type="character"),
+        make_option("--survival_genexpr_conf_file", type="character"),
         make_option("--sf_crossreg_activity_file", type="character"),
         make_option("--sf_crossreg_genexpr_file", type="character"),
         make_option("--demeter2_file", type="character"),
+        make_option("--ccle_metadata_file", type="character"),
         make_option("--ontology_chea_file", type="character"),
         make_option("--sf_activity_vs_genexpr_file", type="character"),
         make_option("--metadata_file", type="character"),
@@ -1270,6 +1277,9 @@ parseargs = function(){
         make_option("--msigdb_dir", type="character"),
         make_option("--immune_screen_file", type="character"),
         make_option("--human2mouse_file", type="character"),
+        make_option("--event_prior_knowledge_file", type="character"),
+        make_option("--rbpdb_file", type="character"),
+        make_option("--splicing_factors_file", type="character"),
         make_option("--figs_dir", type="character")
     )
 
@@ -1283,12 +1293,15 @@ main = function(){
     
     diff_activity_file = args[["diff_activity_file"]]
     diff_genexpr_file = args[["diff_genexpr_file"]]
+    diff_genexpr_deseq_file = args[["diff_genexpr_deseq_file"]]
     survival_activity_file = args[["survival_activity_file"]]
     survival_genexpr_file = args[["survival_genexpr_file"]]
+    survival_activity_conf_file = args[["survival_activity_conf_file"]]
+    survival_genexpr_conf_file = args[["survival_genexpr_conf_file"]]
     sf_crossreg_activity_file = args[["sf_crossreg_activity_file"]]
     sf_crossreg_genexpr_file = args[["sf_crossreg_genexpr_file"]]
     demeter2_file = args[["demeter2_file"]]
-    ccle_metadata_file = args[["cclE_metadata_file"]]
+    ccle_metadata_file = args[["ccle_metadata_file"]]
     sf_activity_vs_genexpr_file = args[["sf_activity_vs_genexpr_file"]]
     metadata_file = args[["metadata_file"]]
     regulons_path = args[["regulons_path"]]
@@ -1296,9 +1309,12 @@ main = function(){
     regulons_jaccard_file = args[["regulons_jaccard_file"]]
     gene_annotation_file = args[["gene_annotation_file"]]
     ontology_chea_file = args[["ontology_chea_file"]]
+    msigdb_dir = args[["msigdb_dir"]]
     immune_screen_file = args[["immune_screen_file"]]
     human2mouse_file = args[["human2mouse_file"]]
-    msigdb_dir = args[["msigdb_dir"]]
+    event_prior_knowledge_file = args[["event_prior_knowledge_file"]]
+    rbpdb_file = args[["rbpdb_file"]]
+    splicing_factors_file = args[["splicing_factors_file"]]
     figs_dir = args[["figs_dir"]]
     
     dir.create(figs_dir, recursive = TRUE)
@@ -1533,7 +1549,8 @@ main = function(){
         driver_activity, driver_genexpr_deseq, # HEY
         sf_crossreg_activity, sf_crossreg_genexpr, 
         enrichments_reactome, immune_screen, sf_activity_vs_genexpr, regulons_jaccard,
-        n_samples
+        n_samples,
+        splicing_factors, rbpdb
     )
     
     # make figdata
@@ -1547,7 +1564,8 @@ main = function(){
         driver_activity, driver_genexpr, 
         sf_crossreg_activity, sf_crossreg_genexpr, 
         enrichments_reactome, immune_screen, sf_activity_vs_genexpr, regulons_jaccard,
-        n_samples
+        n_samples,
+        splicing_factors, rbpdb
     )
 
     # save

@@ -675,11 +675,15 @@ rule figures_cancer_program:
     input:
         diff_activity = os.path.join(RESULTS_DIR,'files','PANCAN','protein_activity-mannwhitneyu-PrimaryTumor_vs_SolidTissueNormal.tsv.gz'),
         diff_genexpr = os.path.join(RESULTS_DIR,'files','PANCAN','genexpr_tpm-mannwhitneyu-PrimaryTumor_vs_SolidTissueNormal.tsv.gz'),
+        diff_genexpr_deseq = os.path.join(RESULTS_DIR,'files','PANCAN','genexpr_counts_deseq2-deseq2-PrimaryTumor_vs_SolidTissueNormal.tsv.gz'),
         survival_activity = os.path.join(RESULTS_DIR,'files','PANCAN',"protein_activity-survival_analysis-surv.tsv.gz"),
         survival_genexpr = os.path.join(RESULTS_DIR,'files','PANCAN',"genexpr_tpm-survival_analysis-surv.tsv.gz"),
+        survival_activity_conf = os.path.join(RESULTS_DIR,'files','PANCAN',"protein_activity-survival_analysis_with_confounders-surv.tsv.gz"),
+        survival_genexpr_conf = os.path.join(RESULTS_DIR,'files','PANCAN',"genexpr_tpm-survival_analysis_with_confounders-surv.tsv.gz"),
         sf_crossreg_activity = os.path.join(RESULTS_DIR,'files','PANCAN',"protein_activity-sf_cross_regulation.tsv.gz"),
         sf_crossreg_genexpr = os.path.join(RESULTS_DIR,'files','PANCAN',"genexpr_tpm-sf_cross_regulation.tsv.gz"),
-        assocs_gene_dependency = os.path.join(PACT_CCLE_DIR,"files","protein_activity_vs_demeter2","CCLE.tsv.gz"),
+        demeter2 = os.path.join(PREP_DIR,"demeter2","CCLE.tsv.gz"),
+        ccle_metadata = os.path.join(PREP_DIR,"metadata","CCLE.tsv.gz"),
         sf_activity_vs_genexpr = os.path.join(RESULTS_DIR,'files','PANCAN',"genexpr_tpm_vs_activity.tsv.gz"),
         ontology_chea = os.path.join(RAW_DIR,"Harmonizome","CHEA-TranscriptionFactorTargets.gmt.gz"),
         metadata = os.path.join(PREP_DIR,"metadata","PANCAN.tsv.gz"),
@@ -689,7 +693,10 @@ rule figures_cancer_program:
         gene_annotation = os.path.join(RAW_DIR,"HGNC","gene_annotations.tsv.gz"),
         msigdb_dir = os.path.join(RAW_DIR,'MSigDB','msigdb_v7.4','msigdb_v7.4_files_to_download_locally','msigdb_v7.4_GMTs'),
         immune_screen = os.path.join(SUPPORT_DIR,"supplementary_tables_literature","Dubrot2022-suptabs-41590_2022_1315_MOESM2_ESM.xlsx"),
-        human2mouse = os.path.join(RAW_DIR,"BIOMART","human2mouse.tsv")
+        human2mouse = os.path.join(RAW_DIR,"BIOMART","human2mouse.tsv"),
+        event_prior_knowledge = os.path.join(SUPPORT_DIR,"supplementary_tables_literature","AngladaGirotto2024-supdata01_event_prior_knowledge.txt"),
+        rbpdb = os.path.join(SUPPORT_DIR,"supplementary_tables_literature","Cook2011-RBPDB_v1.3.1_proteins_human_2012-11-21.tsv"),
+        splicing_factors = os.path.join(SUPPORT_DIR,"splicing_factors","splicing_factors.tsv")
     output:
         directory(os.path.join(RESULTS_DIR,"figures","cancer_program"))
     shell:
@@ -697,11 +704,15 @@ rule figures_cancer_program:
         Rscript scripts/figures_cancer_program.R \
                     --diff_activity_file={input.diff_activity} \
                     --diff_genexpr_file={input.diff_genexpr} \
+                    --diff_genexpr_deseq_file={input.diff_genexpr_deseq} \
                     --survival_activity_file={input.survival_activity} \
                     --survival_genexpr_file={input.survival_genexpr} \
+                    --survival_activity_conf_file={input.survival_activity_conf} \
+                    --survival_genexpr_conf_file={input.survival_genexpr_conf} \
                     --sf_crossreg_activity_file={input.sf_crossreg_activity} \
                     --sf_crossreg_genexpr_file={input.sf_crossreg_genexpr} \
-                    --assocs_gene_dependency_file={input.assocs_gene_dependency} \
+                    --demeter2_file={input.demeter2} \
+                    --ccle_metadata_file={input.ccle_metadata} \
                     --sf_activity_vs_genexpr_file={input.sf_activity_vs_genexpr} \
                     --metadata_file={input.metadata} \
                     --regulons_path={input.regulons_path} \
@@ -712,5 +723,8 @@ rule figures_cancer_program:
                     --msigdb_dir={input.msigdb_dir} \
                     --immune_screen_file={input.immune_screen} \
                     --human2mouse_file={input.human2mouse} \
+                    --event_prior_knowledge_file={input.event_prior_knowledge} \
+                    --rbpdb_file={input.rbpdb} \
+                    --splicing_factors_file={input.splicing_factors} \
                     --figs_dir={output}
         """
