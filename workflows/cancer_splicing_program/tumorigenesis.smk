@@ -31,6 +31,7 @@ rule all:
     input:
         # compute signatures
         expand(os.path.join(RESULTS_DIR,"files","signatures","{dataset}-{omic_type}.tsv.gz"), dataset=DATASETS, omic_type=OMIC_TYPES),
+        
         # compute protein activities
         expand(os.path.join(RESULTS_DIR,"files","protein_activity","{dataset}-{omic_type}.tsv.gz"), dataset=DATASETS, omic_type=OMIC_TYPES),
         
@@ -111,6 +112,8 @@ rule compute_protein_activity:
         
 rule figures_tumorigenesis:
     input:
+        genexpr = os.path.join(PREP_DIR,"genexpr_tpm","tumorigenesis.tsv.gz"),
+        annotation = os.path.join(RAW_DIR,'VastDB','EVENT_INFO-hg38_noseqs.tsv'),
         protein_activity = os.path.join(RESULTS_DIR,"files","protein_activity","tumorigenesis-{omic_type}.tsv.gz"),
         metadata = os.path.join(PREP_DIR,"metadata","tumorigenesis.tsv.gz"),
         driver_types = os.path.join(RESULTS_DIR,'files','PANCAN','cancer_program.tsv.gz')
@@ -119,8 +122,10 @@ rule figures_tumorigenesis:
     shell:
         """
         Rscript scripts/figures_tumorigenesis.R \
+                    --genexpr_file={input.genexpr} \
+                    --annotation_file={input.annotation} \
                     --protein_activity_file={input.protein_activity} \
                     --metadata_file={input.metadata} \
-                    --driver_types={input.driver_types} \
+                    --driver_types_file={input.driver_types} \
                     --figs_dir={output}
         """

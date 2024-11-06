@@ -37,14 +37,13 @@ PAL_DRIVER_TYPE = c(
 # RESULTS_DIR = file.path(ROOT,"results","cancer_splicing_program")
 # genexpr_file = file.path(PREP_DIR,"genexpr_tpm","tumorigenesis.tsv.gz")
 # annotation_file = file.path(RAW_DIR,'VastDB','EVENT_INFO-hg38_noseqs.tsv')
-# splicing_file = file.path(PREP_DIR,"event_psi","tumorigenesis-EX.tsv.gz")
 # protein_activity_file = file.path(RESULTS_DIR,"files","protein_activity","tumorigenesis-EX.tsv.gz")
 # metadata_file = file.path(PREP_DIR,"metadata","tumorigenesis.tsv.gz")
 # driver_types_file = file.path(RESULTS_DIR,'files','PANCAN','cancer_program.tsv.gz')
 # figs_dir = file.path(RESULTS_DIR,"figures","tumorigenesis-EX")
 
 ##### FUNCTIONS #####
-plot_tumorigenesis = function(protein_activity, genexpr, splicing){
+plot_tumorigenesis = function(protein_activity, genexpr){
     plts = list()
     
     X = protein_activity %>%
@@ -143,10 +142,10 @@ plot_tumorigenesis = function(protein_activity, genexpr, splicing){
 
 
 make_plots = function(
-    protein_activiy, genexpr, splicing
+    protein_activiy, genexpr
 ){
     plts = list(
-        plot_tumorigenesis(protein_activiy, genexpr, splicing)
+        plot_tumorigenesis(protein_activiy, genexpr)
     )
     plts = do.call(c,plts)
     return(plts)
@@ -205,6 +204,8 @@ save_figdata = function(figdata, dir){
 parseargs = function(){
     
     option_list = list( 
+        make_option("--genexpr_file", type="character"),
+        make_option("--annotation_file", type="character"),
         make_option("--protein_activity_file", type="character"),
         make_option("--metadata_file", type="character"),
         make_option("--driver_types_file", type="character"),
@@ -220,6 +221,8 @@ parseargs = function(){
 main = function(){
     args = parseargs()
     
+    genexpr_file = args[["genexpr_file"]]
+    annotation_file = args[["annotation_file"]]
     protein_activity_file = args[["protein_activity_file"]]
     metadata_file = args[["metadata_file"]]
     driver_types_file = args[["driver_types_file"]]
@@ -231,7 +234,6 @@ main = function(){
     # load
     annot = read_tsv(annotation_file)
     genexpr = read_tsv(genexpr_file)
-    splicing = read_tsv(splicing_file)
     protein_activity = read_tsv(protein_activity_file)
     metadata = read_tsv(metadata_file)
     driver_types = read_tsv(driver_types_file)
@@ -297,34 +299,9 @@ main = function(){
         drop_na(driver_type)
 
     events_oi = annot %>% filter(GENE%in%driver_types[["GENE"]]) %>% distinct(EVENT,GENE)
-    splicing = splicing %>%
-        filter(EVENT%in%events_oi[["EVENT"]]) %>%
-        pivot_longer(-EVENT, names_to="sampleID", values_to="event_psi") %>%
-        left_join(metadata, by="sampleID") %>%
-        drop_na(condition, event_psi) %>%
-        filter(study_accession=="PRJNA193487") %>%
-        mutate(
-            condition_lab = sprintf(
-                "%s (%s%s) (%s%s) | %s | %s", condition, pert_time, pert_time_units, 
-                pert_concentration, pert_concentration_units, cell_line_name, study_accession
-            )
-        ) %>%
-        
-        # summarize replicates
-        group_by(condition_lab, condition, pert_time, pert_time_units, 
-                 pert_concentration, pert_concentration_units, cell_line_name, study_accession,
-                 PERT_ENSEMBL, PERT_GENE, EVENT) %>%
-        summarize(
-            event_psi = median(event_psi, na.rm=TRUE),
-        ) %>%
-        ungroup() %>%
-        left_join(annot %>% distinct(EVENT,GENE)) %>%
-        left_join(driver_types, by="GENE") %>%
-        drop_na(driver_type)
-        
     
     # plot
-    plts = make_plots(protein_activity, genexpr, splicing)
+    plts = make_plots(protein_activity, genexpr)
     
     # make figdata
     figdata = make_figdata(protein_activity)
