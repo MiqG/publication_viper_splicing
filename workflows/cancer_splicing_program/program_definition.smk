@@ -9,7 +9,6 @@ SUPPORT_DIR = os.path.join(ROOT,"support")
 SRC_DIR = os.path.join(ROOT,"src")
 RESULTS_DIR = os.path.join(ROOT,"results","cancer_splicing_program")
 REGULONS_DIR = os.path.join(ROOT,"results","regulon_inference")
-PACT_CCLE_DIR = os.path.join(ROOT,"results","sf_activity_ccle")
 SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
 PADJ_METHOD = 'fdr_bh'
 
@@ -38,7 +37,6 @@ CANCER_TYPES_PTSTN = [
     'THCA',
     'UCEC'
 ]
-CANCER_TYPES_PTSTN.remove("STAD") # DEV
 CANCER_TYPES_METPT = ["BRCA","SKCM","THCA"]
 CANCER_TYPES_PT = metadata.loc[
     metadata["sample_type_clean"].isin(["PrimaryTumor","PrimaryBloodDerivedCancerPeripheralBlood"]),"cancer_type"
@@ -626,8 +624,8 @@ rule sf_activity_regulation_genexpr:
         genexpr = pd.read_table(input.genexpr, index_col=0)
         
         # prep
-        common_sfs = set(protein_activity.index).intersection(genexpr.index)
-        common_samples = set(protein_activity.columns).intersection(genexpr.columns)
+        common_sfs = list(set(protein_activity.index).intersection(genexpr.index))
+        common_samples = list(set(protein_activity.columns).intersection(genexpr.columns))
         protein_activity = protein_activity.loc[common_sfs,common_samples].copy()
         genexpr = genexpr.loc[common_sfs,common_samples].copy()
         

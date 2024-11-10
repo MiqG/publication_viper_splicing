@@ -209,12 +209,6 @@ rule all:
         # preprocess STRINGDB
         os.path.join(PREP_DIR,'ppi','STRINGDB.tsv.gz'),
         
-        # EDA data figures
-        os.path.join(RESULTS_DIR,'figures','eda'),
-        
-        # figures benchmark KNN imputation
-        os.path.join(RESULTS_DIR,'figures','benchmark_imputation'),
-        
         # TCGA for network inference
         ## split by cancer type and sample type
         expand(os.path.join(PREP_DIR,"event_psi","{cancer}-{sample}-EX.tsv.gz"), zip, cancer=CANCER_TYPES_SPLIT, sample=SAMPLE_TYPES_SPLIT),
@@ -228,9 +222,15 @@ rule all:
         
         # preprocess SplicingLore
         os.path.join(PREP_DIR,"metadata","SplicingLore.tsv.gz"),
-        os.path.join(PREP_DIR,"ground_truth_pert","SplicingLore","delta_psi-EX.tsv.gz")
+        os.path.join(PREP_DIR,"ground_truth_pert","SplicingLore","delta_psi-EX.tsv.gz"),
 
+        # EDA data figures
+        os.path.join(RESULTS_DIR,'figures','eda'),
         
+        # figures benchmark KNN imputation
+        os.path.join(RESULTS_DIR,'figures','benchmark_imputation')
+
+
 rule make_list_splicing_factors:
     input:
         spliceosome_db = os.path.join(SUPPORT_DIR,"splicing_factors","literature_suptabs","SpliceosomeDB-human.csv"),

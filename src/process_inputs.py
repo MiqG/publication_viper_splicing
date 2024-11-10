@@ -44,7 +44,7 @@ def prepare_data(data, metadata, sample_col):
     """
     Keep only samples metadata that are also in data. The output will have the same order.
     """
-    common_samples = set(data.columns).intersection(set(metadata[sample_col]))
+    common_samples = list(set(data.columns).intersection(set(metadata[sample_col])))
     
     data = data[common_samples]
     
