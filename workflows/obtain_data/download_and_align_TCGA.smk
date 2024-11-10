@@ -4,8 +4,9 @@ import pandas as pd
 # unpack config
 configfile: "../../config.yaml"
 PATHS = config["PATHS"]
-VASTDB_DIR = PATHS["VAST_TOOLS"]["VASTDB"]
-VAST_TOOLS_DIR = PATHS["VAST_TOOLS"]["BIN"]
+PATHS = {k: os.path.expanduser(v) for k, v in PATHS.items()} # make sure to have full paths (without ~)
+VASTDB_DIR = PATHS["VASTDB_DIR"]
+VAST_TOOLS_DIR = PATHS["VAST_TOOLS_DIR"]
 TOKEN_FILE = PATHS["TCGA_TOKEN"]
 
 # variables
@@ -51,7 +52,7 @@ metadata = metadata.loc[metadata["cancer_type"].isin([
     "LUSC",#(download problems),
     "PAAD","PCPG","PRAD","READ","SARC",
     # on going
-    "BRCA"
+    "BRCA",
     # TAR format
     "OV", "STAD", "ESCA", "LAML"
 ])]
@@ -106,16 +107,13 @@ rule all:
         # Quantify splicing and mRNA levels with vast-tools
         expand(os.path.join(TCGA_DIR,"{cancer_type}","vast_out",".done","{sample}"), zip, sample=SAMPLES, cancer_type=CANCER_TYPES),
 
-        Remove fastq files
-        expand(os.path.join(TCGA_DIR,"fastqs",".done_rm","{sample}"), sample=SAMPLES),
-        
         # Combine into single tables
         expand(os.path.join(TCGA_DIR,"{cancer_type}","vast_out",".done_combine-{n_samples}"), zip, cancer_type=N_SAMPLES.keys(), n_samples=N_SAMPLES.values()),
 
         # Tidy PSI
         expand(os.path.join(".done","{cancer_type}.done"), cancer_type=set(CANCER_TYPES)),
         expand(os.path.join(TCGA_DIR,"{cancer_type}","vast_out","PSI-minN_1-minSD_0-noVLOW-min_ALT_use25-Tidy.tab.gz"), cancer_type=set(CANCER_TYPES)),
-        
+
         
 rule create_manifests:
     output:
@@ -390,30 +388,6 @@ rule align:
         """
 
         
-rule delete_fastqs:
-    input:
-        download_done = [os.path.join(TCGA_DIR,"fastqs",".done","{sample}_{end}").format(end=end, sample="{sample}") for end in ENDS],
-        align_done = os.path.join(TCGA_DIR,"vast_out",".done","{sample}")
-    output:
-        touch(os.path.join(TCGA_DIR,"fastqs",".done_rm","{sample}"))
-    params:
-        sample = "{sample}",
-        fastqs_dir = os.path.join(TCGA_DIR,"fastqs")
-    threads: 1
-    resources:
-        runtime = 300,
-        memory = 1
-    group: "TCGA"
-    shell:
-        """
-        set -eo pipefail
-
-        rm {params.fastqs_dir}/{params.sample}*
-        
-        echo "Done!"
-        """
-        
-        
 import datetime
 t = datetime.datetime.now()
 t = t.strftime('%Y%m%d%H%M%S')
@@ -430,10 +404,10 @@ rule vasttools_combine:
         bin_dir=VAST_TOOLS_DIR,
         vast_out = os.path.join(TCGA_DIR,"{cancer_type}","vast_out"),
         folder = os.path.join(TCGA_DIR,"{cancer_type}","vast_out",t)
-    threads: 10
+    threads: 23
     resources:
-        runtime = 3600*48, # 24h in seconds
-        #runtime = 60*24, # 24h in minutes
+        #runtime = 3600*48, # 24h in seconds
+        runtime = 60*48, # 48h in minutes
         memory = 90
     shell:
         """
@@ -441,10 +415,11 @@ rule vasttools_combine:
 
         # group results
         echo "Grouping results..."
+        
         mkdir -p {params.folder}/to_combine
-        ln -sf {params.vast_out}/*/to_combine/* {params.folder}/to_combine/
+        find {params.vast_out}/*/to_combine -type f -print0 | xargs -0 -I {{}} ln -sf {{}} {params.folder}/to_combine/
         mkdir -p {params.folder}/expr_out
-        ln -sf {params.vast_out}/*/expr_out/* {params.folder}/expr_out/
+        find {params.vast_out}/*/expr_out -type f -print0 | xargs -0 -I {{}} ln -sf {{}} {params.folder}/expr_out/
 
         # combine runs
         echo "Combining runs..."
@@ -493,9 +468,9 @@ rule vasttools_tidy:
         bin_dir=VAST_TOOLS_DIR
     threads: 1
     resources:
-        runtime = 3600*12, # 12h in seconds
-        #runtime = 60*12, # 12h in minutes
-        memory = 40
+        #runtime = 3600*12, # 12h in seconds
+        runtime = 60*12, # 12h in minutes
+        memory = 90
     shell:
         """
         set -eo pipefail
