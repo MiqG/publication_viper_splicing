@@ -1,5 +1,4 @@
 PATHS:
-    VAST_TOOLS:
-        BIN: "~/repositories/vast-tools"
-        VASTDB: "~/projects/publication_viper_splicing/data/raw/VastDB/assemblies"
+    VAST_TOOLS_DIR: "~/repositories/vast-tools"
+    VASTDB_DIR: "~/projects/publication_viper_splicing/data/raw/VastDB/assemblies"
     TCGA_TOKEN: "~/projects/publication_viper_splicing/support/.private/gdc-user-token.txt"
