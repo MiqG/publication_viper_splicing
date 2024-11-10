@@ -52,7 +52,13 @@ REGULON_SETS = [
     # empirical vs computational networks
     "aracne_and_experimental_regulons",
     "mlr_and_experimental_regulons",
-    "aracne_and_mlr_regulons"
+    "aracne_and_mlr_regulons",
+    # benchmark max_targets ARANCe
+    "aracne_regulons_CardosoMoreira2020_100",
+    "aracne_regulons_CardosoMoreira2020_500",
+    "aracne_regulons_CardosoMoreira2020_1000",
+    "aracne_regulons_CardosoMoreira2020_2000",
+    "aracne_regulons_CardosoMoreira2020_5000"
 ]
 
 TOP_N = [100, 90, 80, 70, 60, 50, 40]

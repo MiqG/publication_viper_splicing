@@ -84,6 +84,14 @@ METHODS_ACTIVITY = c(
     "viper"
 )
 
+SETS_MAX_TARGETS = c(
+    "aracne_regulons_CardosoMoreira2020_100",
+    "aracne_regulons_CardosoMoreira2020_500",
+    "aracne_regulons_CardosoMoreira2020_1000",
+    "aracne_regulons_CardosoMoreira2020_2000",
+    "aracne_regulons_CardosoMoreira2020_5000"
+)
+
 SF_CLASS = c("Core", "RBP", "Other")
 
 # formatting
@@ -233,6 +241,31 @@ plot_evaluation = function(evaluation){
         theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         labs(x="SF Class", y="ROC AUC", color="Inference Type", shape="Held-out Dataset")
     
+    # max_targets ARACNe benchmark
+    plts[["evaluation-max_targets_aracne-median_auc_roc-box"]] = x %>%
+        filter(eval_type=="real" & regulon_set%in%SETS_MAX_TARGETS) %>%
+        mutate(
+            regulon_set = factor(regulon_set, levels=SETS_MAX_TARGETS),
+            method_activity = factor(method_activity, levels=METHODS_ACTIVITY)
+        ) %>%
+        ggplot(aes(x=regulon_set, y=auc_roc, group=interaction(regulon_set, method_activity))) +
+        geom_boxplot(aes(color=method_activity), fill=NA, outlier.shape=NA, 
+                     position=position_dodge2(0.9, preserve="single")) +
+        geom_point(aes(color=method_activity, shape=signature_id), size=0.5, 
+                   position=position_jitterdodge(dodge.width=0.9, jitter.width=0.1)) +
+        color_palette(PAL_METHODS_ACTIVITY) + 
+        geom_text(
+            aes(y = 0.2, label=label), 
+            . %>% 
+            count(method_activity, regulon_set, eval_type, eval_direction) %>% 
+            mutate(label=paste0("n=",n)),
+            position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        geom_hline(yintercept=0.5, linewidth=LINE_SIZE, linetype="dashed", color="black") +
+        theme_pubr(x.text.angle = 45) +
+        facet_wrap(~eval_direction) +  
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Method", y="median(ROC AUC)", color="Inference Type", shape="Held-out Dataset")
     
     # CLIP benchmark
     plts[["evaluation-clip-median_auc_roc-box"]] = x %>%
@@ -528,6 +561,9 @@ save_plots = function(plts, figs_dir){
     
     # by SF class and held out dataset
     save_plt(plts, "evaluation-sf_class_vs_held_out_ds-raw_auc_roc-box", '.pdf', figs_dir, width=12, height=12)
+
+    # max_targets ARACNe eval
+    save_plt(plts, "evaluation-max_targets_aracne-median_auc_roc-box", '.pdf', figs_dir, width=8, height=9)
     
     # CLIP eval
     save_plt(plts, "evaluation-clip-median_auc_roc-box", '.pdf', figs_dir, width=8, height=9)
