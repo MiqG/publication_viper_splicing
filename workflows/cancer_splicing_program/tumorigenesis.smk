@@ -56,7 +56,7 @@ rule compute_signatures:
         splicing = pd.read_table(input.splicing, index_col=0)
         
         # subset
-        common_samples = set(metadata["sampleID"]).intersection(splicing.columns)
+        common_samples = list(set(metadata["sampleID"]).intersection(splicing.columns))
         metadata = metadata.loc[metadata["sampleID"].isin(common_samples)].copy()
         splicing = splicing[common_samples].copy()
         

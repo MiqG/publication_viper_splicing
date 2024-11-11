@@ -40,9 +40,6 @@ rule all:
         expand(os.path.join(RESULTS_DIR,"files","signatures","{dataset}-{omic_type}.tsv.gz"), zip, dataset=DATASETS, omic_type=OMIC_TYPES),
         expand(os.path.join(RESULTS_DIR,"files","protein_activity","{dataset}-{omic_type}.tsv.gz"), dataset=DATASETS, omic_type=OMIC_TYPES),
         
-        # compute viper SF activities        
-        expand(os.path.join(RESULTS_DIR,"files","program_enrichment_scores","{dataset}-{omic_type}.tsv.gz"), dataset=DATASETS, omic_type=OMIC_TYPES),
-        
         # figures
         expand(os.path.join(RESULTS_DIR,"figures","proliferation-{omic_type}"), omic_type=OMIC_TYPES)
         

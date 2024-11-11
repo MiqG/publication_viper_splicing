@@ -28,7 +28,9 @@ THRESH_FDR = 0.05
 ORGDB = org.Hs.eg.db
 THRESH_N_SUM = 5.5
 DRIVER_TYPES = c("Oncogenic","Tumor suppressor")
-SPLICEOSOME_STAGES = c('B complex','Bact complex','C complex','P complex','A complex','U5 snRNP','tri-snRNP','17S U2 snRNP','U1 snRNP')
+SPLICEOSOME_STAGES = c('U1 snRNP','17S U2 snRNP','tri-snRNP','U5 snRNP','B complex','Bact complex','C complex','P complex','A complex')
+
+EXAMPLE_GENES = c("HNRNPD","DNMT1")
 
 # formatting
 LINE_SIZE = 0.25
@@ -56,6 +58,7 @@ PAL_SAMPLE_TYPE = setNames(
     get_palette(palette = "npg", k=3),
     c("Primary Tumor","Primary Blood Derived Cancer - Peripheral Blood","Solid Tissue Normal")
 )
+
 
 # Development
 # -----------
@@ -451,10 +454,16 @@ plot_eda_programs = function(driver_activity, splicing_factors, rbpdb){
             by="GENE"
         )
     
-    # stages of the spliceosome, only 11 splicing factors could be considered
+    # stages of the spliceosome, 32 splicing factors could be considered
+    n_total = X %>%
+        separate_rows(spliceosome_db_complex, sep=", ") %>%
+        drop_na(spliceosome_db_complex) %>% 
+        distinct(GENE) %>% 
+        nrow()
+    
     x = X %>%
         separate_rows(spliceosome_db_complex, sep=", ") %>%
-        drop_na() %>% 
+        drop_na(spliceosome_db_complex) %>% 
         distinct(GENE, spliceosome_db_complex, driver_type) %>%
         group_by(spliceosome_db_complex, driver_type) %>%
         mutate(sfs = paste(GENE, collapse=", ")) %>%
@@ -462,17 +471,29 @@ plot_eda_programs = function(driver_activity, splicing_factors, rbpdb){
         count(spliceosome_db_complex, driver_type, sfs)
         
     plts[["eda_programs-spliceosome_db_complex-bar"]] = x %>%
-        mutate(spliceosome_db_complex = factor(spliceosome_db_complex, levels=SPLICEOSOME_STAGES)) %>%
-        ggbarplot(x="spliceosome_db_complex", y="n", fill="driver_type", color=NA, position=position_dodge(0.9)) +
-        geom_text(aes(label=sfs, group=driver_type), size=FONT_SIZE, family=FONT_FAMILY, angle=90, position=position_dodge(0.9)) +
+        mutate(spliceosome_db_complex = factor(spliceosome_db_complex, levels=rev(SPLICEOSOME_STAGES))) %>%
+        ggbarplot(x="spliceosome_db_complex", y="n", fill="driver_type", color=NA, position=position_dodge(0.9, preserve="single")) +
+        #geom_text(aes(label=sfs, group=driver_type), size=FONT_SIZE, family=FONT_FAMILY, angle=90, position=position_dodge(0.9)) +
         fill_palette(PAL_DRIVER_TYPE) +
-        theme_pubr(x.text.angle = 45) +
-        labs(x="Spliceosome Complex", y="Count", subtitle="11 SFs out of 509")
+        labs(x="Spliceosome Complex", y="Count", subtitle=sprintf("%s SFs out of 509", n_total)) +
+        theme_pubclean() +
+        coord_radial(theta="x", inner.radius=0.1, rotate_angle=TRUE)
     
     # RBP families
+    n_total_sfs = X %>%
+        separate_rows(rbp_family, sep="; ") %>%
+        drop_na(rbp_family) %>%
+        distinct(GENE) %>%
+        nrow()
+    n_total_rbps = X %>%
+        separate_rows(rbp_family, sep="; ") %>%
+        drop_na(rbp_family) %>%
+        distinct(rbp_family) %>%
+        nrow()
+    
     x = X %>%
         separate_rows(rbp_family, sep="; ") %>%
-        drop_na() %>% 
+        drop_na(rbp_family) %>% 
         distinct(GENE, rbp_family, driver_type) %>%
         group_by(rbp_family, driver_type) %>%
         mutate(sfs = paste(GENE, collapse=", ")) %>%
@@ -481,10 +502,10 @@ plot_eda_programs = function(driver_activity, splicing_factors, rbpdb){
         
     plts[["eda_programs-rbpdb_family-bar"]] = x %>%
         ggbarplot(x="rbp_family", y="n", fill="driver_type", color=NA, position=position_dodge(0.9)) +
-        geom_text(aes(label=sfs, group=driver_type), size=FONT_SIZE, family=FONT_FAMILY, angle=90, position=position_dodge(0.9)) +
+        #geom_text(aes(label=sfs, group=driver_type), size=FONT_SIZE, family=FONT_FAMILY, angle=90, position=position_dodge(0.9)) +
         fill_palette(PAL_DRIVER_TYPE) +
         theme_pubr(x.text.angle = 45) +
-        labs(x="RBPDB Family (7 out of 49)", y="Count", subtitle="Total SFs = 11")
+        labs(x=sprintf("RBPDB Family (%s out of 49)", n_total_rbps), y="Count", subtitle=sprintf("Total SFs = %s",n_total_sfs))
     
     return(plts)
 }
@@ -716,8 +737,8 @@ plot_survival_analysis = function(survival_roc, survival_omic, survival_omic_con
         ) %>%
         count(GENE, driver_type, surv_type) %>%
         drop_na() %>%
-        filter(GENE %in% c("SNRNP200","HNRNPD")) %>%
-        #mutate(GENE = factor(GENE, levels=c("SNRNP200","HNRNPD"))) %>%
+        filter(GENE %in% EXAMPLE_GENES) %>%
+        mutate(GENE = factor(GENE, levels=EXAMPLE_GENES)) %>%
         ggbarplot(
             x="surv_type", y="n", fill="driver_type", color=NA, 
             palette=PAL_DRIVER_TYPE, position=position_dodge(0.9), 
@@ -759,8 +780,8 @@ plot_survival_analysis = function(survival_roc, survival_omic, survival_omic_con
         ) %>%
         count(GENE, driver_type, surv_type) %>%
         drop_na() %>%
-        filter(GENE %in% c("SNRNP200","HNRNPD")) %>%
-        #mutate(GENE = factor(GENE, levels=c("SNRNP200","HNRNPD"))) %>%
+        filter(GENE %in% EXAMPLE_GENES) %>%
+        mutate(GENE = factor(GENE, levels=EXAMPLE_GENES)) %>%
         ggbarplot(
             x="surv_type", y="n", fill="driver_type", color=NA, 
             palette=PAL_DRIVER_TYPE, position=position_dodge(0.9), 
@@ -1219,7 +1240,7 @@ save_plots = function(plts, figs_dir){
     
     # EDA programs
     save_plt(plts, "eda_programs-spliceosome_db_complex-bar", '.pdf', figs_dir, width=5, height=7)
-    save_plt(plts, "eda_programs-rbpdb_family-bar", '.pdf', figs_dir, width=5, height=7)
+    save_plt(plts, "eda_programs-rbpdb_family-bar", '.pdf', figs_dir, width=7, height=7)
     
     # cross regulation splicing factors
     save_plt(plts, "sf_cross_regulation-correlations-violin-activity", '.pdf', figs_dir, width=5, height=5)
@@ -1280,7 +1301,7 @@ parseargs = function(){
         make_option("--event_prior_knowledge_file", type="character"),
         make_option("--rbpdb_file", type="character"),
         make_option("--splicing_factors_file", type="character"),
-        make_option("--figs_dir", type="character")
+        make_option("--figs_dir", type="character"),
         make_option("--random_seed", type="integer", default=1234)
     )
 

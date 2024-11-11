@@ -99,7 +99,7 @@ plot_diff_response = function(diff_response, immune_screen, splicing, regulons, 
     
     events_oi = X %>% 
         group_by(Comparison,Dataset) %>% 
-        slice_max(abs(score*median_diff), n=6) %>%
+        slice_max(abs(score), n=6) %>%
         ungroup()
     
     plts[["diff_response-median_diff_vs_immune_screen_score-scatter"]] = X %>%
@@ -187,18 +187,12 @@ plot_diff_response = function(diff_response, immune_screen, splicing, regulons, 
     # immune screen response to perturbing regulators of exon_oi
     regulators_exon_oi = c("SF3B3","PRPF8","SRSF1")
     plts[["diff_response-immune_screen_score_reglators_oi-bar"]] = immune_screen %>%
-        filter(Comparison=="ICB vs NSG" & human_symbol%in%(interactions_oi %>% filter(driver_type=="Tumor suppressor") %>% pull(GENE))) %>%
+        filter(Comparison=="ICB vs NSG" & human_symbol%in%regulators_exon_oi) %>%
         mutate(
             label = sprintf("%s (%s)", human_symbol, Gene)
         ) %>%
         arrange(score) %>%
         ggbarplot(x="label", y="score", fill="darkred", color=NA) +
-        # ggplot(aes(x=Comparison, y=score)) +
-        # geom_quasirandom(color="darkred", size=0.1, varwidth=0.5) +
-        geom_text_repel(
-            aes(label=label), . %>% filter(human_symbol%in%regulators_exon_oi),
-            size=FONT_SIZE, family=FONT_FAMILY, segment.size=0.1, min.segment.length=0.001
-        ) +
         theme_pubr() +
         labs(x="", y="Fitness Score Gene KO")
     

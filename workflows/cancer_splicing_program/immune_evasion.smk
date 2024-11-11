@@ -18,9 +18,6 @@ CONDITIONS = ["PRE","ON"]
 ##### RULES ######
 rule all:
     input:
-        # make datasets
-        expand(os.path.join(PREP_DIR,'event_psi','Riaz2017-{condition}-{omic_type}.tsv.gz'), condition=CONDITIONS, omic_type=OMIC_TYPES),
-        
         # survival analysis
         expand(os.path.join(RESULTS_DIR,'files',"survival_analysis",'splicing-{omic_type}-Riaz2017-{condition}-surv.tsv.gz'), condition=CONDITIONS, omic_type=OMIC_TYPES),
         expand(os.path.join(RESULTS_DIR,'files',"survival_analysis",'splicing-{omic_type}-Riaz2017-{condition}-cat.tsv.gz'), condition=CONDITIONS, omic_type=OMIC_TYPES),
@@ -29,28 +26,6 @@ rule all:
         expand(os.path.join(RESULTS_DIR,"figures","immune_evasion-{omic_type}"), omic_type=OMIC_TYPES)        
         
         
-rule split_psi_by_condition:
-    input:
-        metadata = os.path.join(PREP_DIR,"metadata","Riaz2017.tsv.gz"),
-        psi = os.path.join(PREP_DIR,'event_psi','Riaz2017-{omic_type}.tsv.gz'),
-    output:
-        psi = os.path.join(PREP_DIR,'event_psi','Riaz2017-{condition}-{omic_type}.tsv.gz')
-    params:
-        condition = "{condition}"
-    run:
-        import pandas as pd
-        
-        metadata = pd.read_table(input.metadata)
-        psi = pd.read_table(input.psi, index_col=0)
-        
-        idx = metadata["treatment_status"] == params.condition
-        samples_oi = list(set(metadata.loc[idx,"sampleID"]).intersection(psi.columns))
-        
-        psi[samples_oi].reset_index().to_csv(output.psi, **SAVE_PARAMS)
-        
-        print("Done!")
-        
-
 rule survival_analysis_splicing:
     input:
         splicing = os.path.join(PREP_DIR,'event_psi','Riaz2017-{condition}-{omic_type}.tsv.gz'),
