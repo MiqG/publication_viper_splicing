@@ -56,19 +56,6 @@ results/sf_activity_validation/
 │   │   │       └── proteomics.tsv.gz
 │   │   ├── genexpr-indisulam_vs_dmso-box-ENSG00000131051.pdf
 │   │   └── proteomics-indisulam_vs_dmso-box-RBM39.pdf
-│   ├── validation_ptms
-│   │   ├── activity_acetylation-double_perturbation_combined-ranking-scatter.pdf
-│   │   ├── activity_acetylation-double_perturbation_rep-ranking-scatter.pdf
-│   │   ├── activity_methylation-prmt_inhibitors-scatter_line.pdf
-│   │   ├── activity_phosphorylation-sr_proteins-activity_vs_phosphoproteomics-scatter.pdf
-│   │   ├── activity_phosphorylation-sr_proteins-KH-CB19-heatmap.pdf
-│   │   ├── activity_phosphorylation-sr_proteins-KH-CB19-scatter_line.pdf
-│   │   ├── activity_phosphorylation-sr_proteins-PALBOCICLIB-heatmap.pdf
-│   │   ├── activity_phosphorylation-sr_proteins-PALBOCICLIB-scatter_line.pdf
-│   │   ├── activity_phosphorylation-sr_proteins-T025-heatmap.pdf
-│   │   ├── activity_phosphorylation-sr_proteins-T025-scatter_line.pdf
-│   │   ├── activity_phosphorylation-sr_proteins-T3-heatmap.pdf
-│   │   └── activity_phosphorylation-sr_proteins-T3-scatter_line.pdf
 │   └── validation_sf3b_complex
 │       ├── activity_drugs-sf3b_complex-scatter_line.pdf
 │       ├── activity_drugs-sf3b_complex_vs_shortest_paths-box.pdf
@@ -81,7 +68,6 @@ results/sf_activity_validation/
 │               └── shortest_paths.tsv.gz
 └── files
     ├── metadata
-    │   ├── ptms-EX.tsv.gz
     │   └── sf3b_complex-EX.tsv.gz
     ├── ppi
     │   ├── shortest_path_lengths_to_sf3b_complex.tsv.gz
@@ -91,13 +77,11 @@ results/sf_activity_validation/
     │   ├── protein_depletion-EX.tsv.gz
     │   ├── protein_depletion-Lu2021-EX.tsv.gz
     │   ├── protein_depletion-Nijhuis2020-EX.tsv.gz
-    │   ├── ptms-EX.tsv.gz
     │   └── sf3b_complex-EX.tsv.gz
     └── signatures
         ├── combinatorial_perturbations-EX.tsv.gz
         ├── protein_depletion-EX.tsv.gz
         ├── protein_depletion-Lu2021-EX.tsv.gz
         ├── protein_depletion-Nijhuis2020-EX.tsv.gz
-        ├── ptms-EX.tsv.gz
         └── sf3b_complex-EX.tsv.gz
 ```
