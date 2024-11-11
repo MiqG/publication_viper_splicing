@@ -130,6 +130,7 @@ def parse_args():
     parser.add_argument('--padj_method', type=str, default='fdr_bh')
     parser.add_argument('--thresh_std', type=int, default=0)
     parser.add_argument('--formula', type=str, default='')
+    parser.add_argument('--random_seed', type=int, default=1234)
     
 
     args = parser.parse_args()

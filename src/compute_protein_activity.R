@@ -5,7 +5,6 @@
 require(optparse)
 require(tidyverse)
 require(viper)
-require(pROC)
 
 # Development
 # -----------

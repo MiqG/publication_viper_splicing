@@ -106,6 +106,9 @@ class MannWhitneyU(PairwiseTest.PairwiseTest):
 ##### SCRIPT #####
 def main():
     args = PairwiseTest.parse_args()
+    
+    np.random.seed(args.random_seed)
+    
     ab_test = MannWhitneyU(
         data_file = args.data_file,
         metadata_file = args.metadata_file,
@@ -120,7 +123,9 @@ def main():
         padj_method = args.padj_method,
         thresh_std = args.thresh_std    
     )
+    
     ab_test.run()
+    
     ab_test.write_outputs()
 
 
