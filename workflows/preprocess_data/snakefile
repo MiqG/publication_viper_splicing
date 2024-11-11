@@ -55,9 +55,7 @@ DATASETS = ["CCLE"]
 ENCORE_DATASETS = ["ENCOREKD","ENCOREKO"]
 
 N_SAMPLES_ENA = {
-    "sf_drugs": 108,
-    "sf_ptms": 88,
-    "ipsc_differentiation": 217 
+    "sf_drugs": 108
 }
 
 tcga_metadata = pd.read_table(os.path.join(RAW_DIR,"TCGA","metadata","PANCAN.tsv.gz"))
@@ -72,7 +70,9 @@ SAMPLE_TYPES_SPLIT = tcga_metadata["sample_type_clean"].values
 CANCER_TYPES_STN = tcga_metadata.loc[tcga_metadata["sample_type_clean"]=="SolidTissueNormal","cancer_type"].values
 CANCER_TYPES_PT = tcga_metadata.loc[tcga_metadata["sample_type_clean"]=="PrimaryTumor","cancer_type"].values
 CANCER_TYPES_CONCAT = {"SolidTissueNormal": CANCER_TYPES_STN, "PrimaryTumor": CANCER_TYPES_PT}
-        
+
+CONDITIONS_RIAZ = ["PRE","ON"]
+
 ##### RULES #####
 rule all:
     input:
@@ -205,6 +205,7 @@ rule all:
         os.path.join(PREP_DIR,"event_psi","Riaz2017-ALTD.tsv.gz"),
         os.path.join(PREP_DIR,"event_psi","Riaz2017-INT.tsv.gz"),
         os.path.join(PREP_DIR,"genexpr_tpm","Riaz2017.tsv.gz"),
+        expand(os.path.join(PREP_DIR,'event_psi','Riaz2017-{condition}-{omic_type}.tsv.gz'), condition=CONDITIONS_RIAZ, omic_type=["EX"]),
         
         # preprocess STRINGDB
         os.path.join(PREP_DIR,'ppi','STRINGDB.tsv.gz'),
@@ -2160,6 +2161,28 @@ rule preprocess_Riaz2017:
         
         ## TPMs
         genexpr.reset_index().drop(columns='NAME').to_csv(output.genexpr, **SAVE_PARAMS)
+        
+        print("Done!")
+        
+        
+rule split_psi_by_condition_riaz:
+    input:
+        metadata = os.path.join(PREP_DIR,"metadata","Riaz2017.tsv.gz"),
+        psi = os.path.join(PREP_DIR,'event_psi','Riaz2017-{omic_type}.tsv.gz'),
+    output:
+        psi = os.path.join(PREP_DIR,'event_psi','Riaz2017-{condition}-{omic_type}.tsv.gz')
+    params:
+        condition = "{condition}"
+    run:
+        import pandas as pd
+        
+        metadata = pd.read_table(input.metadata)
+        psi = pd.read_table(input.psi, index_col=0)
+        
+        idx = metadata["treatment_status"] == params.condition
+        samples_oi = list(set(metadata.loc[idx,"sampleID"]).intersection(psi.columns))
+        
+        psi[samples_oi].reset_index().to_csv(output.psi, **SAVE_PARAMS)
         
         print("Done!")
         

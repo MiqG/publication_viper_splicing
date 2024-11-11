@@ -32,13 +32,10 @@ This workflow (`snakefile`) processes and cleans data in the `data/raw` director
 
 ## Expected outputs
 ```{shell}
-$ tree data/prep/
-data/prep/
+data/prep
 ├── clip_peaks_mapped
 │   └── POSTAR3.tsv.gz
 ├── demeter2
-│   └── CCLE.tsv.gz
-├── doubling_times
 │   └── CCLE.tsv.gz
 ├── event_psi
 │   ├── ACC-ALTA.tsv.gz
@@ -137,10 +134,6 @@ data/prep/
 │   ├── HNSC-Metastatic-EX.tsv.gz
 │   ├── HNSC-PrimaryTumor-EX.tsv.gz
 │   ├── HNSC-SolidTissueNormal-EX.tsv.gz
-│   ├── ipsc_differentiation-ALTA.tsv.gz
-│   ├── ipsc_differentiation-ALTD.tsv.gz
-│   ├── ipsc_differentiation-EX.tsv.gz
-│   ├── ipsc_differentiation-INT.tsv.gz
 │   ├── KICH-ALTA.tsv.gz
 │   ├── KICH-ALTD.tsv.gz
 │   ├── KICH-EX.tsv.gz
@@ -263,10 +256,6 @@ data/prep/
 │   ├── sf_drugs-ALTD.tsv.gz
 │   ├── sf_drugs-EX.tsv.gz
 │   ├── sf_drugs-INT.tsv.gz
-│   ├── sf_ptms-ALTA.tsv.gz
-│   ├── sf_ptms-ALTD.tsv.gz
-│   ├── sf_ptms-EX.tsv.gz
-│   ├── sf_ptms-INT.tsv.gz
 │   ├── SKCM-ALTA.tsv.gz
 │   ├── SKCM-ALTD.tsv.gz
 │   ├── SKCM-EX.tsv.gz
@@ -363,47 +352,10 @@ data/prep/
 │   ├── UCEC-EX.tsv.gz
 │   ├── UCS-EX.tsv.gz
 │   └── UVM-EX.tsv.gz
-├── event_psi_imputed_discretized_gaussian
-│   ├── ACC-EX.tsv.gz
-│   ├── BLCA-EX.tsv.gz
-│   ├── BRCA-EX.tsv.gz
-│   ├── CESC-EX.tsv.gz
-│   ├── CHOL-EX.tsv.gz
-│   ├── COAD-EX.tsv.gz
-│   ├── DLBC-EX.tsv.gz
-│   ├── ESCA-EX.tsv.gz
-│   ├── GBM-EX.tsv.gz
-│   ├── HNSC-EX.tsv.gz
-│   ├── KICH-EX.tsv.gz
-│   ├── KIRC-EX.tsv.gz
-│   ├── KIRP-EX.tsv.gz
-│   ├── LAML-EX.tsv.gz
-│   ├── LGG-EX.tsv.gz
-│   ├── LIHC-EX.tsv.gz
-│   ├── LUAD-EX.tsv.gz
-│   ├── LUSC-EX.tsv.gz
-│   ├── MESO-EX.tsv.gz
-│   ├── OV-EX.tsv.gz
-│   ├── PAAD-EX.tsv.gz
-│   ├── PCPG-EX.tsv.gz
-│   ├── PRAD-EX.tsv.gz
-│   ├── READ-EX.tsv.gz
-│   ├── SARC-EX.tsv.gz
-│   ├── SKCM-EX.tsv.gz
-│   ├── STAD-EX.tsv.gz
-│   ├── TGCT-EX.tsv.gz
-│   ├── THCA-EX.tsv.gz
-│   ├── THYM-EX.tsv.gz
-│   ├── UCEC-EX.tsv.gz
-│   ├── UCS-EX.tsv.gz
-│   └── UVM-EX.tsv.gz
-├── event_psi_imputed_discretized_qep
-│   ├── CCLE-EX.tsv.gz
-│   ├── LAML-EX.tsv.gz
-│   └── LIHC-EX.tsv.gz
 ├── genexpr_counts
 │   ├── ACC.tsv.gz
 │   ├── BLCA.tsv.gz
+│   ├── BRCA.tsv.gz
 │   ├── CESC.tsv.gz
 │   ├── CHOL.tsv.gz
 │   ├── COAD.tsv.gz
@@ -420,6 +372,7 @@ data/prep/
 │   ├── LUAD.tsv.gz
 │   ├── LUSC.tsv.gz
 │   ├── MESO.tsv.gz
+│   ├── OV.tsv.gz
 │   ├── PAAD.tsv.gz
 │   ├── PCPG.tsv.gz
 │   ├── PRAD.tsv.gz
@@ -472,7 +425,6 @@ data/prep/
 │   ├── HNSC-PrimaryTumor.tsv.gz
 │   ├── HNSC-SolidTissueNormal.tsv.gz
 │   ├── HNSC.tsv.gz
-│   ├── ipsc_differentiation.tsv.gz
 │   ├── KICH-PrimaryTumor.tsv.gz
 │   ├── KICH-SolidTissueNormal.tsv.gz
 │   ├── KICH.tsv.gz
@@ -525,7 +477,6 @@ data/prep/
 │   ├── SARC-RecurrentTumor.tsv.gz
 │   ├── SARC.tsv.gz
 │   ├── sf_drugs.tsv.gz
-│   ├── sf_ptms.tsv.gz
 │   ├── SKCM-Metastatic.tsv.gz
 │   ├── SKCM-PrimaryTumor.tsv.gz
 │   ├── SKCM.tsv.gz
@@ -548,24 +499,6 @@ data/prep/
 │   ├── UCS.tsv.gz
 │   ├── UVM-PrimaryTumor.tsv.gz
 │   └── UVM.tsv.gz
-├── genexpr_tpm_discretized_qep
-│   ├── CCLE.tsv.gz
-│   ├── LAML.tsv.gz
-│   └── LIHC.tsv.gz
-├── ground_truth_kd
-│   └── ENCORE
-│       ├── HepG2
-│       │   ├── delta_psi-EX-masked.tsv.gz
-│       │   ├── delta_psi-EX.tsv.gz
-│       │   ├── delta_psi_rel-EX-masked.tsv.gz
-│       │   ├── delta_psi_rel-EX.tsv.gz
-│       │   └── log2_fold_change_tpm.tsv.gz
-│       └── K562
-│           ├── delta_psi-EX-masked.tsv.gz
-│           ├── delta_psi-EX.tsv.gz
-│           ├── delta_psi_rel-EX-masked.tsv.gz
-│           ├── delta_psi_rel-EX.tsv.gz
-│           └── log2_fold_change_tpm.tsv.gz
 ├── ground_truth_pert
 │   ├── ENASFS
 │   │   ├── delta_psi-EX.tsv.gz
@@ -586,16 +519,6 @@ data/prep/
 │   │       └── log2_fold_change_tpm.tsv.gz
 │   └── SplicingLore
 │       └── delta_psi-EX.tsv.gz
-├── kd_transcriptomes
-│   └── ENCORE
-│       ├── HepG2
-│       │   ├── delta_psi-EX.tsv.gz
-│       │   ├── delta_psi_rel-EX.tsv.gz
-│       │   └── log2_fold_change_tpm.tsv.gz
-│       └── K562
-│           ├── delta_psi-EX.tsv.gz
-│           ├── delta_psi_rel-EX.tsv.gz
-│           └── log2_fold_change_tpm.tsv.gz
 ├── metadata
 │   ├── ACC.tsv.gz
 │   ├── Bian2018.tsv.gz
@@ -614,7 +537,6 @@ data/prep/
 │   ├── GBM.tsv.gz
 │   ├── Hafner2019.tsv.gz
 │   ├── HNSC.tsv.gz
-│   ├── ipsc_differentiation.tsv.gz
 │   ├── KICH.tsv.gz
 │   ├── KIRC.tsv.gz
 │   ├── KIRP.tsv.gz
@@ -635,7 +557,6 @@ data/prep/
 │   ├── Riaz2017.tsv.gz
 │   ├── SARC.tsv.gz
 │   ├── sf_drugs.tsv.gz
-│   ├── sf_ptms.tsv.gz
 │   ├── SKCM.tsv.gz
 │   ├── SplicingLore.tsv.gz
 │   ├── STAD.tsv.gz
@@ -646,8 +567,6 @@ data/prep/
 │   ├── UCEC.tsv.gz
 │   ├── UCS.tsv.gz
 │   └── UVM.tsv.gz
-├── metmap
-│   └── CCLE.tsv.gz
 ├── mutations
 │   ├── ACC.tsv.gz
 │   ├── BLCA.tsv.gz
@@ -705,115 +624,11 @@ data/prep/
 │           ├── delta_psi-EX.tsv.gz
 │           ├── delta_psi_rel-EX.tsv.gz
 │           └── log2_fold_change_tpm.tsv.gz
-├── phosphoproteomics
-│   └── Hafner2019-log2_fold_changes.tsv.gz
 ├── ppi
 │   └── STRINGDB.tsv.gz
-├── references
-│   └── splicing_factors
-│       ├── splicing_factors-ensembl.txt
-│       ├── splicing_factors-symbol.txt
-│       └── splicing_factors.tsv
-└── summary_stats
-    ├── event_psi
-    │   ├── ACC-EX.tsv.gz
-    │   ├── BLCA-EX.tsv.gz
-    │   ├── BRCA-EX.tsv.gz
-    │   ├── CCLE-EX.tsv.gz
-    │   ├── CESC-EX.tsv.gz
-    │   ├── CHOL-EX.tsv.gz
-    │   ├── COAD-EX.tsv.gz
-    │   ├── DLBC-EX.tsv.gz
-    │   ├── GBM-EX.tsv.gz
-    │   ├── HNSC-EX.tsv.gz
-    │   ├── KICH-EX.tsv.gz
-    │   ├── KIRC-EX.tsv.gz
-    │   ├── KIRP-EX.tsv.gz
-    │   ├── LGG-EX.tsv.gz
-    │   ├── LIHC-EX.tsv.gz
-    │   ├── LUAD-EX.tsv.gz
-    │   ├── LUSC-EX.tsv.gz
-    │   ├── MESO-EX.tsv.gz
-    │   ├── PAAD-EX.tsv.gz
-    │   ├── PCPG-EX.tsv.gz
-    │   ├── PRAD-EX.tsv.gz
-    │   ├── READ-EX.tsv.gz
-    │   ├── SARC-EX.tsv.gz
-    │   ├── SKCM-EX.tsv.gz
-    │   ├── TGCT-EX.tsv.gz
-    │   ├── THCA-EX.tsv.gz
-    │   ├── THYM-EX.tsv.gz
-    │   ├── UCEC-EX.tsv.gz
-    │   ├── UCS-EX.tsv.gz
-    │   └── UVM-EX.tsv.gz
-    ├── event_psi_imputed
-    │   ├── ACC-EX.tsv.gz
-    │   ├── BLCA-EX.tsv.gz
-    │   ├── BRCA-EX.tsv.gz
-    │   ├── CCLE-EX.tsv.gz
-    │   ├── CESC-EX.tsv.gz
-    │   ├── CHOL-EX.tsv.gz
-    │   ├── COAD-EX.tsv.gz
-    │   ├── DLBC-EX.tsv.gz
-    │   ├── ESCA-EX.tsv.gz
-    │   ├── GBM-EX.tsv.gz
-    │   ├── HNSC-EX.tsv.gz
-    │   ├── KICH-EX.tsv.gz
-    │   ├── KIRC-EX.tsv.gz
-    │   ├── KIRP-EX.tsv.gz
-    │   ├── LAML-EX.tsv.gz
-    │   ├── LGG-EX.tsv.gz
-    │   ├── LIHC-EX.tsv.gz
-    │   ├── LUAD-EX.tsv.gz
-    │   ├── LUSC-EX.tsv.gz
-    │   ├── MESO-EX.tsv.gz
-    │   ├── OV-EX.tsv.gz
-    │   ├── PAAD-EX.tsv.gz
-    │   ├── PCPG-EX.tsv.gz
-    │   ├── PRAD-EX.tsv.gz
-    │   ├── READ-EX.tsv.gz
-    │   ├── SARC-EX.tsv.gz
-    │   ├── SKCM-EX.tsv.gz
-    │   ├── STAD-EX.tsv.gz
-    │   ├── TGCT-EX.tsv.gz
-    │   ├── THCA-EX.tsv.gz
-    │   ├── THYM-EX.tsv.gz
-    │   ├── UCEC-EX.tsv.gz
-    │   ├── UCS-EX.tsv.gz
-    │   └── UVM-EX.tsv.gz
-    └── genexpr_tpm
-        ├── ACC.tsv.gz
-        ├── BLCA.tsv.gz
-        ├── BRCA.tsv.gz
-        ├── CCLE.tsv.gz
-        ├── CESC.tsv.gz
-        ├── CHOL.tsv.gz
-        ├── COAD.tsv.gz
-        ├── DLBC.tsv.gz
-        ├── ESCA.tsv.gz
-        ├── GBM.tsv.gz
-        ├── HNSC.tsv.gz
-        ├── KICH.tsv.gz
-        ├── KIRC.tsv.gz
-        ├── KIRP.tsv.gz
-        ├── LAML.tsv.gz
-        ├── LGG.tsv.gz
-        ├── LIHC.tsv.gz
-        ├── LUAD.tsv.gz
-        ├── LUSC.tsv.gz
-        ├── MESO.tsv.gz
-        ├── OV.tsv.gz
-        ├── PAAD.tsv.gz
-        ├── PCPG.tsv.gz
-        ├── PRAD.tsv.gz
-        ├── READ.tsv.gz
-        ├── SARC.tsv.gz
-        ├── SKCM.tsv.gz
-        ├── STAD.tsv.gz
-        ├── TGCT.tsv.gz
-        ├── THCA.tsv.gz
-        ├── THYM.tsv.gz
-        ├── UCEC.tsv.gz
-        ├── UCS.tsv.gz
-        └── UVM.tsv.gz
+└── references
+    └── splicing_factors
+        ├── splicing_factors-ensembl.txt
+        ├── splicing_factors-symbol.txt
+        └── splicing_factors.tsv
 ```
