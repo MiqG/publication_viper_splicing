@@ -118,7 +118,8 @@ parseargs = function(){
         make_option("--features_oi_file", type="character", default=NULL),
         make_option("--consider_confounders", type="character", default="False"),
         make_option("--output_surv_file", type="character"),
-        make_option("--output_cat_file", type="character")
+        make_option("--output_cat_file", type="character"),
+        make_option("--random_seed", type="integer", default=1234)
     )
 
     args = parse_args(OptionParser(option_list=option_list))
@@ -139,6 +140,9 @@ main = function(){
     consider_confounders = args[["consider_confounders"]]
     output_surv_file = args[["output_surv_file"]]
     output_cat_file = args[["output_cat_file"]]
+    random_seed = args[["random_seed"]]
+    
+    set.seed(random_seed)
     
     # load
     data_matrix = read_tsv(data_matrix_file)

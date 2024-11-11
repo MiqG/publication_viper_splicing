@@ -122,7 +122,7 @@ rule all:
         expand(os.path.join(RESULTS_DIR,'files',"diff_genexpr_counts_deseq2",'{cancer}-{comparison}.tsv.gz'), comparison=["PrimaryTumor_vs_SolidTissueNormal"], cancer=CANCER_TYPES_PTSTN),
         ## merge
         expand(os.path.join(RESULTS_DIR,'files','PANCAN','{omic}-mannwhitneyu-{comparison}.tsv.gz'), comparison=DIFF_CANCER_TYPES.keys(), omic=OMICS),
-         expand(os.path.join(RESULTS_DIR,'files','PANCAN','genexpr_counts_deseq2-deseq2-{comparison}.tsv.gz'), comparison=["PrimaryTumor_vs_SolidTissueNormal"]),
+        expand(os.path.join(RESULTS_DIR,'files','PANCAN','genexpr_counts_deseq2-deseq2-{comparison}.tsv.gz'), comparison=["PrimaryTumor_vs_SolidTissueNormal"]),
         ## define cancer program
         os.path.join(RESULTS_DIR,'files','PANCAN','cancer_program.tsv.gz'),
         
@@ -216,6 +216,7 @@ rule compute_signature_within:
         signature.reset_index().to_csv(output.signature, **SAVE_PARAMS)
         
         print("Done!")
+        
 
 rule compute_protein_activity:
     input:

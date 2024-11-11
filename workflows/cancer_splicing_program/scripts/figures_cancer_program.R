@@ -1281,6 +1281,7 @@ parseargs = function(){
         make_option("--rbpdb_file", type="character"),
         make_option("--splicing_factors_file", type="character"),
         make_option("--figs_dir", type="character")
+        make_option("--random_seed", type="integer", default=1234)
     )
 
     args = parse_args(OptionParser(option_list=option_list))
@@ -1316,6 +1317,7 @@ main = function(){
     rbpdb_file = args[["rbpdb_file"]]
     splicing_factors_file = args[["splicing_factors_file"]]
     figs_dir = args[["figs_dir"]]
+    random_seed = args[["random_seed"]]
     
     dir.create(figs_dir, recursive = TRUE)
     
@@ -1364,9 +1366,12 @@ main = function(){
         mutate(sample_type = factor(sample_type, levels=c("Solid Tissue Normal","Primary Blood Derived Cancer - Peripheral Blood","Primary Tumor")))
     
     diff_activity = diff_activity %>%
+        group_by(cancer_type) %>% # correct p-values for each type of cancer
         mutate(
+            padj = p.adjust(pvalue, method="fdr"),
             is_significant = padj < THRESH_FDR
         ) %>%
+        ungroup() %>%
         dplyr::rename("ENSEMBL"="regulator") %>%
         left_join(
             gene_annotation[,c("ENSEMBL","GENE")],
@@ -1540,13 +1545,13 @@ main = function(){
     
     # plot
     plts = make_plots(
-        diff_activity, diff_genexpr_deseq, # HEY
+        diff_activity, diff_genexpr_deseq,
         demeter2, 
         survival_roc_activity, survival_roc_genexpr, 
         survival_roc_genexpr_w_activity_labs, survival_roc_activity_w_genexpr_labs,
         survival_activity, survival_genexpr, 
         survival_activity_conf, survival_genexpr_conf, 
-        driver_activity, driver_genexpr_deseq, # HEY
+        driver_activity, driver_genexpr_deseq, 
         sf_crossreg_activity, sf_crossreg_genexpr, 
         enrichments_reactome, immune_screen, sf_activity_vs_genexpr, regulons_jaccard,
         n_samples,
@@ -1555,13 +1560,13 @@ main = function(){
     
     # make figdata
     figdata = make_figdata(
-        diff_activity, diff_genexpr,
+        diff_activity, diff_genexpr_deseq,
         demeter2, 
         survival_roc_activity, survival_roc_genexpr, 
         survival_roc_genexpr_w_activity_labs, survival_roc_activity_w_genexpr_labs,
         survival_activity, survival_genexpr, 
         survival_activity_conf, survival_genexpr_conf, 
-        driver_activity, driver_genexpr, 
+        driver_activity, driver_genexpr_deseq,
         sf_crossreg_activity, sf_crossreg_genexpr, 
         enrichments_reactome, immune_screen, sf_activity_vs_genexpr, regulons_jaccard,
         n_samples,

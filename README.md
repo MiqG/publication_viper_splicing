@@ -1,7 +1,6 @@
-# Disentangling the splicing factor programs underlying complex molecular phenotypes
+# Exon inclusion signatures enable accurate estimation of splicing factor activity
 
-## Overview
-Repurposing VIPER to estimate differential splicing factor activity.
+Repurposing VIPER to estimate differential splicing factor activity. This repository contains all the code to reproduce our analyses.
 
 ## Structure
 - `config.yaml`: important paths used througout the workflows to be set by the user.
@@ -40,13 +39,13 @@ Repurposing VIPER to estimate differential splicing factor activity.
 
 
 ## Installation and requirements
-#### Environment
+### Environment
 We recommend installing mamba miniforge rather than conda in your corresponding OS: https://github.com/conda-forge/miniforge.
 ```shell
 mamba env create -f environment.yaml
 ```
 
-#### `vast-tools`
+### `vast-tools` (requires manual installation)
 Based on https://github.com/vastgroup/vast-tools?tab=readme-ov-file#installation.
 
 Clone vast-tools repository in your desired path:
@@ -83,6 +82,8 @@ snakemake -s <workflow_name>.smk --cores <number_of_cores>
 
 In case you want to run the workflows on your cluster, refer to [snakemake documentation](https://snakemake.readthedocs.io/en/stable/executing/cluster.html) to adapt the command according to your job submission scheduler.
 
+## Issues
+Please, report any issues here: https://github.com/MiqG/publication_viper_splicing/issues
 
 ## Authors
 - [Miquel Anglada Girotto](https://orcid.org/0000-0003-1885-8649)
