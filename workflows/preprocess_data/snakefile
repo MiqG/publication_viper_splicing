@@ -243,7 +243,7 @@ rule make_list_splicing_factors:
         go_rna_splicing = os.path.join(SUPPORT_DIR,"splicing_factors","GOBP_RNA_SPLICING-ensembl.txt"),
         go_rna_binding = os.path.join(SUPPORT_DIR,"splicing_factors","GOMF_RNA_BINDING-ensembl.txt"),
         annot_hgnc = os.path.join(RAW_DIR,"HGNC","gene_annotations.tsv.gz"),
-        annot_ensembl = os.path.join(RAW_DIR,"references","annotation-entrez_ensembl_symbol.tsv")
+        annot_ensembl = os.path.join(SUPPORT_DIR,"annotation-entrez_ensembl_symbol.tsv")
     output:
         directory(os.path.join(PREP_DIR,"references","splicing_factors"))
     run:

@@ -12,6 +12,7 @@ dependencies:
     - tqdm
     - networkx
     - scipy
+    - csvkit
     - pyranges
     - r-base=4.1
     - r-tidyverse

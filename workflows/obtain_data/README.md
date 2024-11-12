@@ -54,6 +54,17 @@ The workflows provided include:
 11. `download_splicinglore.smk`
     - downloads SplicingLore database
     - outputs in `data/raw/SplicingLore`
+    
+12. `download_general.smk`
+    - downloads supporting data from databases to complete analyses
+    - outputs in 
+        - `data/raw/BIOMART`
+        - `data/raw/VastDB`
+        - `data/raw/DepMap`
+        - `data/raw/HGNC`
+        - `data/raw/UCSCXena`
+        - `data/raw/Harmonizome`
+        - `data/raw/STRINGDB`
 
 In this case, workflows are independent from each other; feel free to execute them in any other order.
 
