@@ -51,10 +51,15 @@ This set of Snakemake workflows make up a pipeline for constructing and evaluati
             - `results/regulon_inference/files/regulon_properties`
         
     - `regulon_thresholds.smk`: 
-        - generates empirical netwroks considering PSI thresholds
+        - generates empirical networks considering PSI thresholds
         - outputs in 
             - `results/regulon_inference/files/dPSIthresh{N}_experimentally_derived_regulons_pruned-EX`
             - `results/regulon_inference/files/regulon_properties`
+            
+    - `aracne_regulons_benchmark_boostrap_pruning.smk`
+        - generates computational networks using different "max_targets" parameter in ARACNe
+        - outputs in `results/regulon_inference/files/aracne_regulons_CardosoMoreira2020_{max_targets}-EX`
+
         
 3. Regulon Evaluation workflow (`regulon_evaluation.smk`): computes performance evaluation metrics for each type of network
     
