@@ -5,6 +5,7 @@ import numpy as np
 # unpack config
 configfile: "../../config.yaml"
 PATHS = config["PATHS"]
+PATHS = {k: os.path.expanduser(v) for k, v in PATHS.items()} # make sure to have full paths (without ~)
 VASTDB_DIR = PATHS["VAST_TOOLS"]["VASTDB"]
 VAST_TOOLS_DIR = PATHS["VAST_TOOLS"]["BIN"]
 
