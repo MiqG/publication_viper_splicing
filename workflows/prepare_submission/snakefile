@@ -18,13 +18,64 @@ DATA_DIR = os.path.join(ROOT,'data')
 RAW_DIR = os.path.join(DATA_DIR,'raw')
 PREP_DIR = os.path.join(DATA_DIR,'prep')
 
+REGULON_DIR = os.path.join(RESULTS_DIR,"regulon_inference")
 PROGRAM_DIR = os.path.join(RESULTS_DIR,"cancer_splicing_program")
+
+CANCER_TYPES = [
+    'ACC',
+    'BLCA',
+    'BRCA',
+    'CESC',
+    'CHOL',
+    'COAD',
+    'DLBC',
+    'ESCA',
+    'GBM',
+    'HNSC',
+    'KICH',
+    'KIRC',
+    'KIRP',
+    'LAML',
+    'LGG',
+    'LIHC',
+    'LUAD',
+    'LUSC',
+    'MESO',
+    'OV',
+    'PAAD',
+    'PCPG',
+    'PRAD',
+    'READ',
+    'SARC',
+    'SKCM',
+    'STAD',
+    'TGCT',
+    'THCA',
+    'THYM',
+    'UCEC',
+    'UCS',
+    'UVM'
+]
+
+DATASETS = ["CCLE","Nijhuis2020","Lu2021","CardosoMoreira2020","Riaz2017"]
 
 ##### RULES #####
 rule all:
     input:
+        # supplementary tables
         os.path.join(RESULTS_DIR,'prepare_submission','files',"ENASFS.tsv.gz"),
-        os.path.join(RESULTS_DIR,'prepare_submission','files','supplementary_tables')
+        os.path.join(RESULTS_DIR,'prepare_submission','files','supplementary_tables'),
+        # benchmark
+        os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','benchmark'),
+        # TCGA
+        expand(os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','tcga','metadata','{cancer}.tsv.gz'), cancer=CANCER_TYPES),
+        expand(os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','tcga','event_psi','{cancer}-EX.tsv.gz'), cancer=CANCER_TYPES),
+        expand(os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','tcga','genexpr_tpm','{cancer}.tsv.gz'), cancer=CANCER_TYPES),
+        expand(os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','tcga','genexpr_counts','{cancer}.tsv.gz'), cancer=CANCER_TYPES),
+        # datasets
+        expand(os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','datasets','metadata','{dataset}.tsv.gz'), dataset=DATASETS),
+        expand(os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','datasets','event_psi','{dataset}-EX.tsv.gz'), dataset=DATASETS),
+        expand(os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','datasets','genexpr_tpm','{dataset}.tsv.gz'), dataset=DATASETS),
 
 
 rule prep_pert_datasets:
@@ -81,5 +132,101 @@ rule supplementary_tables:
                 cmd = ["gzip", outfile]
                 print(cmd)
                 subprocess.call(cmd)
+            
+        print("Done!")
+        
+        
+rule intermediary_files_benchmark:
+    input:
+        metadata_encorekd = os.path.join(PREP_DIR,"metadata","ENCOREKD.tsv.gz"),
+        metadata_encoreko = os.path.join(PREP_DIR,"metadata","ENCOREKO.tsv.gz"),
+        metadata_ena = os.path.join(PREP_DIR,"metadata","ENASFS.tsv.gz"),
+        psi_encorekd = os.path.join(PREP_DIR,"event_psi","ENCOREKD-EX.tsv.gz"),
+        psi_encoreko = os.path.join(PREP_DIR,"event_psi","ENCOREKO-EX.tsv.gz"),
+        psi_ena = os.path.join(PREP_DIR,"event_psi","ENASFS-EX.tsv.gz"),
+        genexpr_tpm_encorekd = os.path.join(PREP_DIR,"genexpr_tpm","ENCOREKD.tsv.gz"),
+        genexpr_tpm_encoreko = os.path.join(PREP_DIR,"genexpr_tpm","ENCOREKO.tsv.gz"),
+        genexpr_tpm_ena = os.path.join(PREP_DIR,"genexpr_tpm","ENASFS.tsv.gz"),
+        signatures_tpm_encorekd_hepg2 = os.path.join(PREP_DIR,'ground_truth_pert','ENCOREKD',"HepG2",'log2_fold_change_tpm.tsv.gz'),
+        signatures_tpm_encorekd_k562 = os.path.join(PREP_DIR,'ground_truth_pert','ENCOREKD',"K562",'log2_fold_change_tpm.tsv.gz'),
+        signatures_tpm_encoreko_hepg2 = os.path.join(PREP_DIR,'ground_truth_pert','ENCOREKO',"HepG2",'log2_fold_change_tpm.tsv.gz'),
+        signatures_tpm_encoreko_k562 = os.path.join(PREP_DIR,'ground_truth_pert','ENCOREKO',"K562",'log2_fold_change_tpm.tsv.gz'),
+        signatures_tpm_ena = os.path.join(PREP_DIR,'ground_truth_pert','ENASFS','log2_fold_change_tpm.tsv.gz'),
+        signatures_psi_encorekd_hepg2 = os.path.join(PREP_DIR,'ground_truth_pert','ENCOREKD',"HepG2",'delta_psi-EX.tsv.gz'),
+        signatures_psi_encorekd_k562 = os.path.join(PREP_DIR,'ground_truth_pert','ENCOREKD',"K562",'delta_psi-EX.tsv.gz'),
+        signatures_psi_encoreko_hepg2 = os.path.join(PREP_DIR,'ground_truth_pert','ENCOREKO',"HepG2",'delta_psi-EX.tsv.gz'),
+        signatures_psi_encoreko_k562 = os.path.join(PREP_DIR,'ground_truth_pert','ENCOREKO',"K562",'delta_psi-EX.tsv.gz'),
+        signatures_psi_ena = os.path.join(PREP_DIR,'ground_truth_pert','ENASFS','delta_psi-EX.tsv.gz'),
+        labels_encorekd_hepg2 = os.path.join(REGULON_DIR,"files","regulon_evaluation_labels","ENCOREKD_HepG2.tsv.gz"),
+        labels_encorekd_k562 = os.path.join(REGULON_DIR,"files","regulon_evaluation_labels","ENCOREKD_K562.tsv.gz"),
+        labels_encoreko_hepg2 = os.path.join(REGULON_DIR,"files","regulon_evaluation_labels","ENCOREKO_HepG2.tsv.gz"),
+        labels_encoreko_k562 = os.path.join(REGULON_DIR,"files","regulon_evaluation_labels","ENCOREKO_K562.tsv.gz"),
+        labels_ena = os.path.join(REGULON_DIR,"files","regulon_evaluation_labels","ENASFS.tsv.gz")
+    output:
+        directory(os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','benchmark'))
+    run:
+        import os
+        import subprocess
+        
+        outdir = output[0]
+        os.makedirs(outdir, exist_ok=True)
+        
+        for key, f in input.items():
+            filename = os.path.basename(f)
+            extension = ".".join(filename.split(".")[1:])
+            outfile = os.path.join(outdir,key+"."+extension)
+            cmd = ["cp", f, outfile]
+            print(cmd)
+            subprocess.call(cmd)
+            
+            if not filename.endswith(".gz"):
+                cmd = ["gzip", outfile]
+                print(cmd)
+                subprocess.call(cmd)
+            
+        print("Done!")
+        
+        
+rule intermediary_files_tcga:
+    input:
+        psi = os.path.join(PREP_DIR,"event_psi","{cancer}-EX.tsv.gz"),
+        tpm = os.path.join(PREP_DIR,"genexpr_tpm","{cancer}.tsv.gz"),
+        counts = os.path.join(PREP_DIR,"genexpr_counts","{cancer}.tsv.gz"),
+        metadata = os.path.join(PREP_DIR,"metadata","{cancer}.tsv.gz")
+    output:
+        metadata = os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','tcga','metadata','{cancer}.tsv.gz'),
+        psi = os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','tcga','event_psi','{cancer}-EX.tsv.gz'),
+        tpm = os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','tcga','genexpr_tpm','{cancer}.tsv.gz'),
+        counts = os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','tcga','genexpr_counts','{cancer}.tsv.gz')
+    run:
+        import os
+        import subprocess
+
+        for key, f in input.items():
+            outfile = output[key]
+            cmd = ["cp", f, outfile]
+            print(cmd)
+            subprocess.call(cmd)
+            
+        print("Done!")
+
+rule intermediary_files_datasets:
+    input:
+        psi = os.path.join(PREP_DIR,"event_psi","{dataset}-EX.tsv.gz"),
+        tpm = os.path.join(PREP_DIR,"genexpr_tpm","{dataset}.tsv.gz"),
+        metadata = os.path.join(PREP_DIR,"metadata","{dataset}.tsv.gz")
+    output:
+        metadata = os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','datasets','metadata','{dataset}.tsv.gz'),
+        psi = os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','datasets','event_psi','{dataset}-EX.tsv.gz'),
+        tpm = os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','datasets','genexpr_tpm','{dataset}.tsv.gz')
+    run:
+        import os
+        import subprocess
+
+        for key, f in input.items():
+            outfile = output[key]
+            cmd = ["cp", f, outfile]
+            print(cmd)
+            subprocess.call(cmd)
             
         print("Done!")
