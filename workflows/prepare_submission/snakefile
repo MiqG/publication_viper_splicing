@@ -66,22 +66,22 @@ rule all:
         os.path.join(RESULTS_DIR,'prepare_submission','files',"ENASFS.tsv.gz"),
         os.path.join(RESULTS_DIR,'prepare_submission','files','supplementary_tables'),
         # benchmark
-        os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','benchmark'),
+        os.path.join(RESULTS_DIR,'prepare_submission','files','intermediate_files','benchmark'),
         # TCGA
-        expand(os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','tcga','metadata','{cancer}.tsv.gz'), cancer=CANCER_TYPES),
-        expand(os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','tcga','event_psi','{cancer}-EX.tsv.gz'), cancer=CANCER_TYPES),
-        expand(os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','tcga','event_psi','{cancer}-ALTA.tsv.gz'), cancer=CANCER_TYPES),
-        expand(os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','tcga','event_psi','{cancer}-ALTD.tsv.gz'), cancer=CANCER_TYPES),
-        expand(os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','tcga','event_psi','{cancer}-INT.tsv.gz'), cancer=CANCER_TYPES),
-        expand(os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','tcga','genexpr_tpm','{cancer}.tsv.gz'), cancer=CANCER_TYPES),
-        expand(os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','tcga','genexpr_counts','{cancer}.tsv.gz'), cancer=CANCER_TYPES),
+        expand(os.path.join(RESULTS_DIR,'prepare_submission','files','intermediate_files','tcga','metadata','{cancer}.tsv.gz'), cancer=CANCER_TYPES),
+        expand(os.path.join(RESULTS_DIR,'prepare_submission','files','intermediate_files','tcga','event_psi','{cancer}-EX.tsv.gz'), cancer=CANCER_TYPES),
+        expand(os.path.join(RESULTS_DIR,'prepare_submission','files','intermediate_files','tcga','event_psi','{cancer}-ALTA.tsv.gz'), cancer=CANCER_TYPES),
+        expand(os.path.join(RESULTS_DIR,'prepare_submission','files','intermediate_files','tcga','event_psi','{cancer}-ALTD.tsv.gz'), cancer=CANCER_TYPES),
+        expand(os.path.join(RESULTS_DIR,'prepare_submission','files','intermediate_files','tcga','event_psi','{cancer}-INT.tsv.gz'), cancer=CANCER_TYPES),
+        expand(os.path.join(RESULTS_DIR,'prepare_submission','files','intermediate_files','tcga','genexpr_tpm','{cancer}.tsv.gz'), cancer=CANCER_TYPES),
+        expand(os.path.join(RESULTS_DIR,'prepare_submission','files','intermediate_files','tcga','genexpr_counts','{cancer}.tsv.gz'), cancer=CANCER_TYPES),
         # datasets
-        expand(os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','datasets','metadata','{dataset}.tsv.gz'), dataset=DATASETS),
-        expand(os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','datasets','event_psi','{dataset}-EX.tsv.gz'), dataset=DATASETS),
-        expand(os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','datasets','event_psi','{dataset}-ALTA.tsv.gz'), dataset=DATASETS),
-        expand(os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','datasets','event_psi','{dataset}-ALTD.tsv.gz'), dataset=DATASETS),
-        expand(os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','datasets','event_psi','{dataset}-INT.tsv.gz'), dataset=DATASETS),
-        expand(os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','datasets','genexpr_tpm','{dataset}.tsv.gz'), dataset=DATASETS),
+        expand(os.path.join(RESULTS_DIR,'prepare_submission','files','intermediate_files','datasets','metadata','{dataset}.tsv.gz'), dataset=DATASETS),
+        expand(os.path.join(RESULTS_DIR,'prepare_submission','files','intermediate_files','datasets','event_psi','{dataset}-EX.tsv.gz'), dataset=DATASETS),
+        expand(os.path.join(RESULTS_DIR,'prepare_submission','files','intermediate_files','datasets','event_psi','{dataset}-ALTA.tsv.gz'), dataset=DATASETS),
+        expand(os.path.join(RESULTS_DIR,'prepare_submission','files','intermediate_files','datasets','event_psi','{dataset}-ALTD.tsv.gz'), dataset=DATASETS),
+        expand(os.path.join(RESULTS_DIR,'prepare_submission','files','intermediate_files','datasets','event_psi','{dataset}-INT.tsv.gz'), dataset=DATASETS),
+        expand(os.path.join(RESULTS_DIR,'prepare_submission','files','intermediate_files','datasets','genexpr_tpm','{dataset}.tsv.gz'), dataset=DATASETS),
 
 
 rule prep_pert_datasets:
@@ -142,7 +142,7 @@ rule supplementary_tables:
         print("Done!")
         
         
-rule intermediary_files_benchmark:
+rule intermediate_files_benchmark:
     input:
         metadata_encorekd = os.path.join(PREP_DIR,"metadata","ENCOREKD.tsv.gz"),
         metadata_encoreko = os.path.join(PREP_DIR,"metadata","ENCOREKO.tsv.gz"),
@@ -169,7 +169,7 @@ rule intermediary_files_benchmark:
         labels_encoreko_k562 = os.path.join(REGULON_DIR,"files","regulon_evaluation_labels","ENCOREKO_K562.tsv.gz"),
         labels_ena = os.path.join(REGULON_DIR,"files","regulon_evaluation_labels","ENASFS.tsv.gz")
     output:
-        directory(os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','benchmark'))
+        directory(os.path.join(RESULTS_DIR,'prepare_submission','files','intermediate_files','benchmark'))
     run:
         import os
         import subprocess
@@ -193,7 +193,7 @@ rule intermediary_files_benchmark:
         print("Done!")
         
         
-rule intermediary_files_tcga:
+rule intermediate_files_tcga:
     input:
         psi_ex = os.path.join(PREP_DIR,"event_psi","{cancer}-EX.tsv.gz"),
         psi_alta = os.path.join(PREP_DIR,"event_psi","{cancer}-ALTA.tsv.gz"),
@@ -203,13 +203,13 @@ rule intermediary_files_tcga:
         counts = os.path.join(PREP_DIR,"genexpr_counts","{cancer}.tsv.gz"),
         metadata = os.path.join(PREP_DIR,"metadata","{cancer}.tsv.gz")
     output:
-        metadata = os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','tcga','metadata','{cancer}.tsv.gz'),
-        psi_ex = os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','tcga','event_psi','{cancer}-EX.tsv.gz'),
-        psi_alta = os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','tcga','event_psi','{cancer}-ALTA.tsv.gz'),
-        psi_altd = os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','tcga','event_psi','{cancer}-ALTD.tsv.gz'),
-        psi_int = os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','tcga','event_psi','{cancer}-INT.tsv.gz'),
-        tpm = os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','tcga','genexpr_tpm','{cancer}.tsv.gz'),
-        counts = os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','tcga','genexpr_counts','{cancer}.tsv.gz')
+        metadata = os.path.join(RESULTS_DIR,'prepare_submission','files','intermediate_files','tcga','metadata','{cancer}.tsv.gz'),
+        psi_ex = os.path.join(RESULTS_DIR,'prepare_submission','files','intermediate_files','tcga','event_psi','{cancer}-EX.tsv.gz'),
+        psi_alta = os.path.join(RESULTS_DIR,'prepare_submission','files','intermediate_files','tcga','event_psi','{cancer}-ALTA.tsv.gz'),
+        psi_altd = os.path.join(RESULTS_DIR,'prepare_submission','files','intermediate_files','tcga','event_psi','{cancer}-ALTD.tsv.gz'),
+        psi_int = os.path.join(RESULTS_DIR,'prepare_submission','files','intermediate_files','tcga','event_psi','{cancer}-INT.tsv.gz'),
+        tpm = os.path.join(RESULTS_DIR,'prepare_submission','files','intermediate_files','tcga','genexpr_tpm','{cancer}.tsv.gz'),
+        counts = os.path.join(RESULTS_DIR,'prepare_submission','files','intermediate_files','tcga','genexpr_counts','{cancer}.tsv.gz')
     run:
         import os
         import subprocess
@@ -222,7 +222,7 @@ rule intermediary_files_tcga:
             
         print("Done!")
 
-rule intermediary_files_datasets:
+rule intermediate_files_datasets:
     input:
         psi_ex = os.path.join(PREP_DIR,"event_psi","{dataset}-EX.tsv.gz"),
         psi_alta = os.path.join(PREP_DIR,"event_psi","{dataset}-ALTA.tsv.gz"),
@@ -231,12 +231,12 @@ rule intermediary_files_datasets:
         tpm = os.path.join(PREP_DIR,"genexpr_tpm","{dataset}.tsv.gz"),
         metadata = os.path.join(PREP_DIR,"metadata","{dataset}.tsv.gz")
     output:
-        metadata = os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','datasets','metadata','{dataset}.tsv.gz'),
-        psi_ex = os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','datasets','event_psi','{dataset}-EX.tsv.gz'),
-        psi_alta = os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','datasets','event_psi','{dataset}-ALTA.tsv.gz'),
-        psi_altd = os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','datasets','event_psi','{dataset}-ALTD.tsv.gz'),
-        psi_int = os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','datasets','event_psi','{dataset}-INT.tsv.gz'),
-        tpm = os.path.join(RESULTS_DIR,'prepare_submission','files','intermediary_files','datasets','genexpr_tpm','{dataset}.tsv.gz')
+        metadata = os.path.join(RESULTS_DIR,'prepare_submission','files','intermediate_files','datasets','metadata','{dataset}.tsv.gz'),
+        psi_ex = os.path.join(RESULTS_DIR,'prepare_submission','files','intermediate_files','datasets','event_psi','{dataset}-EX.tsv.gz'),
+        psi_alta = os.path.join(RESULTS_DIR,'prepare_submission','files','intermediate_files','datasets','event_psi','{dataset}-ALTA.tsv.gz'),
+        psi_altd = os.path.join(RESULTS_DIR,'prepare_submission','files','intermediate_files','datasets','event_psi','{dataset}-ALTD.tsv.gz'),
+        psi_int = os.path.join(RESULTS_DIR,'prepare_submission','files','intermediate_files','datasets','event_psi','{dataset}-INT.tsv.gz'),
+        tpm = os.path.join(RESULTS_DIR,'prepare_submission','files','intermediate_files','datasets','genexpr_tpm','{dataset}.tsv.gz')
     run:
         import os
         import subprocess
