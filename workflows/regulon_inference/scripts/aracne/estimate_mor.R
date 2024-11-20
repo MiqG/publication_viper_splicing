@@ -1,10 +1,3 @@
-#
-# Author: Miquel Anglada-Girotto and Daniel Moakley
-# Contact: miquel [dot] anglada [at] crg [dot] eu
-#
-# Script purpose
-# --------------
-
 Sys.setenv(VROOM_CONNECTION_SIZE = 500000)
 require(optparse)
 require(tidyverse)

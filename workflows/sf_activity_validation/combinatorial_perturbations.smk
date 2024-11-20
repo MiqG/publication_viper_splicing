@@ -1,11 +1,3 @@
-"""
-Author: Miquel Anglada Girotto
-Contact: miquelangladagirotto [at] gmail [dot] com
-
-Outline
--------
-"""
-
 import os
 
 # variables

@@ -1,7 +1,3 @@
-# impute missing values with various methods:
-# - knn
-# - pmm
-
 import argparse
 import json
 import pandas as pd

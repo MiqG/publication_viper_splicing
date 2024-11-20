@@ -1,8 +1,3 @@
-#
-# Author: Miquel Anglada Girotto
-# Contact: miquel [dot] anglada [at] crg [dot] eu
-#
-
 require(optparse)
 require(tidyverse)
 require(ggpubr)

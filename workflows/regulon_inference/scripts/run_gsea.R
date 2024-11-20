@@ -1,14 +1,3 @@
-#
-# Author: Miquel Anglada Girotto
-# Contact: miquel [dot] anglada [at] crg [dot] eu
-#
-# Script purpose
-# --------------
-# EDA of gene dependencies regressed on event PSI and gene TPMs.
-# 
-# Outline
-# -------
-
 require(optparse)
 require(tidyverse)
 require(clusterProfiler)

@@ -1,13 +1,3 @@
-"""
-Author: Miquel Anglada Girotto
-Contact: miquelangladagirotto [at] gmail [dot] com
-
-Outline
--------
-- proliferation
-    - MKI67 expression vs cancer-driver SFs in STN TCGA
-"""
-
 import os
 import pandas as pd
 

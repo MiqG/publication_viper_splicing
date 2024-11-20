@@ -1,7 +1,3 @@
-# Note
-# ----
-# WE ARE RUNNING METAVIPER!
-
 require(optparse)
 require(tidyverse)
 require(viper)

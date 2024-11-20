@@ -1,13 +1,3 @@
-#
-# Author: Miquel Anglada Girotto
-# Contact: miquel [dot] anglada [at] crg [dot] eu
-#
-# Script purpose
-# --------------
-# - Validate whether protein activity inferrence indicates that indisulam targets RBM39
-# - Investigate the effect of MS023, inhibitor of Type I PRMT enzymes
-#     - no cell growth effect in vitro, but strong suppression of tumor growth in vivo
-
 require(optparse)
 require(tidyverse)
 require(ggpubr)

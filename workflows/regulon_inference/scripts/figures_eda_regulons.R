@@ -1,18 +1,3 @@
-#
-# Author: Miquel Anglada Girotto
-# Contact: miquel [dot] anglada [at] crg [dot] eu
-#
-# Script purpose
-# --------------
-# EDA regulons of interest
-#
-# Outline
-# -------
-# - how many targets per regulator?
-# - how many regulators per target?
-# - which biological processes does each regulator control?
-# - which protein impacts does each regulator control?
-
 require(optparse)
 require(tidyverse)
 require(ggpubr)

@@ -1,14 +1,3 @@
-"""
-Author: Miquel Anglada Girotto
-Contact: miquelangladagirotto [at] gmail [dot] com
-
-Outline
--------
-1. Protein activity vs drug treatment:
-    - indisulam targets RBM39
-    - MS023 targets PRMTs (methyltransferases)
-"""
-
 import os
 
 # variables

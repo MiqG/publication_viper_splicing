@@ -1,14 +1,3 @@
-"""
-Author: Miquel Anglada Girotto
-Contact: miquelangladagirotto [at] gmail [dot] com
-
-Outline
--------
-- study activities of cancer-driver splicing program 
-    - during tumorigenesis in brain organoids
-    - upon cancer-driver mutations
-"""
-
 import os
 
 # variables
