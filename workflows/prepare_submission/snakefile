@@ -57,7 +57,7 @@ CANCER_TYPES = [
     'UVM'
 ]
 
-DATASETS = ["CCLE","Nijhuis2020","Lu2021","CardosoMoreira2020","Riaz2017"]
+DATASETS = ["CCLE","Nijhuis2020","Lu2021","CardosoMoreira2020","Riaz2017","tumorigenesis"]
 
 ##### RULES #####
 rule all:
