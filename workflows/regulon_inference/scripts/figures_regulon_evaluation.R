@@ -87,6 +87,17 @@ SETS_MAX_TARGETS = c(
 
 SF_CLASS = c("Core", "RBP", "Other")
 
+CELL_LINEAGES = c(
+    "HAEMATOPOIETIC_AND_LYMPHOID_TISSUE",
+    "BREAST",
+    "CERVIX",
+    "BONE",
+    "KIDNEY",
+    "LUNG",
+    "CENTRAL_NERVOUS_SYSTEM",
+    "LARGE_INTESTINE"
+)
+
 # formatting
 LINE_SIZE = 0.25
 
@@ -132,9 +143,15 @@ plot_evaluation = function(evaluation){
     x = X %>%
         group_by(regulon_set, method_activity, curves_type, eval_direction, eval_type, 
                  signature_id, n_total_regulators, n_total_targets) %>%
-        summarize(auc_roc = median(auc_roc, na.rm=TRUE)) %>%    
+        summarize(
+            auc_roc = median(auc_roc, na.rm=TRUE),
+            median_rank_percentile = median(median_rank_percentile, na.rm=TRUE),
+            mean_rank_percentile = median(mean_rank_percentile)
+        ) %>%    
         ungroup()
     
+    # network inference method performance overview
+    ## roc auc
     plts[["evaluation-general-median_auc_roc-box"]] = x %>%
         filter(regulon_set%in%SETS_MAIN & eval_type=="real") %>%
         mutate(
@@ -158,8 +175,33 @@ plot_evaluation = function(evaluation){
         facet_wrap(~eval_direction) +  
         theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         labs(x="Method", y="median(ROC AUC)", color="Inference Type", shape="Held-out Dataset")
+    ## rank percentiles
+    plts[["evaluation-general-median_rank_perc-box"]] = x %>%
+        filter(regulon_set%in%SETS_MAIN & eval_type=="real") %>%
+        mutate(
+            regulon_set = factor(regulon_set, levels=SETS_MAIN),
+            method_activity = factor(method_activity, levels=METHODS_ACTIVITY)
+        ) %>%
+        ggplot(aes(x=regulon_set, y=median_rank_percentile, group=interaction(regulon_set, method_activity))) +
+        geom_boxplot(aes(color=method_activity), fill=NA, outlier.shape=NA, position=position_dodge(0.9)) +
+        geom_point(aes(color=method_activity, shape=signature_id), size=0.5, 
+                   position=position_jitterdodge(dodge.width=0.9, jitter.width=0.1)) +
+        color_palette(PAL_METHODS_ACTIVITY) + 
+        geom_text(
+            aes(y = 0.3, label=label), 
+            . %>% 
+            count(method_activity, regulon_set, eval_type, eval_direction) %>% 
+            mutate(label=paste0("n=",n)),
+            position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        geom_hline(yintercept=0.5, linewidth=LINE_SIZE, linetype="dashed", color="black") +
+        theme_pubr(x.text.angle = 45) +
+        facet_wrap(~eval_direction) +  
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Method", y="median(Rank Percentile)", color="Inference Type", shape="Held-out Dataset")
     
-    # evaluation by SF class of empirical splicing networks
+    # evaluation of held out datasets for network generation
+    ## roc auc
     plts[["evaluation-held_out_ds-raw_auc_roc-box"]] = X %>%
         filter(eval_type=="real" & regulon_set=="experimentally_derived_regulons_pruned") %>%
         mutate(
@@ -182,8 +224,99 @@ plot_evaluation = function(evaluation){
         facet_wrap(~eval_direction) +  
         theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         labs(x="Held-out Dataset", y="ROC AUC", color="Inference Type", shape="Held-out Dataset")
-
+    ## rank percentiles
+    plts[["evaluation-held_out_ds-raw_rank_perc-box"]] = X %>%
+        filter(eval_type=="real" & regulon_set=="experimentally_derived_regulons_pruned") %>%
+        mutate(
+            method_activity = factor(method_activity, levels=METHODS_ACTIVITY)
+        ) %>%
+        ggplot(aes(x=signature_id, y=median_rank_percentile, group=interaction(signature_id, method_activity))) +
+        geom_boxplot(aes(color=method_activity), fill=NA, outlier.shape=NA, position=position_dodge(0.9)) +
+        geom_point(aes(color=method_activity, shape=signature_id), size=0.5, 
+                   position=position_jitterdodge(dodge.width=0.9, jitter.width=0.1)) +
+        color_palette(PAL_METHODS_ACTIVITY) + 
+        geom_text(
+            aes(y = -0.1, label=label), 
+            . %>% 
+            count(signature_id, method_activity, regulon_set, eval_type, eval_direction) %>% 
+            mutate(label=paste0("n=",n)),
+            position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        geom_hline(yintercept=0.5, linewidth=LINE_SIZE, linetype="dashed", color="black") +
+        theme_pubr(x.text.angle = 45) +
+        facet_wrap(~eval_direction) +  
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Held-out Dataset", y="Rank Percentile", color="Inference Type", shape="Held-out Dataset")
+    
+    # evaluation context independence
+    ## roc auc
+    plts[["evaluation-context_indep-raw_auc_roc-box"]] = X %>%
+        filter(eval_type=="real" & regulon_set=="experimentally_derived_regulons_pruned" & eval_direction=="perturbations") %>%
+        # consider only cell lines that are not in networks
+        filter(!(cell_line%in%c("K562_HAEMATOPOIETIC_AND_LYMPHOID_TISSUE","K562","HepG2"))) %>%
+        mutate(
+            method_activity = factor(method_activity, levels=METHODS_ACTIVITY),
+        ) %>%
+        rowwise() %>%
+        mutate(
+            cell_lineage = paste(unlist(strsplit(cell_line, "_"))[-1], collapse="_"),
+            cell_lineage = factor(cell_lineage, levels=CELL_LINEAGES)
+        ) %>%
+        ungroup() %>%
+        ggplot(aes(x=signature_id, y=auc_roc, group=interaction(signature_id, method_activity))) +
+        geom_boxplot(aes(color=method_activity), fill=NA, outlier.shape=NA, position=position_dodge(0.9)) +
+        geom_point(aes(color=method_activity, shape=cell_line), size=0.5, 
+                   position=position_jitterdodge(dodge.width=0.9, jitter.width=0.1)) +
+        color_palette(PAL_METHODS_ACTIVITY) + 
+        scale_shape_manual(values = c(0:10)) +
+        geom_text(
+            aes(y = -0.1, label=label), 
+            . %>% 
+            count(signature_id, method_activity, regulon_set, eval_type, eval_direction, cell_lineage) %>% 
+            mutate(label=paste0("n=",n)),
+            position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        geom_hline(yintercept=0.5, linewidth=LINE_SIZE, linetype="dashed", color="black") +
+        theme_pubr(x.text.angle = 45) +
+        facet_wrap(~eval_direction+cell_lineage, nrow=2) +  
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Held-out Dataset", y="ROC AUC", color="Inference Type", shape="Cell Line")
+    ## rank percentiles
+    plts[["evaluation-context_indep-raw_rank_perc-box"]] = X %>%
+        filter(eval_type=="real" & regulon_set=="experimentally_derived_regulons_pruned" & eval_direction=="perturbations") %>%
+        # consider only cell lines that are not in networks
+        filter(!(cell_line%in%c("K562_HAEMATOPOIETIC_AND_LYMPHOID_TISSUE","K562","HepG2"))) %>%
+        mutate(
+            method_activity = factor(method_activity, levels=METHODS_ACTIVITY),
+        ) %>%
+        rowwise() %>%
+        mutate(
+            cell_lineage = paste(unlist(strsplit(cell_line, "_"))[-1], collapse="_"),
+            cell_lineage = factor(cell_lineage, levels=CELL_LINEAGES)
+        ) %>%
+        ungroup() %>%
+        ggplot(aes(x=signature_id, y=median_rank_percentile, group=interaction(signature_id, method_activity))) +
+        geom_boxplot(aes(color=method_activity), fill=NA, outlier.shape=NA, position=position_dodge(0.9)) +
+        geom_point(aes(color=method_activity, shape=cell_line), size=0.5, 
+                   position=position_jitterdodge(dodge.width=0.9, jitter.width=0.1)) +
+        color_palette(PAL_METHODS_ACTIVITY) + 
+        scale_shape_manual(values = c(0:10)) +
+        geom_text(
+            aes(y = -0.1, label=label), 
+            . %>% 
+            count(signature_id, method_activity, regulon_set, eval_type, eval_direction, cell_lineage) %>% 
+            mutate(label=paste0("n=",n)),
+            position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        geom_hline(yintercept=0.5, linewidth=LINE_SIZE, linetype="dashed", color="black") +
+        theme_pubr(x.text.angle = 45) +
+        facet_wrap(~eval_direction+cell_lineage, nrow=2) +  
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Held-out Dataset", y="Rank Percentile", color="Inference Type", shape="Cell Line")
+    
+    
     # evaluation by SF class of empirical splicing networks
+    ## roc auc
     plts[["evaluation-sf_class-raw_auc_roc-box"]] = X %>%
         filter(eval_type=="real" & regulon_set=="experimentally_derived_regulons_pruned" & eval_direction=="perturbations") %>%
         mutate(
@@ -207,9 +340,33 @@ plot_evaluation = function(evaluation){
         facet_wrap(~eval_direction) +  
         theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         labs(x="SF Class", y="ROC AUC", color="Inference Type", shape="Held-out Dataset")
-
+    ## rank percentiles
+    plts[["evaluation-sf_class-raw_rank_perc-box"]] = X %>%
+        filter(eval_type=="real" & regulon_set=="experimentally_derived_regulons_pruned" & eval_direction=="perturbations") %>%
+        mutate(
+            method_activity = factor(method_activity, levels=METHODS_ACTIVITY),
+            sf_class = factor(sf_class, levels=SF_CLASS)
+        ) %>%
+        ggplot(aes(x=sf_class, y=median_rank_percentile, group=interaction(sf_class, method_activity))) +
+        geom_boxplot(aes(color=method_activity), fill=NA, outlier.shape=NA, position=position_dodge(0.9)) +
+        geom_point(aes(color=method_activity, shape=signature_id), size=0.5, 
+                   position=position_jitterdodge(dodge.width=0.9, jitter.width=0.1)) +
+        color_palette(PAL_METHODS_ACTIVITY) + 
+        geom_text(
+            aes(y = -0.1, label=label), 
+            . %>% 
+            count(sf_class, method_activity, regulon_set, eval_type, eval_direction) %>% 
+            mutate(label=paste0("n=",n)),
+            position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        geom_hline(yintercept=0.5, linewidth=LINE_SIZE, linetype="dashed", color="black") +  
+        theme_pubr(x.text.angle = 45) +
+        facet_wrap(~eval_direction) +  
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="SF Class", y="Rank Percentile", color="Inference Type", shape="Held-out Dataset")
 
     # evaluation by SF class and held-out datasets of empirical splicing networks
+    ## roc auc
     plts[["evaluation-sf_class_vs_held_out_ds-raw_auc_roc-box"]] = X %>%
         filter(eval_type=="real" & regulon_set=="experimentally_derived_regulons_pruned" & eval_direction=="perturbations") %>%
         mutate(
@@ -233,8 +390,33 @@ plot_evaluation = function(evaluation){
         facet_wrap(~eval_direction+signature_id) +  
         theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         labs(x="SF Class", y="ROC AUC", color="Inference Type", shape="Held-out Dataset")
+    ## rank percentile
+    plts[["evaluation-sf_class_vs_held_out_ds-raw_rank_perc-box"]] = X %>%
+        filter(eval_type=="real" & regulon_set=="experimentally_derived_regulons_pruned" & eval_direction=="perturbations") %>%
+        mutate(
+            method_activity = factor(method_activity, levels=METHODS_ACTIVITY),
+            sf_class = factor(sf_class, levels=SF_CLASS)
+        ) %>%
+        ggplot(aes(x=sf_class, y=median_rank_percentile, group=interaction(sf_class, method_activity))) +
+        geom_boxplot(aes(color=method_activity), fill=NA, outlier.shape=NA, position=position_dodge(0.9)) +
+        geom_point(aes(color=method_activity, shape=signature_id), size=0.5, 
+                   position=position_jitterdodge(dodge.width=0.9, jitter.width=0.1)) +
+        color_palette(PAL_METHODS_ACTIVITY) + 
+        geom_text(
+            aes(y = -0.1, label=label), 
+            . %>% 
+            count(sf_class, signature_id, method_activity, regulon_set, eval_type, eval_direction) %>% 
+            mutate(label=paste0("n=",n)),
+            position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        geom_hline(yintercept=0.5, linewidth=LINE_SIZE, linetype="dashed", color="black") +
+        theme_pubr(x.text.angle = 45) +
+        facet_wrap(~eval_direction+signature_id) +  
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="SF Class", y="Rank Percentile", color="Inference Type", shape="Held-out Dataset")
     
     # max_targets ARACNe benchmark
+    ## roc auc
     plts[["evaluation-max_targets_aracne-median_auc_roc-box"]] = x %>%
         filter(eval_type=="real" & regulon_set%in%SETS_MAX_TARGETS) %>%
         mutate(
@@ -259,8 +441,34 @@ plot_evaluation = function(evaluation){
         facet_wrap(~eval_direction) +  
         theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         labs(x="Method", y="median(ROC AUC)", color="Inference Type", shape="Held-out Dataset")
+    ## rank percentile
+    plts[["evaluation-max_targets_aracne-median_rank_perc-box"]] = x %>%
+        filter(eval_type=="real" & regulon_set%in%SETS_MAX_TARGETS) %>%
+        mutate(
+            regulon_set = factor(regulon_set, levels=SETS_MAX_TARGETS),
+            method_activity = factor(method_activity, levels=METHODS_ACTIVITY)
+        ) %>%
+        ggplot(aes(x=regulon_set, y=median_rank_percentile, group=interaction(regulon_set, method_activity))) +
+        geom_boxplot(aes(color=method_activity), fill=NA, outlier.shape=NA, 
+                     position=position_dodge2(0.9, preserve="single")) +
+        geom_point(aes(color=method_activity, shape=signature_id), size=0.5, 
+                   position=position_jitterdodge(dodge.width=0.9, jitter.width=0.1)) +
+        color_palette(PAL_METHODS_ACTIVITY) + 
+        geom_text(
+            aes(y = 0.2, label=label), 
+            . %>% 
+            count(method_activity, regulon_set, eval_type, eval_direction) %>% 
+            mutate(label=paste0("n=",n)),
+            position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        geom_hline(yintercept=0.5, linewidth=LINE_SIZE, linetype="dashed", color="black") +
+        theme_pubr(x.text.angle = 45) +
+        facet_wrap(~eval_direction) +  
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Method", y="median(Rank Percentile)", color="Inference Type", shape="Held-out Dataset")
     
     # CLIP benchmark
+    ## roc auc
     plts[["evaluation-clip-median_auc_roc-box"]] = x %>%
         filter(eval_type=="real" & regulon_set%in%SETS_CLIP) %>%
         mutate(
@@ -285,8 +493,34 @@ plot_evaluation = function(evaluation){
         facet_wrap(~eval_direction) +  
         theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         labs(x="Method", y="median(ROC AUC)", color="Inference Type", shape="Held-out Dataset")
+    ## rank percentile
+    plts[["evaluation-clip-median_rank_perc-box"]] = x %>%
+        filter(eval_type=="real" & regulon_set%in%SETS_CLIP) %>%
+        mutate(
+            regulon_set = factor(regulon_set, levels=SETS_CLIP),
+            method_activity = factor(method_activity, levels=METHODS_ACTIVITY)
+        ) %>%
+        ggplot(aes(x=regulon_set, y=median_rank_percentile, group=interaction(regulon_set, method_activity))) +
+        geom_boxplot(aes(color=method_activity), fill=NA, outlier.shape=NA, 
+                     position=position_dodge2(0.9, preserve="single")) +
+        geom_point(aes(color=method_activity, shape=signature_id), size=0.5, 
+                   position=position_jitterdodge(dodge.width=0.9, jitter.width=0.1)) +
+        color_palette(PAL_METHODS_ACTIVITY) + 
+        geom_text(
+            aes(y = 0.2, label=label), 
+            . %>% 
+            count(method_activity, regulon_set, eval_type, eval_direction) %>% 
+            mutate(label=paste0("n=",n)),
+            position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        geom_hline(yintercept=0.5, linewidth=LINE_SIZE, linetype="dashed", color="black") +
+        theme_pubr(x.text.angle = 45) +
+        facet_wrap(~eval_direction) +  
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Method", y="median(Rank Percentile)", color="Inference Type", shape="Held-out Dataset")
     
     # evaluation thresholds
+    ## roc auc
     plts[["evaluation-threshold-median_auc_roc-box"]] = x %>%
         filter(eval_type=="real" & regulon_set%in%SETS_THRESHOLDS) %>%
         mutate(
@@ -321,9 +555,44 @@ plot_evaluation = function(evaluation){
         facet_wrap(~eval_direction, ncol=1) +  
         theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         labs(x="Method", y="median(ROC AUC)", color="Inference Type", shape="Held-out Dataset")
-    
+    ## rank percentile
+    plts[["evaluation-threshold-median_rank_perc-box"]] = x %>%
+        filter(eval_type=="real" & regulon_set%in%SETS_THRESHOLDS) %>%
+        mutate(
+            regulon_set = factor(regulon_set, levels=SETS_THRESHOLDS),
+            method_activity = factor(method_activity, levels=METHODS_ACTIVITY)
+        ) %>%
+        ggplot(aes(x=regulon_set, y=median_rank_percentile, group=interaction(regulon_set, method_activity))) +
+        geom_boxplot(aes(color=method_activity), fill=NA, outlier.shape=NA, 
+                     position=position_dodge2(0.9, preserve="single")) +
+        geom_point(aes(color=method_activity, shape=signature_id), size=0.5, 
+                   position=position_jitterdodge(dodge.width=0.9, jitter.width=0.1)) +
+        color_palette(PAL_METHODS_ACTIVITY) + 
+        geom_text(
+            aes(y = 0.2, label=label), 
+            . %>% 
+            count(method_activity, regulon_set, eval_type, eval_direction) %>% 
+            mutate(label=paste0("n=",n)),
+            position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        geom_text(
+            aes(y=0.3, label=n_total_regulators), 
+            . %>% distinct(method_activity, eval_direction, regulon_set, n_total_regulators), 
+            size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        geom_text(
+            aes(y=0.25, label=n_total_targets), 
+            . %>% distinct(method_activity, eval_direction, regulon_set, n_total_targets), 
+            size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        geom_hline(yintercept=0.5, linewidth=LINE_SIZE, linetype="dashed", color="black") +
+        theme_pubr(x.text.angle = 45) +
+        facet_wrap(~eval_direction, ncol=1) +  
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Method", y="median(Rank Percentile)", color="Inference Type", shape="Held-out Dataset")    
     
     # evaluation robustness
+    ## roc auc
     plts[["evaluation-robustness-median_auc_roc-box"]] = x %>%
         filter(eval_type=="real" & regulon_set%in%SETS_ROBUSTNESS) %>%
         mutate(
@@ -358,9 +627,45 @@ plot_evaluation = function(evaluation){
         facet_wrap(~eval_direction, ncol=1) +  
         theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         labs(x="Method", y="median(ROC AUC)", color="Inference Type", shape="Held-out Dataset")
+    ## rank percentile
+    plts[["evaluation-robustness-median_rank_perc-box"]] = x %>%
+        filter(eval_type=="real" & regulon_set%in%SETS_ROBUSTNESS) %>%
+        mutate(
+            regulon_set = factor(regulon_set, levels=SETS_ROBUSTNESS),
+            method_activity = factor(method_activity, levels=METHODS_ACTIVITY)
+        ) %>%
+        ggplot(aes(x=regulon_set, y=median_rank_percentile, group=interaction(regulon_set, method_activity))) +
+        geom_boxplot(aes(color=method_activity), fill=NA, outlier.shape=NA, 
+                     position=position_dodge2(0.9, preserve="single")) +
+        geom_point(aes(color=method_activity, shape=signature_id), size=0.5, 
+                   position=position_jitterdodge(dodge.width=0.9, jitter.width=0.1)) +
+        color_palette(PAL_METHODS_ACTIVITY) + 
+        geom_text(
+            aes(y = 0.2, label=label), 
+            . %>% 
+            count(method_activity, regulon_set, eval_type, eval_direction) %>% 
+            mutate(label=paste0("n=",n)),
+            position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        geom_text(
+            aes(y=0.3, label=n_total_regulators), 
+            . %>% distinct(method_activity, eval_direction, regulon_set, n_total_regulators), 
+            size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        geom_text(
+            aes(y=0.25, label=n_total_targets), 
+            . %>% distinct(method_activity, eval_direction, regulon_set, n_total_targets), 
+            size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        geom_hline(yintercept=0.5, linewidth=LINE_SIZE, linetype="dashed", color="black") +
+        theme_pubr(x.text.angle = 45) +
+        facet_wrap(~eval_direction, ncol=1) +  
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Method", y="median(Rank Percentile)", color="Inference Type", shape="Held-out Dataset")
     
     # computational networks
     ## evaluation considering splitting networks
+    ### roc auc
     plts[["evaluation-comp_split-median_auc_roc-box"]] = x %>%
         filter(regulon_set%in%SETS_COMPUTATIONAL & eval_type=="real") %>%
         mutate(
@@ -384,8 +689,33 @@ plot_evaluation = function(evaluation){
         facet_wrap(~eval_direction) +  
         theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         labs(x="Method", y="median(ROC AUC)", color="Inference Type", shape="Held-out Dataset")
+    ### rank percentile
+    plts[["evaluation-comp_split-median_rank_perc-box"]] = x %>%
+        filter(regulon_set%in%SETS_COMPUTATIONAL & eval_type=="real") %>%
+        mutate(
+            regulon_set = factor(regulon_set, levels=SETS_COMPUTATIONAL),
+            method_activity = factor(method_activity, levels=METHODS_ACTIVITY)
+        ) %>%
+        ggplot(aes(x=regulon_set, y=median_rank_percentile, group=interaction(regulon_set, method_activity))) +
+        geom_boxplot(aes(color=method_activity), fill=NA, outlier.shape=NA, position=position_dodge(0.9)) +
+        geom_point(aes(color=method_activity, shape=signature_id), size=0.5, 
+                   position=position_jitterdodge(dodge.width=0.9, jitter.width=0.1)) +
+        color_palette(PAL_METHODS_ACTIVITY) + 
+        geom_text(
+            aes(y = 0.3, label=label), 
+            . %>% 
+            count(method_activity, regulon_set, eval_direction) %>% 
+            mutate(label=paste0("n=",n)),
+            position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        geom_hline(yintercept=0.5, linewidth=LINE_SIZE, linetype="dashed", color="black") +
+        theme_pubr(x.text.angle = 45) +
+        facet_wrap(~eval_direction) +  
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Method", y="median(Rank Percentile)", color="Inference Type", shape="Held-out Dataset")
     
     ## evaluation considering splitting networks and whether regulators are in empirical SF networks
+    ### roc auc
     plts[["evaluation-comp_best_vs_in_empirical-median_auc_roc-box"]] = X %>%
         filter(eval_type=="real" & regulon_set=="mlr_regulons_PANCAN_PT" & eval_direction=="perturbations") %>%
         group_by(regulon_set, method_activity, curves_type, eval_direction, eval_type, 
@@ -413,8 +743,37 @@ plot_evaluation = function(evaluation){
         facet_wrap(~eval_direction+in_empirical) +  
         theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         labs(x="SF Class", y="ROC AUC", color="Inference Type", shape="Held-out Dataset")
+    ### rank percentile
+    plts[["evaluation-comp_best_vs_in_empirical-median_rank_perc-box"]] = X %>%
+        filter(eval_type=="real" & regulon_set=="mlr_regulons_PANCAN_PT" & eval_direction=="perturbations") %>%
+        group_by(regulon_set, method_activity, curves_type, eval_direction, eval_type, 
+                 signature_id, n_total_regulators, n_total_targets, in_empirical, sf_class) %>%
+        summarize(median_rank_percentile = median(median_rank_percentile, na.rm=TRUE)) %>%    
+        ungroup() %>%        
+        mutate(
+            method_activity = factor(method_activity, levels=METHODS_ACTIVITY),
+            sf_class = factor(sf_class, levels=SF_CLASS)
+        ) %>%
+        ggplot(aes(x=sf_class, y=median_rank_percentile, group=interaction(sf_class, method_activity))) +
+        geom_boxplot(aes(color=method_activity), fill=NA, outlier.shape=NA, position=position_dodge(0.9)) +
+        geom_point(aes(color=method_activity, shape=signature_id), size=0.5, 
+                   position=position_jitterdodge(dodge.width=0.9, jitter.width=0.1)) +
+        color_palette(PAL_METHODS_ACTIVITY) + 
+        geom_text(
+            aes(y = -0.1, label=label), 
+            . %>% 
+            count(sf_class, method_activity, regulon_set, eval_type, eval_direction, in_empirical) %>% 
+            mutate(label=paste0("n=",n)),
+            position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        geom_hline(yintercept=0.5, linewidth=LINE_SIZE, linetype="dashed", color="black") +
+        theme_pubr(x.text.angle = 45) +
+        facet_wrap(~eval_direction+in_empirical) +  
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="SF Class", y="Rank Percentile", color="Inference Type", shape="Held-out Dataset")
     
     ## evaluation using best computational networks with empirical MoR and their likelihood
+    ### roc auc
     plts[["evaluation-comp_best_w_empirical_likelihood-median_auc_roc-box"]] = x %>%
         filter(regulon_set%in%SETS_LIKELIHOOD & eval_type=="real") %>%
         mutate(
@@ -438,9 +797,33 @@ plot_evaluation = function(evaluation){
         facet_wrap(~eval_direction) +  
         theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         labs(x="Method", y="median(ROC AUC)", color="Inference Type", shape="Held-out Dataset")
-    
+    ### rank percentile
+    plts[["evaluation-comp_best_w_empirical_likelihood-median_rank_perc-box"]] = x %>%
+        filter(regulon_set%in%SETS_LIKELIHOOD & eval_type=="real") %>%
+        mutate(
+            regulon_set = factor(regulon_set, levels=SETS_LIKELIHOOD),
+            method_activity = factor(method_activity, levels=METHODS_ACTIVITY)
+        ) %>%
+        ggplot(aes(x=regulon_set, y=median_rank_percentile, group=interaction(regulon_set, method_activity))) +
+        geom_boxplot(aes(color=method_activity), fill=NA, outlier.shape=NA, position=position_dodge(0.9)) +
+        geom_point(aes(color=method_activity, shape=signature_id), size=0.5, 
+                   position=position_jitterdodge(dodge.width=0.9, jitter.width=0.1)) +
+        color_palette(PAL_METHODS_ACTIVITY) + 
+        geom_text(
+            aes(y = 0.3, label=label), 
+            . %>% 
+            count(method_activity, regulon_set, eval_type, eval_direction) %>% 
+            mutate(label=paste0("n=",n)),
+            position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        geom_hline(yintercept=0.5, linewidth=LINE_SIZE, linetype="dashed", color="black") +
+        theme_pubr(x.text.angle = 45) +
+        facet_wrap(~eval_direction) +  
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Method", y="median(Rank Percentile)", color="Inference Type", shape="Held-out Dataset")
     
     ## evaluation combining ARACNe and MLR determined networks
+    ### roc auc
     plts[["evaluation-comp_best_aracne_mlr-median_auc_roc-box"]] = x %>%
         filter(regulon_set%in%SETS_MOR & eval_type=="real") %>%
         mutate(
@@ -464,6 +847,41 @@ plot_evaluation = function(evaluation){
         facet_wrap(~eval_direction) +  
         theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         labs(x="Method", y="median(ROC AUC)", color="Inference Type", shape="Held-out Dataset")
+    ### rank percentile
+    plts[["evaluation-comp_best_aracne_mlr-median_rank_perc-box"]] = x %>%
+        filter(regulon_set%in%SETS_MOR & eval_type=="real") %>%
+        mutate(
+            regulon_set = factor(regulon_set, levels=SETS_MOR),
+            method_activity = factor(method_activity, levels=METHODS_ACTIVITY)
+        ) %>%
+        ggplot(aes(x=regulon_set, y=median_rank_percentile, group=interaction(regulon_set, method_activity))) +
+        geom_boxplot(aes(color=method_activity), fill=NA, outlier.shape=NA, position=position_dodge(0.9)) +
+        geom_point(aes(color=method_activity, shape=signature_id), size=0.5, 
+                   position=position_jitterdodge(dodge.width=0.9, jitter.width=0.1)) +
+        color_palette(PAL_METHODS_ACTIVITY) + 
+        geom_text(
+            aes(y = 0.3, label=label), 
+            . %>% 
+            count(method_activity, regulon_set, eval_type, eval_direction) %>% 
+            mutate(label=paste0("n=",n)),
+            position=position_dodge(0.9), size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        geom_hline(yintercept=0.5, linewidth=LINE_SIZE, linetype="dashed", color="black") +
+        theme_pubr(x.text.angle = 45) +
+        facet_wrap(~eval_direction) +  
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Method", y="median(Rank Percentile)", color="Inference Type", shape="Held-out Dataset")
+    
+    ## correlation ROC AUC vs Relative Ranking
+    plts[["evaluation-median_auc_roc_vs_median_rank_percentile-scatter"]] = x %>%
+        filter(eval_type=="real") %>%
+        ggplot(aes(x=auc_roc, y=median_rank_percentile)) +
+        geom_scattermore(pixels=c(1000,1000), pointsize=5, color=PAL_DARK) +
+        stat_cor(method="spearman", size=FONT_SIZE, family=FONT_FAMILY) +
+        theme_pubr() +
+        facet_wrap(~eval_direction) +
+        theme(aspect.ratio = 1, strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="median(ROC AUC)", y="median(Rank Percentile)")
     
     return(plts)
 }
@@ -545,42 +963,61 @@ save_plots = function(plts, figs_dir){
     
     # overall
     save_plt(plts, "evaluation-general-median_auc_roc-box", '.pdf', figs_dir, width=9, height=8.5)
+    save_plt(plts, "evaluation-general-median_rank_perc-box", '.pdf', figs_dir, width=9, height=8.5)
     
     # by held out dataset
     save_plt(plts, "evaluation-held_out_ds-raw_auc_roc-box", '.pdf', figs_dir, width=12, height=8)
+    save_plt(plts, "evaluation-held_out_ds-raw_rank_perc-box", '.pdf', figs_dir, width=12, height=8)
+
+    # by held out context
+    save_plt(plts, "evaluation-context_indep-raw_auc_roc-box", '.pdf', figs_dir, width=11, height=12)
+    save_plt(plts, "evaluation-context_indep-raw_rank_perc-box", '.pdf', figs_dir, width=11, height=12)
     
     # by SF class
     save_plt(plts, "evaluation-sf_class-raw_auc_roc-box", '.pdf', figs_dir, width=5, height=6)
+    save_plt(plts, "evaluation-sf_class-raw_rank_perc-box", '.pdf', figs_dir, width=5, height=6)
     
     # by SF class and held out dataset
     save_plt(plts, "evaluation-sf_class_vs_held_out_ds-raw_auc_roc-box", '.pdf', figs_dir, width=12, height=12)
+    save_plt(plts, "evaluation-sf_class_vs_held_out_ds-raw_rank_perc-box", '.pdf', figs_dir, width=12, height=12)
 
     # max_targets ARACNe eval
     save_plt(plts, "evaluation-max_targets_aracne-median_auc_roc-box", '.pdf', figs_dir, width=8, height=9)
+    save_plt(plts, "evaluation-max_targets_aracne-median_rank_perc-box", '.pdf', figs_dir, width=8, height=9)
     
     # CLIP eval
     save_plt(plts, "evaluation-clip-median_auc_roc-box", '.pdf', figs_dir, width=8, height=9)
+    save_plt(plts, "evaluation-clip-median_rank_perc-box", '.pdf', figs_dir, width=8, height=9)
     
     # thresholds empirical SF
     save_plt(plts, "evaluation-threshold-median_auc_roc-box", '.pdf', figs_dir, width=10, height=14)
+    save_plt(plts, "evaluation-threshold-median_rank_perc-box", '.pdf', figs_dir, width=10, height=14)
     
     # robustness empirical SF
     save_plt(plts, "evaluation-robustness-median_auc_roc-box", '.pdf', figs_dir, width=10, height=14)
+    save_plt(plts, "evaluation-robustness-median_rank_perc-box", '.pdf', figs_dir, width=10, height=14)
     
     # computational- by network
     save_plt(plts, "evaluation-comp_split-median_auc_roc-box", '.pdf', figs_dir, width=10, height=8)
+    save_plt(plts, "evaluation-comp_split-median_rank_perc-box", '.pdf', figs_dir, width=10, height=8)
 
     # computational best with empirical MoR and SF class
     save_plt(plts, "evaluation-comp_best_vs_in_empirical-median_auc_roc-box", '.pdf', figs_dir, width=7, height=7)
+    save_plt(plts, "evaluation-comp_best_vs_in_empirical-median_rank_perc-box", '.pdf', figs_dir, width=7, height=7)
     
     # computational best with empirical MoR
     save_plt(plts, "evaluation-comp_best_w_empirical_likelihood-median_auc_roc-box", '.pdf', figs_dir, width=7, height=8)
+    save_plt(plts, "evaluation-comp_best_w_empirical_likelihood-median_rank_perc-box", '.pdf', figs_dir, width=7, height=8)
     
     # combine aracne and MLR
     save_plt(plts, "evaluation-comp_best_aracne_mlr-median_auc_roc-box", '.pdf', figs_dir, width=4, height=7)
+    save_plt(plts, "evaluation-comp_best_aracne_mlr-median_rank_perc-box", '.pdf', figs_dir, width=4, height=7)
     
+    # comparison ROC AUC vs Rank Percentile
+    save_plt(plts, "evaluation-median_auc_roc_vs_median_rank_percentile-scatter", '.pdf', figs_dir, width=8, height=5)    
+
     # by held out dataset
-    save_plt(plts, "eval_splicinglore-held_out_ds-raw_auc_roc-box", '.pdf', figs_dir, width=12, height=10)    
+    save_plt(plts, "eval_splicinglore-held_out_ds-raw_auc_roc-box", '.pdf', figs_dir, width=12, height=10)
 }
 
 

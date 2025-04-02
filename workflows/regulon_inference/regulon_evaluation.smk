@@ -167,6 +167,7 @@ rule evaluate_regulons:
         # runtime = 3600*6, # h in seconds
         runtime = 60*24, # h in minutes 
         memory = 300, # GB
+    conda: "publication_viper_splicing"
     shell:
         """
         nice Rscript {params.script_dir}/evaluate_activity.R \

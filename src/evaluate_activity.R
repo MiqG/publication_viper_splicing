@@ -15,14 +15,19 @@ require(clusterProfiler)
 # eval_labels_file = file.path(RESULTS_DIR,"files","regulon_evaluation_labels","ENASFS.tsv.gz")
 # regulons_path = file.path(RESULTS_DIR,"files","experimentally_derived_regulons_pruned-EX")
 # regulons_path = file.path(RESULTS_DIR,"files","mlr_and_experimental_regulons-EX")
-
 # precomputed_activity_file = file.path(RESULTS_DIR,"files","benchmark_sf_genexpr_foldchange","ENCOREKO_K562.tsv.gz")
+
 # signature_file = file.path(PREP_DIR,'ground_truth_pert','ENASFS','delta_psi-EX.tsv.gz')
-# regulons_path = file.path(RESULTS_DIR,"files","top40_experimentally_derived_regulons_pruned-EX")
-# eval_labels_file = file.path(RESULTS_DIR,"files","regulon_evaluation_labels","ENCOREKO_K562.tsv.gz")
+# regulons_path = file.path(RESULTS_DIR,"files","experimentally_derived_regulons_pruned-EX")
+# eval_labels_file = file.path(RESULTS_DIR,"files","regulon_evaluation_labels","ENASFS.tsv.gz")
+
+# signature_file = file.path(PREP_DIR,'ground_truth_pert','ENCOREKD',"HepG2",'delta_psi-EX.tsv.gz')
+# regulons_path = file.path(RESULTS_DIR,"files","experimentally_derived_regulons_pruned-EX")
+# eval_labels_file = file.path(RESULTS_DIR,"files","regulon_evaluation_labels","ENCOREKD_HepG2.tsv.gz")
+
 # shadow_correction = "no"
 # n_tails = "two"
-# method_activity = "gsea"
+# method_activity = "viper"
 
 ##### FUNCTIONS #####
 as_regulon_network = function(regulons){
@@ -287,8 +292,9 @@ compute_curves = function(x, grouping_var){
             pert_sf_clean = .$pert_sf[is.finite(.$activity_norm)] # we replaced NAs
             
             # rank percentile
-            mean_rp = mean(.$activity_norm[.$pert_sf=="Regulator"], na.rm=TRUE)
-            median_rp = median(.$activity_norm[.$pert_sf=="Regulator"], na.rm=TRUE)
+            rank_perc = rank(.$activity_norm) / length(.$activity_norm)
+            mean_rp = mean(rank_perc[.$pert_sf=="Regulator"], na.rm=TRUE)
+            median_rp = median(rank_perc[.$pert_sf=="Regulator"], na.rm=TRUE)
             
             # ROC curves
             roc_curve = roc(
@@ -320,8 +326,9 @@ compute_curves = function(x, grouping_var){
             pert_sf_clean = .$pert_sf[is.finite(.$activity_norm)]
 
             # rank percentile
-            mean_rp = mean(.$activity_norm[.$pert_sf=="Regulator"], na.rm=TRUE)
-            median_rp = median(.$activity_norm[.$pert_sf=="Regulator"], na.rm=TRUE)
+            rank_perc = rank(.$activity_norm) / length(.$activity_norm)
+            mean_rp = mean(rank_perc[.$pert_sf=="Regulator"], na.rm=TRUE)
+            median_rp = median(rank_perc[.$pert_sf=="Regulator"], na.rm=TRUE)
             
             # ROC curves
             roc_curve = roc(
