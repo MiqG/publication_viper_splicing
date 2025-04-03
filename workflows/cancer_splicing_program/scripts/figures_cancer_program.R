@@ -19,8 +19,9 @@ ORGDB = org.Hs.eg.db
 THRESH_N_SUM = 5.5
 DRIVER_TYPES = c("Oncogenic","Tumor suppressor")
 SPLICEOSOME_STAGES = c('U1 snRNP','17S U2 snRNP','tri-snRNP','U5 snRNP','B complex','Bact complex','C complex','P complex','A complex')
-
+RISK_TYPES = c("Incr. Risk","Decr. Risk")
 EXAMPLE_GENES = c("HNRNPD","DNMT1")
+EXAMPLE_GENES_CONF = c("CPSF6","DNMT1")
 
 # formatting
 LINE_SIZE = 0.25
@@ -614,11 +615,11 @@ plot_prolif_driver = function(diff_activity, demeter2){
 
 make_roc_analysis = function(driver_classif, survival_analysis_surv){
     # roc curve based on thresholds of n_sum for each type of cancer
-    # We expect to classify Tumor Suppressor as Low Risk and Oncogenic as High Risk
+    # We expect to classify Tumor Suppressor as Decr. Risk and Oncogenic as Incr. Risk
     driver_types = c("Tumor suppressor", "Oncogenic")
     driver_levels = list(
-        "Tumor suppressor" = c("High Risk", "Low Risk"),
-        "Oncogenic" = c("Low Risk", "High Risk")
+        "Tumor suppressor" = c("Incr. Risk", "Decr. Risk"),
+        "Oncogenic" = c("Decr. Risk", "Incr. Risk")
     )
     
     driver_classif = driver_classif %>%
@@ -639,7 +640,7 @@ make_roc_analysis = function(driver_classif, survival_analysis_surv){
                 survival_analysis_surv,
                 by="GENE"
             ) %>%
-            mutate(surv_type = ifelse(coxph_coef>0, "High Risk", "Low Risk")) %>%
+            mutate(surv_type = ifelse(coxph_coef>0, "Incr. Risk", "Decr. Risk")) %>%
             count(GENE, driver_type, surv_type) %>%
             roc(response=surv_type, predictor=n, 
                 levels=driver_levels[[driver_type_oi]], direction="<")
@@ -719,30 +720,50 @@ plot_survival_analysis = function(survival_roc, survival_omic, survival_omic_con
         slice_max(n, n=1) %>%
         ungroup()
     
-    plts[["survival_analysis-cancer_all-examples-bar"]] = X %>%
+    x = X %>%
         left_join(
             survival_omic %>%            
-            mutate(surv_type = ifelse(coxph_coef>0, "High Risk", "Low Risk")),
+            mutate(
+                surv_type = ifelse(coxph_coef>0, "Incr. Risk", "Decr. Risk"),
+                surv_type = factor(surv_type, levels=RISK_TYPES),
+                is_significant = coxph_fdr < THRESH_FDR
+            ),
             by="GENE"
         ) %>%
-        count(GENE, driver_type, surv_type) %>%
+        count(GENE, driver_type, surv_type, is_significant) %>%
         drop_na() %>%
         filter(GENE %in% EXAMPLE_GENES) %>%
-        mutate(GENE = factor(GENE, levels=EXAMPLE_GENES)) %>%
+        mutate(GENE = factor(GENE, levels=EXAMPLE_GENES))
+    
+    binom_results = x %>%
+        group_by(GENE) %>%
+        summarise(
+            incr = sum(n[surv_type == "Incr. Risk"]),
+            total = sum(n),
+            pval = binom.test(incr, total, p = 0.5)$p.value
+        ) %>%
+        ungroup() %>%
+        mutate(pval_label = paste0("p = ", signif(pval, 2)))
+
+    plts[["survival_analysis-cancer_all-examples-bar"]] = x %>%
+        left_join(binom_results %>% distinct(GENE, pval_label), by="GENE") %>%
         ggbarplot(
             x="surv_type", y="n", fill="driver_type", color=NA, 
-            palette=PAL_DRIVER_TYPE, position=position_dodge(0.9), 
+            palette=PAL_DRIVER_TYPE, 
             label=TRUE, lab.family=FONT_FAMILY, lab.size=FONT_SIZE
         ) +
+        geom_text(aes(x=1.5, y=28, label=pval_label), . %>% distinct(GENE, pval_label), size=FONT_SIZE, family=FONT_FAMILY) +
         facet_wrap(~GENE) +
         theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         labs(x="Splicing Factor", y="N. Cancer Types", fill="Driver Type")
         
-    
     plts[["survival_analysis-cancers_all-violin"]] = X %>%
         left_join(
             survival_omic %>%            
-            mutate(surv_type = ifelse(coxph_coef>0, "High Risk", "Low Risk")),
+            mutate(
+                surv_type = ifelse(coxph_coef>0, "Incr. Risk", "Decr. Risk"),
+                surv_type = factor(surv_type, levels=RISK_TYPES)
+            ),
             by="GENE"
         ) %>%
         count(GENE, driver_type, surv_type) %>%
@@ -761,22 +782,40 @@ plot_survival_analysis = function(survival_roc, survival_omic, survival_omic_con
         theme_pubr() +
         labs(x="Risk with High Protein Activity", y="N. Cancers", fill="Driver Type")
     
-    
-    plts[["survival_analysis_conf-cancer_all-examples-bar"]] = X %>%
+    ## survival considering confounders
+    x = X %>%
         left_join(
             survival_omic_conf %>%            
-            mutate(surv_type = ifelse(coxph_coef>0, "High Risk", "Low Risk")),
+            mutate(
+                surv_type = ifelse(coxph_coef>0, "Incr. Risk", "Decr. Risk"),
+                surv_type = factor(surv_type, levels=RISK_TYPES),
+                is_significant = coxph_fdr < THRESH_FDR
+            ),
             by="GENE"
         ) %>%
-        count(GENE, driver_type, surv_type) %>%
+        count(GENE, driver_type, surv_type, is_significant) %>%
         drop_na() %>%
-        filter(GENE %in% EXAMPLE_GENES) %>%
-        mutate(GENE = factor(GENE, levels=EXAMPLE_GENES)) %>%
+        filter(GENE %in% EXAMPLE_GENES_CONF) %>%
+        mutate(GENE = factor(GENE, levels=EXAMPLE_GENES_CONF))
+    
+    binom_results = x %>%
+        group_by(GENE) %>%
+        summarise(
+            incr = sum(n[surv_type == "Incr. Risk"]),
+            total = sum(n),
+            pval = binom.test(incr, total, p = 0.5)$p.value
+        ) %>%
+        ungroup() %>%
+        mutate(pval_label = paste0("p = ", signif(pval, 2)))    
+    
+    plts[["survival_analysis_conf-cancer_all-examples-bar"]] = x %>%
+        left_join(binom_results %>% distinct(GENE, pval_label), by="GENE") %>%
         ggbarplot(
             x="surv_type", y="n", fill="driver_type", color=NA, 
-            palette=PAL_DRIVER_TYPE, position=position_dodge(0.9), 
+            palette=PAL_DRIVER_TYPE, 
             label=TRUE, lab.family=FONT_FAMILY, lab.size=FONT_SIZE
         ) +
+        geom_text(aes(x=1.5, y=19, label=pval_label), . %>% distinct(GENE, pval_label), size=FONT_SIZE, family=FONT_FAMILY) +
         facet_wrap(~GENE) +
         theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         labs(x="Splicing Factor", y="N. Cancer Types", fill="Driver Type")
@@ -785,7 +824,10 @@ plot_survival_analysis = function(survival_roc, survival_omic, survival_omic_con
     plts[["survival_analysis_conf-cancers_all-violin"]] = X %>%
         left_join(
             survival_omic_conf %>%            
-            mutate(surv_type = ifelse(coxph_coef>0, "High Risk", "Low Risk")),
+            mutate(
+                surv_type = ifelse(coxph_coef>0, "Incr. Risk", "Decr. Risk"),
+                surv_type = factor(surv_type, levels=RISK_TYPES)
+            ),
             by="GENE"
         ) %>%
         count(GENE, driver_type, surv_type) %>%
@@ -802,7 +844,7 @@ plot_survival_analysis = function(survival_roc, survival_omic, survival_omic_con
         ) +
         stat_compare_means(method="wilcox.test", label="p.format", size=FONT_SIZE, family=FONT_FAMILY) +
         theme_pubr() +
-        labs(x="Risk with High Protein Activity", y="N. Cancers", fill="Driver Type")    
+        labs(x="Risk with High Protein Activity", y="N. Cancers", fill="Driver Type")
     
     # different n_sum thresholds
     thresholds = c(8,10,12)
@@ -811,7 +853,10 @@ plot_survival_analysis = function(survival_roc, survival_omic, survival_omic_con
                 filter(abs(n_sum)>=thresh) %>%
                 left_join(
                     survival_omic %>%            
-                    mutate(surv_type = ifelse(coxph_coef>0, "High Risk", "Low Risk")),
+                    mutate(
+                        surv_type = ifelse(coxph_coef>0, "Incr. Risk", "Decr. Risk"),
+                        surv_type = factor(surv_type, levels=RISK_TYPES)
+                    ),
                     by="GENE"
                 ) %>%
                 count(GENE, driver_type, surv_type) %>%
@@ -841,7 +886,71 @@ plot_survival_analysis = function(survival_roc, survival_omic, survival_omic_con
         left_join(
             survival_omic %>%
             filter(cancer_type %in% driver_omic[["cancer_type"]]) %>%
-            mutate(surv_type = ifelse(coxph_coef>0, "High Risk", "Low Risk")),
+            mutate(
+                surv_type = ifelse(coxph_coef>0, "Incr. Risk", "Decr. Risk"),
+                surv_type = factor(surv_type, levels=RISK_TYPES)
+            ),
+            by="GENE"
+        ) %>%
+        count(GENE, driver_type, surv_type) %>%
+        drop_na() %>%
+        ggplot(aes(x=surv_type, y=n, group=interaction(surv_type,driver_type))) +
+        geom_violin(aes(fill=driver_type), color=NA, position=position_dodge(0.9)) +
+        geom_boxplot(fill=NA, width=0.1, outlier.size=0.1, position=position_dodge(0.9)) +
+        fill_palette(PAL_DRIVER_TYPE) +
+        geom_text(
+            aes(label=label, y=0), 
+            . %>% count(surv_type,driver_type) %>% mutate(label=paste0("n=",n)),
+            position=position_dodge(0.9),
+            size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        stat_compare_means(method="wilcox.test", label="p.format", size=FONT_SIZE, family=FONT_FAMILY) +
+        theme_pubr() +
+        labs(x="Risk with High Protein Activity", y="N. Cancers", fill="Driver Type")
+    
+    
+    plts[["survival_analysis_conf-cancers_all_vs_thresh-violin"]] = lapply(thresholds, function(thresh){
+            X %>%
+                filter(abs(n_sum)>=thresh) %>%
+                left_join(
+                    survival_omic_conf %>%            
+                    mutate(
+                        surv_type = ifelse(coxph_coef>0, "Incr. Risk", "Decr. Risk"),
+                        surv_type = factor(surv_type, levels=RISK_TYPES)
+                    ),
+                    by="GENE"
+                ) %>%
+                count(GENE, driver_type, surv_type) %>%
+                drop_na() %>%
+                mutate(n_sum_threshold = sprintf("thresh=%s",thresh))
+        }) %>% 
+        bind_rows() %>%
+        mutate(n_sum_threshold = factor(n_sum_threshold, levels=sprintf("thresh=%s",thresholds))) %>%
+        ggplot(aes(x=surv_type, y=n, group=interaction(surv_type,driver_type))) +
+        geom_violin(aes(fill=driver_type), color=NA, position=position_dodge(0.9)) +
+        geom_boxplot(fill=NA, width=0.1, outlier.size=0.1, position=position_dodge(0.9)) +
+        fill_palette(PAL_DRIVER_TYPE) +
+        geom_text(
+            aes(label=label, y=3), 
+            . %>% count(n_sum_threshold,surv_type,driver_type) %>% mutate(label=paste0("n=",n)),
+            position=position_dodge(0.9),
+            size=FONT_SIZE, family=FONT_FAMILY
+        ) +
+        stat_compare_means(method="wilcox.test", label="p.format", size=FONT_SIZE, family=FONT_FAMILY) +
+        theme_pubr() +
+        facet_wrap(~n_sum_threshold) +
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Risk with High Protein Activity", y="N. Cancers", fill="Driver Type")
+    
+    
+    plts[["survival_analysis_conf-cancers_differential-violin"]] = X %>%
+        left_join(
+            survival_omic_conf %>%
+            filter(cancer_type %in% driver_omic[["cancer_type"]]) %>%
+            mutate(
+                surv_type = ifelse(coxph_coef>0, "Incr. Risk", "Decr. Risk"),
+                surv_type = factor(surv_type, levels=RISK_TYPES)
+            ),
             by="GENE"
         ) %>%
         count(GENE, driver_type, surv_type) %>%
@@ -1197,6 +1306,8 @@ save_plots = function(plts, figs_dir){
     save_plt(plts, 'survival_analysis_conf-cancers_all-violin-activity', '.pdf', figs_dir, width=5, height=6)
     save_plt(plts, "survival_analysis-cancers_all_vs_thresh-violin-activity", '.pdf', figs_dir, width=9, height=6)
     save_plt(plts, "survival_analysis-cancers_differential-violin-activity", '.pdf', figs_dir, width=5, height=6)
+    save_plt(plts, "survival_analysis_conf-cancers_all_vs_thresh-violin-activity", '.pdf', figs_dir, width=9, height=6)
+    save_plt(plts, "survival_analysis_conf-cancers_differential-violin-activity", '.pdf', figs_dir, width=5, height=6)
     
     # survival - genexpr
     save_plt(plts, 'survival_analysis-cancers_all-roc_curves-genexpr', '.pdf', figs_dir, width=5, height=6)
@@ -1207,6 +1318,8 @@ save_plots = function(plts, figs_dir){
     save_plt(plts, 'survival_analysis_conf-cancers_all-violin-genexpr', '.pdf', figs_dir, width=5, height=6)
     save_plt(plts, "survival_analysis-cancers_all_vs_thresh-violin-genexpr", '.pdf', figs_dir, width=9, height=6)
     save_plt(plts, "survival_analysis-cancers_differential-violin-genexpr", '.pdf', figs_dir, width=5, height=6)
+    save_plt(plts, "survival_analysis_conf-cancers_all_vs_thresh-violin-genexpr", '.pdf', figs_dir, width=9, height=6)
+    save_plt(plts, "survival_analysis_conf-cancers_differential-violin-genexpr", '.pdf', figs_dir, width=5, height=6)
 
     # survival - activity with genexpr cancer splicing program labels
     save_plt(plts, 'survival_analysis-cancers_all-roc_curves-activity_w_genexpr_labs', '.pdf', figs_dir, width=5, height=6)
@@ -1217,6 +1330,8 @@ save_plots = function(plts, figs_dir){
     save_plt(plts, 'survival_analysis_conf-cancers_all-violin-activity_w_genexpr_labs', '.pdf', figs_dir, width=5, height=6)
     save_plt(plts, "survival_analysis-cancers_all_vs_thresh-violin-activity_w_genexpr_labs", '.pdf', figs_dir, width=9, height=6)
     save_plt(plts, "survival_analysis-cancers_differential-violin-activity_w_genexpr_labs", '.pdf', figs_dir, width=5, height=6)
+    save_plt(plts, "survival_analysis_conf-cancers_all_vs_thresh-violin-activity_w_genexpr_labs", '.pdf', figs_dir, width=9, height=6)
+    save_plt(plts, "survival_analysis_conf-cancers_differential-violin-activity_w_genexpr_labs", '.pdf', figs_dir, width=5, height=6)
     
     # survival - genexpr with activity cancer splicing program labels
     save_plt(plts, 'survival_analysis-cancers_all-roc_curves-genexpr_w_activity_labs', '.pdf', figs_dir, width=5, height=6)
@@ -1227,6 +1342,8 @@ save_plots = function(plts, figs_dir){
     save_plt(plts, 'survival_analysis_conf-cancers_all-violin-genexpr_w_activity_labs', '.pdf', figs_dir, width=5, height=6)
     save_plt(plts, "survival_analysis-cancers_all_vs_thresh-violin-genexpr_w_activity_labs", '.pdf', figs_dir, width=9, height=6)
     save_plt(plts, "survival_analysis-cancers_differential-violin-genexpr_w_activity_labs", '.pdf', figs_dir, width=5, height=6)
+    save_plt(plts, "survival_analysis_conf-cancers_all_vs_thresh-violin-genexpr_w_activity_labs", '.pdf', figs_dir, width=9, height=6)
+    save_plt(plts, "survival_analysis_conf-cancers_differential-violin-genexpr_w_activity_labs", '.pdf', figs_dir, width=5, height=6)
     
     # EDA programs
     save_plt(plts, "eda_programs-spliceosome_db_complex-bar", '.pdf', figs_dir, width=5, height=7)
