@@ -13,7 +13,7 @@ SAVE_PARAMS = {"sep":"\t", "index":False, "compression":"gzip"}
 EVENT_TYPES = ["EX"]
 OMIC_TYPES = EVENT_TYPES
 
-DATASETS = ["tumorigenesis"]
+DATASETS = ["tumorigenesis","Matsumoto2017"]
 
 ###### RULES ######
 rule all:
@@ -25,15 +25,15 @@ rule all:
         expand(os.path.join(RESULTS_DIR,"files","protein_activity","{dataset}-{omic_type}.tsv.gz"), dataset=DATASETS, omic_type=OMIC_TYPES),
         
         # figures
-        expand(os.path.join(RESULTS_DIR,"figures","tumorigenesis-{omic_type}"), omic_type=OMIC_TYPES)
+        #expand(os.path.join(RESULTS_DIR,"figures","tumorigenesis-{omic_type}"), omic_type=OMIC_TYPES)
         
 
 rule compute_signatures:
     input:
-        metadata = os.path.join(PREP_DIR,'metadata','tumorigenesis.tsv.gz'),
-        splicing = os.path.join(PREP_DIR,'event_psi','tumorigenesis-{omic_type}.tsv.gz'),
+        metadata = os.path.join(PREP_DIR,'metadata','{dataset}.tsv.gz'),
+        splicing = os.path.join(PREP_DIR,'event_psi','{dataset}-{omic_type}.tsv.gz'),
     output:
-        signatures = os.path.join(RESULTS_DIR,"files","signatures","tumorigenesis-{omic_type}.tsv.gz")
+        signatures = os.path.join(RESULTS_DIR,"files","signatures","{dataset}-{omic_type}.tsv.gz")
     run:
         import pandas as pd
         
@@ -57,7 +57,10 @@ rule compute_signatures:
             
             # controls will be np.nan
             if isinstance(ctls,str):
-                ctls = ctls.split("||")
+                if "||" in ctls:
+                    ctls = ctls.split("||")
+                elif "," in ctls:
+                    ctls = ctls.split(",")
                 
                 # there may be empty controls
                 if any(splicing.columns.isin(ctls)):
