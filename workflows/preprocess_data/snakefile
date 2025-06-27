@@ -76,168 +76,175 @@ CONDITIONS_RIAZ = ["PRE","ON"]
 ##### RULES #####
 rule all:
     input:
-        # get list of splicing factors
-        os.path.join(PREP_DIR,"references","splicing_factors"),
+        os.path.join(PREP_DIR,'inhouse','carcinogenesis','proteomics.tsv.gz'),
+        os.path.join(PREP_DIR,'inhouse','carcinogenesis','phosphoproteomics.tsv.gz')
         
-        # preprocess CCLE
-        os.path.join(PREP_DIR,"metadata","CCLE.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","CCLE-EX.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","CCLE-ALTA.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","CCLE-ALTD.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","CCLE-INT.tsv.gz"),
-        os.path.join(PREP_DIR,"genexpr_tpm","CCLE.tsv.gz"),
-        os.path.join(PREP_DIR,"mutations","CCLE.tsv.gz"),
+#         # get list of splicing factors
+#         os.path.join(PREP_DIR,"references","splicing_factors"),
+        
+#         # preprocess CCLE
+#         os.path.join(PREP_DIR,"metadata","CCLE.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","CCLE-EX.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","CCLE-ALTA.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","CCLE-ALTD.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","CCLE-INT.tsv.gz"),
+#         os.path.join(PREP_DIR,"genexpr_tpm","CCLE.tsv.gz"),
+#         os.path.join(PREP_DIR,"mutations","CCLE.tsv.gz"),
 
-        # preprocess ENCORE
-        os.path.join(PREP_DIR,"metadata","ENCOREKD.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","ENCOREKD-EX.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","ENCOREKD-ALTA.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","ENCOREKD-ALTD.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","ENCOREKD-INT.tsv.gz"),
-        os.path.join(PREP_DIR,"genexpr_tpm","ENCOREKD.tsv.gz"),    
+#         # preprocess ENCORE
+#         os.path.join(PREP_DIR,"metadata","ENCOREKD.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","ENCOREKD-EX.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","ENCOREKD-ALTA.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","ENCOREKD-ALTD.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","ENCOREKD-INT.tsv.gz"),
+#         os.path.join(PREP_DIR,"genexpr_tpm","ENCOREKD.tsv.gz"),    
         
-        # preprocess ENCOREKO
-        os.path.join(PREP_DIR,"metadata","ENCOREKO.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","ENCOREKO-EX.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","ENCOREKO-ALTA.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","ENCOREKO-ALTD.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","ENCOREKO-INT.tsv.gz"),
-        os.path.join(PREP_DIR,"genexpr_tpm","ENCOREKO.tsv.gz"),    
+#         # preprocess ENCOREKO
+#         os.path.join(PREP_DIR,"metadata","ENCOREKO.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","ENCOREKO-EX.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","ENCOREKO-ALTA.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","ENCOREKO-ALTD.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","ENCOREKO-INT.tsv.gz"),
+#         os.path.join(PREP_DIR,"genexpr_tpm","ENCOREKO.tsv.gz"),    
 
-        # preprocess TCGA
-        expand(os.path.join(PREP_DIR,"metadata","{cancer}.tsv.gz"), cancer=CANCER_TYPES),
-        expand(os.path.join(PREP_DIR,"event_psi","{cancer}-EX.tsv.gz"), cancer=CANCER_TYPES),
-        expand(os.path.join(PREP_DIR,"event_psi","{cancer}-ALTA.tsv.gz"), cancer=CANCER_TYPES),
-        expand(os.path.join(PREP_DIR,"event_psi","{cancer}-ALTD.tsv.gz"), cancer=CANCER_TYPES),
-        expand(os.path.join(PREP_DIR,"event_psi","{cancer}-INT.tsv.gz"), cancer=CANCER_TYPES),
-        expand(os.path.join(PREP_DIR,'genexpr_tpm','{cancer}.tsv.gz'), cancer=CANCER_TYPES),
-        expand(os.path.join(PREP_DIR,'genexpr_counts','{cancer}.tsv.gz'), cancer=CANCER_TYPES),
-        expand(os.path.join(PREP_DIR,"mutations","{cancer}.tsv.gz"), cancer=CANCER_TYPES),
-        os.path.join(PREP_DIR,"metadata","PANCAN.tsv.gz"),
+#         # preprocess TCGA
+#         expand(os.path.join(PREP_DIR,"metadata","{cancer}.tsv.gz"), cancer=CANCER_TYPES),
+#         expand(os.path.join(PREP_DIR,"event_psi","{cancer}-EX.tsv.gz"), cancer=CANCER_TYPES),
+#         expand(os.path.join(PREP_DIR,"event_psi","{cancer}-ALTA.tsv.gz"), cancer=CANCER_TYPES),
+#         expand(os.path.join(PREP_DIR,"event_psi","{cancer}-ALTD.tsv.gz"), cancer=CANCER_TYPES),
+#         expand(os.path.join(PREP_DIR,"event_psi","{cancer}-INT.tsv.gz"), cancer=CANCER_TYPES),
+#         expand(os.path.join(PREP_DIR,'genexpr_tpm','{cancer}.tsv.gz'), cancer=CANCER_TYPES),
+#         expand(os.path.join(PREP_DIR,'genexpr_counts','{cancer}.tsv.gz'), cancer=CANCER_TYPES),
+#         expand(os.path.join(PREP_DIR,"mutations","{cancer}.tsv.gz"), cancer=CANCER_TYPES),
+#         os.path.join(PREP_DIR,"metadata","PANCAN.tsv.gz"),
         
-        # preprocess ENASFS
-        os.path.join(PREP_DIR,"metadata","ENASFS.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","ENASFS-EX.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","ENASFS-ALTA.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","ENASFS-ALTD.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","ENASFS-INT.tsv.gz"),
-        os.path.join(PREP_DIR,"genexpr_tpm","ENASFS.tsv.gz"),
+#         # preprocess ENASFS
+#         os.path.join(PREP_DIR,"metadata","ENASFS.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","ENASFS-EX.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","ENASFS-ALTA.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","ENASFS-ALTD.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","ENASFS-INT.tsv.gz"),
+#         os.path.join(PREP_DIR,"genexpr_tpm","ENASFS.tsv.gz"),
         
-        # PERTURBATION SCREENS
-        ### ENCORE
-        ### log FC TPM
-        expand(os.path.join(PREP_DIR,'pert_transcriptomes','{dataset}',"{cell_line}",'log2_fold_change_tpm.tsv.gz'), cell_line=CELL_LINES, dataset=ENCORE_DATASETS),
-        ### simplify log FC TPM
-        expand(os.path.join(PREP_DIR,'ground_truth_pert','{dataset}',"{cell_line}",'log2_fold_change_tpm.tsv.gz'), cell_line=CELL_LINES, dataset=ENCORE_DATASETS),
+#         # PERTURBATION SCREENS
+#         ### ENCORE
+#         ### log FC TPM
+#         expand(os.path.join(PREP_DIR,'pert_transcriptomes','{dataset}',"{cell_line}",'log2_fold_change_tpm.tsv.gz'), cell_line=CELL_LINES, dataset=ENCORE_DATASETS),
+#         ### simplify log FC TPM
+#         expand(os.path.join(PREP_DIR,'ground_truth_pert','{dataset}',"{cell_line}",'log2_fold_change_tpm.tsv.gz'), cell_line=CELL_LINES, dataset=ENCORE_DATASETS),
         
-        ### delta PSI
-        expand(os.path.join(PREP_DIR,'pert_transcriptomes','{dataset}',"{cell_line}",'delta_psi-{event_type}.tsv.gz'), event_type=EVENT_TYPES, cell_line=CELL_LINES, dataset=ENCORE_DATASETS),
-        ### simplify delta PSI
-        expand(os.path.join(PREP_DIR,'ground_truth_pert','{dataset}',"{cell_line}",'{dpsi_type}-{event_type}.tsv.gz'), event_type=EVENT_TYPES, dpsi_type=DPSI_TYPES, cell_line=CELL_LINES, dataset=ENCORE_DATASETS),
+#         ### delta PSI
+#         expand(os.path.join(PREP_DIR,'pert_transcriptomes','{dataset}',"{cell_line}",'delta_psi-{event_type}.tsv.gz'), event_type=EVENT_TYPES, cell_line=CELL_LINES, dataset=ENCORE_DATASETS),
+#         ### simplify delta PSI
+#         expand(os.path.join(PREP_DIR,'ground_truth_pert','{dataset}',"{cell_line}",'{dpsi_type}-{event_type}.tsv.gz'), event_type=EVENT_TYPES, dpsi_type=DPSI_TYPES, cell_line=CELL_LINES, dataset=ENCORE_DATASETS),
         
-        ## ENASFS
-        ### genexpr fold change
-        os.path.join(PREP_DIR,'pert_transcriptomes','ENASFS','log2_fold_change_tpm.tsv.gz'),
-        ### simplify genexpr fold change
-        os.path.join(PREP_DIR,'ground_truth_pert','ENASFS','log2_fold_change_tpm.tsv.gz'),
-        ### delta PSI
-        expand(os.path.join(PREP_DIR,'pert_transcriptomes','ENASFS','delta_psi-{event_type}.tsv.gz'), event_type=EVENT_TYPES),
-        ### simplify delta PSI
-        expand(os.path.join(PREP_DIR,'ground_truth_pert','ENASFS','delta_psi-{event_type}.tsv.gz'), event_type=EVENT_TYPES),
+#         ## ENASFS
+#         ### genexpr fold change
+#         os.path.join(PREP_DIR,'pert_transcriptomes','ENASFS','log2_fold_change_tpm.tsv.gz'),
+#         ### simplify genexpr fold change
+#         os.path.join(PREP_DIR,'ground_truth_pert','ENASFS','log2_fold_change_tpm.tsv.gz'),
+#         ### delta PSI
+#         expand(os.path.join(PREP_DIR,'pert_transcriptomes','ENASFS','delta_psi-{event_type}.tsv.gz'), event_type=EVENT_TYPES),
+#         ### simplify delta PSI
+#         expand(os.path.join(PREP_DIR,'ground_truth_pert','ENASFS','delta_psi-{event_type}.tsv.gz'), event_type=EVENT_TYPES),
         
-        # impute event PSI
-        expand(os.path.join(PREP_DIR,'event_psi_imputed','{dataset}-{event_type}.tsv.gz'), dataset=["CardosoMoreira2020","PANCAN-SolidTissueNormal","PANCAN-PrimaryTumor"], event_type=EVENT_TYPES),
-        # benchmark event imputation
-        expand(os.path.join(PREP_DIR,'event_psi_imputation_benchmark','{dataset}-{event_type}.tsv.gz'), dataset=["CardosoMoreira2020"], event_type=EVENT_TYPES),
-        expand(os.path.join(PREP_DIR,'event_psi_imputation_benchmark','{dataset}-{event_type}-k{k}.tsv.gz'), dataset=["CardosoMoreira2020"], event_type=EVENT_TYPES, k=["2","5","10","50","100"]),
+#         # impute event PSI
+#         expand(os.path.join(PREP_DIR,'event_psi_imputed','{dataset}-{event_type}.tsv.gz'), dataset=["CardosoMoreira2020","PANCAN-SolidTissueNormal","PANCAN-PrimaryTumor"], event_type=EVENT_TYPES),
+#         # benchmark event imputation
+#         expand(os.path.join(PREP_DIR,'event_psi_imputation_benchmark','{dataset}-{event_type}.tsv.gz'), dataset=["CardosoMoreira2020"], event_type=EVENT_TYPES),
+#         expand(os.path.join(PREP_DIR,'event_psi_imputation_benchmark','{dataset}-{event_type}-k{k}.tsv.gz'), dataset=["CardosoMoreira2020"], event_type=EVENT_TYPES, k=["2","5","10","50","100"]),
         
-        # compute summary stats
-        expand(os.path.join(PREP_DIR,"summary_stats","event_psi_imputed","{dataset}-EX.tsv.gz"), dataset=DATASETS),
-        expand(os.path.join(PREP_DIR,"summary_stats","genexpr_tpm","{dataset}.tsv.gz"), dataset=DATASETS),
+#         # compute summary stats
+#         expand(os.path.join(PREP_DIR,"summary_stats","event_psi_imputed","{dataset}-EX.tsv.gz"), dataset=DATASETS),
+#         expand(os.path.join(PREP_DIR,"summary_stats","genexpr_tpm","{dataset}.tsv.gz"), dataset=DATASETS),
         
-        # preprocess DepMap
-        os.path.join(PREP_DIR,"demeter2","CCLE.tsv.gz"),
+#         # preprocess DepMap
+#         os.path.join(PREP_DIR,"demeter2","CCLE.tsv.gz"),
         
-        # preprocess Nijhuis2020
-        os.path.join(PREP_DIR,"metadata","Nijhuis2020.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","Nijhuis2020-EX.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","Nijhuis2020-ALTA.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","Nijhuis2020-ALTD.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","Nijhuis2020-INT.tsv.gz"),
-        os.path.join(PREP_DIR,"genexpr_tpm","Nijhuis2020.tsv.gz"),
+#         # preprocess Nijhuis2020
+#         os.path.join(PREP_DIR,"metadata","Nijhuis2020.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","Nijhuis2020-EX.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","Nijhuis2020-ALTA.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","Nijhuis2020-ALTD.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","Nijhuis2020-INT.tsv.gz"),
+#         os.path.join(PREP_DIR,"genexpr_tpm","Nijhuis2020.tsv.gz"),
 
-        # preprocess Lu2021
-        os.path.join(PREP_DIR,"metadata","Lu2021.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","Lu2021-EX.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","Lu2021-ALTA.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","Lu2021-ALTD.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","Lu2021-INT.tsv.gz"),
-        os.path.join(PREP_DIR,"genexpr_tpm","Lu2021.tsv.gz"),
+#         # preprocess Lu2021
+#         os.path.join(PREP_DIR,"metadata","Lu2021.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","Lu2021-EX.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","Lu2021-ALTA.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","Lu2021-ALTD.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","Lu2021-INT.tsv.gz"),
+#         os.path.join(PREP_DIR,"genexpr_tpm","Lu2021.tsv.gz"),
         
-        # preprocess ENA datasets
-        expand(os.path.join(PREP_DIR,"metadata","{dataset}.tsv.gz"), dataset=N_SAMPLES_ENA.keys()),
-        expand(os.path.join(PREP_DIR,"event_psi","{dataset}-EX.tsv.gz"), dataset=N_SAMPLES_ENA.keys()),
-        expand(os.path.join(PREP_DIR,"event_psi","{dataset}-ALTA.tsv.gz"), dataset=N_SAMPLES_ENA.keys()),
-        expand(os.path.join(PREP_DIR,"event_psi","{dataset}-ALTD.tsv.gz"), dataset=N_SAMPLES_ENA.keys()),
-        expand(os.path.join(PREP_DIR,"event_psi","{dataset}-INT.tsv.gz"), dataset=N_SAMPLES_ENA.keys()),
-        expand(os.path.join(PREP_DIR,"genexpr_tpm","{dataset}.tsv.gz"), dataset=N_SAMPLES_ENA.keys()),
+#         # preprocess ENA datasets
+#         expand(os.path.join(PREP_DIR,"metadata","{dataset}.tsv.gz"), dataset=N_SAMPLES_ENA.keys()),
+#         expand(os.path.join(PREP_DIR,"event_psi","{dataset}-EX.tsv.gz"), dataset=N_SAMPLES_ENA.keys()),
+#         expand(os.path.join(PREP_DIR,"event_psi","{dataset}-ALTA.tsv.gz"), dataset=N_SAMPLES_ENA.keys()),
+#         expand(os.path.join(PREP_DIR,"event_psi","{dataset}-ALTD.tsv.gz"), dataset=N_SAMPLES_ENA.keys()),
+#         expand(os.path.join(PREP_DIR,"event_psi","{dataset}-INT.tsv.gz"), dataset=N_SAMPLES_ENA.keys()),
+#         expand(os.path.join(PREP_DIR,"genexpr_tpm","{dataset}.tsv.gz"), dataset=N_SAMPLES_ENA.keys()),
         
-        # preprocess CardosoMoreira2020
-        os.path.join(PREP_DIR,"metadata","CardosoMoreira2020.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","CardosoMoreira2020-EX.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","CardosoMoreira2020-ALTA.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","CardosoMoreira2020-ALTD.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","CardosoMoreira2020-INT.tsv.gz"),
-        os.path.join(PREP_DIR,"genexpr_tpm","CardosoMoreira2020.tsv.gz"),
+#         # preprocess CardosoMoreira2020
+#         os.path.join(PREP_DIR,"metadata","CardosoMoreira2020.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","CardosoMoreira2020-EX.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","CardosoMoreira2020-ALTA.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","CardosoMoreira2020-ALTD.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","CardosoMoreira2020-INT.tsv.gz"),
+#         os.path.join(PREP_DIR,"genexpr_tpm","CardosoMoreira2020.tsv.gz"),
         
-        # preprocess tumorigenesis
-        os.path.join(PREP_DIR,"metadata","tumorigenesis.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","tumorigenesis-EX.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","tumorigenesis-ALTA.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","tumorigenesis-ALTD.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","tumorigenesis-INT.tsv.gz"),
-        os.path.join(PREP_DIR,"genexpr_tpm","tumorigenesis.tsv.gz"),
+#         # preprocess tumorigenesis
+#         os.path.join(PREP_DIR,"metadata","tumorigenesis.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","tumorigenesis-EX.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","tumorigenesis-ALTA.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","tumorigenesis-ALTD.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","tumorigenesis-INT.tsv.gz"),
+#         os.path.join(PREP_DIR,"genexpr_tpm","tumorigenesis.tsv.gz"),
         
-        # preprocess Matsumoto2017
-        os.path.join(PREP_DIR,"metadata","Matsumoto2017.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","Matsumoto2017-EX.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","Matsumoto2017-ALTA.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","Matsumoto2017-ALTD.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","Matsumoto2017-INT.tsv.gz"),
-        os.path.join(PREP_DIR,"genexpr_tpm","Matsumoto2017.tsv.gz"),        
+#         # preprocess Matsumoto2017
+#         os.path.join(PREP_DIR,"metadata","Matsumoto2017.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","Matsumoto2017-EX.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","Matsumoto2017-ALTA.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","Matsumoto2017-ALTD.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","Matsumoto2017-INT.tsv.gz"),
+#         os.path.join(PREP_DIR,"genexpr_tpm","Matsumoto2017.tsv.gz"),        
 
-        # preprocess Riaz2017
-        os.path.join(PREP_DIR,"metadata","Riaz2017.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","Riaz2017-EX.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","Riaz2017-ALTA.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","Riaz2017-ALTD.tsv.gz"),
-        os.path.join(PREP_DIR,"event_psi","Riaz2017-INT.tsv.gz"),
-        os.path.join(PREP_DIR,"genexpr_tpm","Riaz2017.tsv.gz"),
-        expand(os.path.join(PREP_DIR,'event_psi','Riaz2017-{condition}-{omic_type}.tsv.gz'), condition=CONDITIONS_RIAZ, omic_type=["EX"]),
+#         # preprocess Riaz2017
+#         os.path.join(PREP_DIR,"metadata","Riaz2017.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","Riaz2017-EX.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","Riaz2017-ALTA.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","Riaz2017-ALTD.tsv.gz"),
+#         os.path.join(PREP_DIR,"event_psi","Riaz2017-INT.tsv.gz"),
+#         os.path.join(PREP_DIR,"genexpr_tpm","Riaz2017.tsv.gz"),
+#         expand(os.path.join(PREP_DIR,'event_psi','Riaz2017-{condition}-{omic_type}.tsv.gz'), condition=CONDITIONS_RIAZ, omic_type=["EX"]),
         
-        # preprocess STRINGDB
-        os.path.join(PREP_DIR,'ppi','STRINGDB.tsv.gz'),
+#         # preprocess STRINGDB
+#         os.path.join(PREP_DIR,'ppi','STRINGDB.tsv.gz'),
         
-        # TCGA for network inference
-        ## split by cancer type and sample type
-        expand(os.path.join(PREP_DIR,"event_psi","{cancer}-{sample}-EX.tsv.gz"), zip, cancer=CANCER_TYPES_SPLIT, sample=SAMPLE_TYPES_SPLIT),
-        expand(os.path.join(PREP_DIR,"genexpr_tpm","{cancer}-{sample}.tsv.gz"), zip, cancer=CANCER_TYPES_SPLIT, sample=SAMPLE_TYPES_SPLIT),
-        ## concatenate by sample type
-        expand(os.path.join(PREP_DIR,"event_psi","PANCAN-{sample}-EX.tsv.gz"), sample=["SolidTissueNormal","PrimaryTumor"]),
-        expand(os.path.join(PREP_DIR,"genexpr_tpm","PANCAN-{sample}.tsv.gz"), sample=["SolidTissueNormal","PrimaryTumor"]),
+#         # TCGA for network inference
+#         ## split by cancer type and sample type
+#         expand(os.path.join(PREP_DIR,"event_psi","{cancer}-{sample}-EX.tsv.gz"), zip, cancer=CANCER_TYPES_SPLIT, sample=SAMPLE_TYPES_SPLIT),
+#         expand(os.path.join(PREP_DIR,"genexpr_tpm","{cancer}-{sample}.tsv.gz"), zip, cancer=CANCER_TYPES_SPLIT, sample=SAMPLE_TYPES_SPLIT),
+#         ## concatenate by sample type
+#         expand(os.path.join(PREP_DIR,"event_psi","PANCAN-{sample}-EX.tsv.gz"), sample=["SolidTissueNormal","PrimaryTumor"]),
+#         expand(os.path.join(PREP_DIR,"genexpr_tpm","PANCAN-{sample}.tsv.gz"), sample=["SolidTissueNormal","PrimaryTumor"]),
         
-        # POSTAR3 preprocessing
-        os.path.join(PREP_DIR,"clip_peaks_mapped","POSTAR3.tsv.gz"),
+#         # POSTAR3 preprocessing
+#         os.path.join(PREP_DIR,"clip_peaks_mapped","POSTAR3.tsv.gz"),
         
-        # preprocess SplicingLore
-        os.path.join(PREP_DIR,"metadata","SplicingLore.tsv.gz"),
-        os.path.join(PREP_DIR,"ground_truth_pert","SplicingLore","delta_psi-EX.tsv.gz"),
+#         # preprocess SplicingLore
+#         os.path.join(PREP_DIR,"metadata","SplicingLore.tsv.gz"),
+#         os.path.join(PREP_DIR,"ground_truth_pert","SplicingLore","delta_psi-EX.tsv.gz"),
 
-        # EDA data figures
-        os.path.join(RESULTS_DIR,'figures','eda'),
+#         # EDA data figures
+#         os.path.join(RESULTS_DIR,'figures','eda'),
         
-        # figures benchmark KNN imputation
-        os.path.join(RESULTS_DIR,'figures','benchmark_imputation')
+#         # figures benchmark KNN imputation
+#         os.path.join(RESULTS_DIR,'figures','benchmark_imputation'),
+        
+#         # preprocess inhouse proteomics
+#         os.path.join(PREP_DIR,'inhouse','carcinogenesis','proteomics.tsv.gz'),
+#         os.path.join(PREP_DIR,'inhouse','carcinogenesis','phosphoproteomics.tsv.gz')
 
 
 rule make_list_splicing_factors:
@@ -2628,5 +2635,90 @@ rule preprocess_splicinglore:
         # save
         metadata.to_csv(output.metadata, **SAVE_PARAMS)
         perts.to_csv(output.perts, **SAVE_PARAMS)
+        
+        print("Done!")
+        
+        
+rule prep_proteomics_carcinogenesis:
+    input:
+        proteomics = os.path.join(RAW_DIR,'inhouse','20250616-proteomics_carcinogenesis','2025NK023_Proteome','2025NK023_CASE_001to008_Proteome_table-results.xlsx'),
+        phosphoproteomics = os.path.join(RAW_DIR,'inhouse','20250616-proteomics_carcinogenesis','2025NY002_Phosphoproteome','2025NY002_CASE_001to008_Phosphoproteome_Table-results.xlsx')
+    output:
+        proteomics = os.path.join(PREP_DIR,'inhouse','carcinogenesis','proteomics.tsv.gz'),
+        phosphoproteomics = os.path.join(PREP_DIR,'inhouse','carcinogenesis','phosphoproteomics.tsv.gz')
+    run:
+        import pandas as pd
+        import numpy as np
+        
+        # load
+        proteomics = pd.read_excel(input.proteomics, sheet_name='Proteins.pg_matrix', skiprows=3)
+        phosphoproteomics = pd.read_excel(input.phosphoproteomics, sheet_name='Phosphopeptides.pr_matrix', skiprows=3)
+        
+        # prep
+        ## proteomics
+        ### rename
+        mapping = {
+            "Y:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NK023_CASE_001_02_500ng.raw": "BJ_IMMORTALIZED__rep1",
+            "Y:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NK023_CASE_002_02_500ng.raw": "BJ_IMMORTALIZED__rep2",
+            "Y:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NK023_CASE_003_01_500ng.raw": "BJ_TRANSFORMED__rep1",
+            "Y:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NK023_CASE_004_01_500ng.raw": "BJ_TRANSFORMED__rep2",
+            "Y:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NK023_CASE_005_01_500ng.raw": "BJ_METASTATIC__rep1",
+            "Y:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NK023_CASE_006_01_500ng.raw": "BJ_METASTATIC__rep2",
+            "Y:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NK023_CASE_007_01_500ng.raw": "BJ_PRIMARY__rep1",
+            "Y:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NK023_CASE_008_01_500ng.raw": "BJ_PRIMARY__rep2"
+        }
+        proteomics = proteomics.rename(columns=mapping)
+        ### filter human genes
+        idx = proteomics["Protein.Names"].str.contains("HUMAN") | (~proteomics["Protein.Names"].isnull())
+        proteomics = proteomics.loc[idx]
+        ### normalize
+        cols_oi = list(mapping.values())
+        proteomics[cols_oi] = 1e6 * (proteomics[cols_oi] / proteomics[cols_oi].sum(axis=0).values.reshape(1,-1))
+        ### log-transform
+        proteomics[cols_oi] = np.log2(proteomics[cols_oi]+1)
+        
+        ## phosphoproteomics
+        ### drop columns
+        todrop = [
+            'Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_001_01_45pto.raw.1',
+            'Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_002_01_45pto.raw.1',
+            'Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_003_01_45pto.raw.1',
+            'Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_004_01_45pto.raw.1',
+            'Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_005_01_45pto.raw.1',
+            'Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_006_01_45pto.raw.1',
+            'Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_007_01_45pto.raw.1',
+            'Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_008_01_45pto.raw.1',
+            'Log10 fold change', 
+            'pvalue', 
+            'Log10 fold change.1', 
+            'pvalue.1',
+            'Log10 fold change.2', 
+            'pvalue.2'
+        ]
+        phosphoproteomics = phosphoproteomics.drop(columns=todrop)
+        ### rename
+        mapping = {
+            "Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_001_01_45pto.raw": "BJ_IMMORTALIZED__rep1",
+            "Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_002_01_45pto.raw": "BJ_IMMORTALIZED__rep2",
+            "Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_003_01_45pto.raw": "BJ_TRANSFORMED__rep1",
+            "Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_004_01_45pto.raw": "BJ_TRANSFORMED__rep2",
+            "Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_005_01_45pto.raw": "BJ_METASTATIC__rep1",
+            "Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_006_01_45pto.raw": "BJ_METASTATIC__rep2",
+            "Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_007_01_45pto.raw": "BJ_PRIMARY__rep1",
+            "Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_008_01_45pto.raw": "BJ_PRIMARY__rep2"
+        }
+        phosphoproteomics = phosphoproteomics.rename(columns=mapping)
+        ### filter human genes
+        idx = phosphoproteomics["Protein.Names"].str.contains("HUMAN") | (~phosphoproteomics["Protein.Names"].isnull())
+        phosphoproteomics = phosphoproteomics.loc[idx]
+        ### normalize
+        cols_oi = list(mapping.values())
+        phosphoproteomics[cols_oi] = 1e6 * (phosphoproteomics[cols_oi] / phosphoproteomics[cols_oi].sum(axis=0).values.reshape(1,-1))
+        ### log-transform
+        phosphoproteomics[cols_oi] = np.log2(phosphoproteomics[cols_oi]+1)
+       
+        # save
+        proteomics.to_csv(output.proteomics, **SAVE_PARAMS)
+        phosphoproteomics.to_csv(output.phosphoproteomics, **SAVE_PARAMS)
         
         print("Done!")
