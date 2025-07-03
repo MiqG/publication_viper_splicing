@@ -2642,7 +2642,7 @@ rule preprocess_splicinglore:
 rule prep_proteomics_carcinogenesis:
     input:
         proteomics = os.path.join(RAW_DIR,'inhouse','20250616-proteomics_carcinogenesis','2025NK023_Proteome','2025NK023_CASE_001to008_Proteome_table-results.xlsx'),
-        phosphoproteomics = os.path.join(RAW_DIR,'inhouse','20250616-proteomics_carcinogenesis','2025NY002_Phosphoproteome','2025NY002_CASE_001to008_Phosphoproteome_Table-results.xlsx')
+        phosphoproteomics = os.path.join(RAW_DIR,'inhouse','20250616-proteomics_carcinogenesis','2025NY002_Phosphoproteome_FINAL','2025NY002_CASE_001to008_Phosphoproteome_Table-results_FINAL_reported.xlsx')
     output:
         proteomics = os.path.join(PREP_DIR,'inhouse','carcinogenesis','proteomics.tsv.gz'),
         phosphoproteomics = os.path.join(PREP_DIR,'inhouse','carcinogenesis','phosphoproteomics.tsv.gz')
@@ -2652,7 +2652,7 @@ rule prep_proteomics_carcinogenesis:
         
         # load
         proteomics = pd.read_excel(input.proteomics, sheet_name='Proteins.pg_matrix', skiprows=3)
-        phosphoproteomics = pd.read_excel(input.phosphoproteomics, sheet_name='Phosphopeptides.pr_matrix', skiprows=3)
+        phosphoproteomics = pd.read_excel(input.phosphoproteomics, sheet_name='All Phosphopeptides', skiprows=3)
         
         # prep
         ## proteomics
@@ -2679,23 +2679,23 @@ rule prep_proteomics_carcinogenesis:
         
         ## phosphoproteomics
         ### drop columns
-        todrop = [
-            'Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_001_01_45pto.raw.1',
-            'Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_002_01_45pto.raw.1',
-            'Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_003_01_45pto.raw.1',
-            'Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_004_01_45pto.raw.1',
-            'Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_005_01_45pto.raw.1',
-            'Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_006_01_45pto.raw.1',
-            'Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_007_01_45pto.raw.1',
-            'Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_008_01_45pto.raw.1',
-            'Log10 fold change', 
-            'pvalue', 
-            'Log10 fold change.1', 
-            'pvalue.1',
-            'Log10 fold change.2', 
-            'pvalue.2'
-        ]
-        phosphoproteomics = phosphoproteomics.drop(columns=todrop)
+        # todrop = [
+        #     'Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_001_01_45pto.raw.1',
+        #     'Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_002_01_45pto.raw.1',
+        #     'Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_003_01_45pto.raw.1',
+        #     'Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_004_01_45pto.raw.1',
+        #     'Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_005_01_45pto.raw.1',
+        #     'Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_006_01_45pto.raw.1',
+        #     'Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_007_01_45pto.raw.1',
+        #     'Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_008_01_45pto.raw.1',
+        #     'Log10 fold change', 
+        #     'pvalue', 
+        #     'Log10 fold change.1', 
+        #     'pvalue.1',
+        #     'Log10 fold change.2', 
+        #     'pvalue.2'
+        # ]
+        # phosphoproteomics = phosphoproteomics.drop(columns=todrop)
         ### rename
         mapping = {
             "Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_001_01_45pto.raw": "BJ_IMMORTALIZED__rep1",

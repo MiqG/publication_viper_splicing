@@ -27,9 +27,10 @@ FONT_SIZE = 2 # for additional labels
 FONT_FAMILY = "Arial"
 
 PAL_DRIVER_TYPE = c(
-    "Non-driver"="lightgrey",
-    "Tumor suppressor"="#6C98B3",
-    "Oncogenic"="#F6AE2D"
+    "Random"="lightgrey",
+    "Non-driver"="darkred",
+    "Oncogenic"="#F6AE2D",
+    "Tumor suppressor"="#6C98B3"
 )
 
 # Development
@@ -58,7 +59,7 @@ PAL_DRIVER_TYPE = c(
 # figs_dir = file.path(RESULTS_DIR,"figures","tumorigenesis-EX")
 
 ##### FUNCTIONS #####
-plot_tumorigenesis = function(protein_activity, genexpr, proteomics_inhouse, phospho_inhouse){
+plot_tumorigenesis = function(protein_activity, genexpr, proteomics_inhouse, phospho_inhouse, splicing_danielsson){
     plts = list()
     
     X = protein_activity %>%
@@ -104,6 +105,36 @@ plot_tumorigenesis = function(protein_activity, genexpr, proteomics_inhouse, pho
         theme_pubr() +
         labs(x="Cell Line", y="Protein Activity", fill="Driver Type")
 
+    # random control
+    X = protein_activity %>%
+        group_by(cell_line_name, study_accession) %>%
+        mutate(driver_type = sample(driver_type)) %>%
+        ungroup() %>%
+        drop_na(driver_type) %>%
+        group_by(cell_line_name, driver_type, study_accession, GENE) %>%
+        summarize(activity = median(activity)) %>%
+        ungroup() %>%
+        filter(study_accession=="PRJNA193487") %>%
+        mutate(cell_line_name=factor(
+            cell_line_name, levels=c("BJ_PRIMARY","BJ_IMMORTALIZED",
+                                     "BJ_TRANSFORMED","BJ_METASTATIC")
+        ))
+    
+    plts[["tumorigenesis-cell_line_vs_activity-random-violin"]] = X %>%
+        filter(cell_line_name!="BJ_PRIMARY") %>%
+        ggplot(aes(x=cell_line_name, y=activity, group=interaction(cell_line_name,driver_type))) +
+        geom_violin(aes(fill=driver_type), color=NA, position=position_dodge(0.9)) +
+        geom_boxplot(width=0.1, outlier.size=0.1, fill=NA, color="black", position=position_dodge(0.9)) +
+        fill_palette(PAL_DRIVER_TYPE) +
+        stat_compare_means(method="wilcox.test", label="p.format", size=FONT_SIZE, family=FONT_FAMILY) + 
+        geom_text(
+            aes(y=-3, label=label, group=driver_type),
+            . %>% count(cell_line_name, driver_type) %>% mutate(label=paste0("n=",n)),
+            size=FONT_SIZE, family=FONT_FAMILY, position=position_dodge(0.9)
+        ) +
+        theme_pubr() +
+        labs(x="Cell Line", y="Protein Activity", fill="Driver Type")
+    
     # genexpr
     X = genexpr %>%
         group_by(cell_line_name, driver_type, study_accession, GENE) %>%
@@ -112,17 +143,17 @@ plot_tumorigenesis = function(protein_activity, genexpr, proteomics_inhouse, pho
         filter(study_accession=="PRJNA193487") %>%
         mutate(
             cell_line_name=factor(
-                cell_line_name, levels=c("BJ_PRIMARY","BJ_IMMORTALIZED",
-                                         "BJ_TRANSFORMED","BJ_METASTATIC")
-                )
+                cell_line_name, levels=c("BJ_PRIMARY","BJ_IMMORTALIZED","BJ_TRANSFORMED","BJ_METASTATIC")
+            )
         )
     ctl_genexpr = X %>%
         filter(cell_line_name=="BJ_PRIMARY") %>%
-        distinct(genexpr_tpm, GENE) %>%
+        distinct(genexpr_tpm, GENE, driver_type) %>%
         dplyr::rename(ctl_tpm = genexpr_tpm)
     X = X %>%
-        left_join(ctl_genexpr, by="GENE") %>%
-        mutate(genexpr_tpm_fc = genexpr_tpm - ctl_tpm)
+        left_join(ctl_genexpr, by=c("GENE","driver_type")) %>%
+        mutate(genexpr_tpm_fc = genexpr_tpm - ctl_tpm) %>%
+        mutate(driver_type = factor(driver_type, levels=names(PAL_DRIVER_TYPE)))
 
     plts[["tumorigenesis-cell_line_vs_genexpr_fc-violin"]] = X %>%
         filter(cell_line_name!="BJ_PRIMARY") %>%
@@ -158,6 +189,63 @@ plot_tumorigenesis = function(protein_activity, genexpr, proteomics_inhouse, pho
         theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
         labs(x="Cell Line", y="|Gene Expression log2FC|", fill="Driver Type")
     
+    # splicing
+    X = splicing_danielsson %>%
+        group_by(cell_line_name, driver_type, event_gene, event_type) %>%
+        summarize(psi = median(psi, na.rm=TRUE)) %>%
+        ungroup() %>%
+        mutate(
+            event_type = factor(event_type, levels=c("exon","intron","altd","alta"))
+        )
+    
+    ctl_splicing = X %>%
+        filter(cell_line_name=="BJ_PRIMARY") %>%
+        distinct(psi, event_gene, driver_type) %>%
+        dplyr::rename(ctl_psi = psi) %>%
+        drop_na(ctl_psi)
+    X = X %>%
+        left_join(ctl_splicing, by=c("event_gene","driver_type")) %>%
+        filter(cell_line_name!="BJ_PRIMARY") %>%
+        mutate(
+            delta_psi = psi - ctl_psi,
+            cell_line_name = factor(
+                cell_line_name, levels=c("BJ_IMMORTALIZED","BJ_TRANSFORMED","BJ_METASTATIC")
+            )
+        ) %>%
+        mutate(driver_type = factor(driver_type, levels=names(PAL_DRIVER_TYPE)))
+    
+    plts[["tumorigenesis-cell_line_vs_splicing_dpsi-violin"]] = X %>%
+        ggplot(aes(x=driver_type, y=delta_psi)) +
+        geom_violin(aes(fill=driver_type), color=NA, position=position_dodge(0.9)) +
+        geom_boxplot(width=0.1, outlier.size=0.1, fill=NA, color="black", position=position_dodge(0.9)) +
+        fill_palette(PAL_DRIVER_TYPE) +
+        stat_compare_means(ref.group="Non-driver", method="wilcox.test", label="p.format", size=FONT_SIZE, family=FONT_FAMILY, angle=20) + 
+        geom_text(
+            aes(y=-55, label=label, group=driver_type),
+            . %>% count(cell_line_name, driver_type) %>% mutate(label=paste0("n=",n)),
+            size=FONT_SIZE, family=FONT_FAMILY, position=position_dodge(0.9)
+        ) +
+        theme_pubr() +
+        facet_wrap(~event_type+cell_line_name, nrow=1) +
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Cell Line", y="Splicing DeltaPSI", fill="Driver Type")
+    
+    plts[["tumorigenesis-cell_line_vs_abs_splicing_dpsi-violin"]] = X %>%
+        ggplot(aes(x=driver_type, y=abs(delta_psi))) +
+        geom_violin(aes(fill=driver_type), color=NA, position=position_dodge(0.9)) +
+        geom_boxplot(width=0.1, outlier.size=0.1, fill=NA, color="black", position=position_dodge(0.9)) +
+        fill_palette(PAL_DRIVER_TYPE) +
+        stat_compare_means(ref.group="Non-driver", method="wilcox.test", label="p.format", size=FONT_SIZE, family=FONT_FAMILY, angle=20) + 
+        geom_text(
+            aes(y=-3, label=label, group=driver_type),
+            . %>% count(cell_line_name, driver_type) %>% mutate(label=paste0("n=",n)),
+            size=FONT_SIZE, family=FONT_FAMILY, position=position_dodge(0.9)
+        ) +
+        theme_pubr() +
+        facet_wrap(~event_type+cell_line_name, nrow=1) +
+        theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
+        labs(x="Cell Line", y="|Splicing DeltaPSI|", fill="Driver Type")    
+    
     # proteomics
     X = proteomics_inhouse %>%
         group_by(cell_line_name, driver_type, GENE, Protein.Names, ENSEMBL) %>%
@@ -171,12 +259,13 @@ plot_tumorigenesis = function(protein_activity, genexpr, proteomics_inhouse, pho
         )
     ctl_proteomics = X %>%
         filter(cell_line_name=="BJ_PRIMARY") %>%
-        distinct(proteomics_cpm, GENE, Protein.Names, ENSEMBL) %>%
+        distinct(proteomics_cpm, GENE, Protein.Names, ENSEMBL, driver_type) %>%
         dplyr::rename(ctl_cpm = proteomics_cpm) %>%
         drop_na(ctl_cpm)
     X = X %>%
-        left_join(ctl_proteomics, by=c("GENE","Protein.Names","ENSEMBL")) %>%
-        mutate(proteomics_cpm_fc = proteomics_cpm - ctl_cpm)
+        left_join(ctl_proteomics, by=c("GENE","Protein.Names","ENSEMBL","driver_type")) %>%
+        mutate(proteomics_cpm_fc = proteomics_cpm - ctl_cpm) %>%
+        mutate(driver_type = factor(driver_type, levels=names(PAL_DRIVER_TYPE)))
 
     plts[["tumorigenesis-cell_line_vs_proteomics_fc-violin"]] = X %>%
         filter(cell_line_name!="BJ_PRIMARY") %>%
@@ -193,7 +282,7 @@ plot_tumorigenesis = function(protein_activity, genexpr, proteomics_inhouse, pho
         theme_pubr() +
         facet_wrap(~cell_line_name) +
         theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
-        labs(x="Cell Line", y="Protein Abundance log2FC", fill="Driver Type")
+        labs(x="Cell Line", y="Protein MaxLFQ log2FC", fill="Driver Type")
     
     plts[["tumorigenesis-cell_line_vs_abs_proteomics_fc-violin"]] = X %>%
         filter(cell_line_name!="BJ_PRIMARY") %>%
@@ -210,7 +299,7 @@ plot_tumorigenesis = function(protein_activity, genexpr, proteomics_inhouse, pho
         theme_pubr() +
         facet_wrap(~cell_line_name) +
         theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
-        labs(x="Cell Line", y="|Protein Abundance log2FC|", fill="Driver Type")
+        labs(x="Cell Line", y="|Protein MaxLFQ log2FC|", fill="Driver Type")
     
     # phosphoproteomics
     X = phospho_inhouse %>%
@@ -231,7 +320,8 @@ plot_tumorigenesis = function(protein_activity, genexpr, proteomics_inhouse, pho
         drop_na(ctl_cpm)
     X = X %>%
         left_join(ctl_phospho, by="GENE") %>%
-        mutate(phospho_cpm_fc = phospho_cpm - ctl_cpm)
+        mutate(phospho_cpm_fc = phospho_cpm - ctl_cpm) %>%
+        mutate(driver_type = factor(driver_type, levels=names(PAL_DRIVER_TYPE)))
 
     plts[["tumorigenesis-cell_line_vs_phospho_fc-violin"]] = X %>%
         filter(cell_line_name!="BJ_PRIMARY") %>%
@@ -248,7 +338,7 @@ plot_tumorigenesis = function(protein_activity, genexpr, proteomics_inhouse, pho
         theme_pubr() +
         facet_wrap(~cell_line_name) +
         theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
-        labs(x="Cell Line", y="Phosphorylation Abundance log2FC", fill="Driver Type")
+        labs(x="Cell Line", y="Phosphopeptide LFQ log2FC", fill="Driver Type")
     
     plts[["tumorigenesis-cell_line_vs_abs_phospho_fc-violin"]] = X %>%
         filter(cell_line_name!="BJ_PRIMARY") %>%
@@ -265,37 +355,7 @@ plot_tumorigenesis = function(protein_activity, genexpr, proteomics_inhouse, pho
         theme_pubr() +
         facet_wrap(~cell_line_name) +
         theme(strip.text.x = element_text(size=6, family=FONT_FAMILY)) +
-        labs(x="Cell Line", y="|Phosphorylation Abundance log2FC|", fill="Driver Type")
-    
-    # random control
-    X = protein_activity %>%
-        group_by(cell_line_name, study_accession) %>%
-        mutate(driver_type = sample(driver_type)) %>%
-        ungroup() %>%
-        drop_na(driver_type) %>%
-        group_by(cell_line_name, driver_type, study_accession, GENE) %>%
-        summarize(activity = median(activity)) %>%
-        ungroup() %>%
-        filter(study_accession=="PRJNA193487") %>%
-        mutate(cell_line_name=factor(
-            cell_line_name, levels=c("BJ_PRIMARY","BJ_IMMORTALIZED",
-                                     "BJ_TRANSFORMED","BJ_METASTATIC")
-        ))
-    
-    plts[["tumorigenesis-cell_line_vs_activity-random-violin"]] = X %>%
-        filter(cell_line_name!="BJ_PRIMARY") %>%
-        ggplot(aes(x=cell_line_name, y=activity, group=interaction(cell_line_name,driver_type))) +
-        geom_violin(aes(fill=driver_type), color=NA, position=position_dodge(0.9)) +
-        geom_boxplot(width=0.1, outlier.size=0.1, fill=NA, color="black", position=position_dodge(0.9)) +
-        fill_palette(PAL_DRIVER_TYPE) +
-        stat_compare_means(method="wilcox.test", label="p.format", size=FONT_SIZE, family=FONT_FAMILY) + 
-        geom_text(
-            aes(y=-3, label=label, group=driver_type),
-            . %>% count(cell_line_name, driver_type) %>% mutate(label=paste0("n=",n)),
-            size=FONT_SIZE, family=FONT_FAMILY, position=position_dodge(0.9)
-        ) +
-        theme_pubr() +
-        labs(x="Cell Line", y="Protein Activity", fill="Driver Type")
+        labs(x="Cell Line", y="|Phosphopeptide LFQ log2FC|", fill="Driver Type")
     
     return(plts)
 }
@@ -331,10 +391,10 @@ plot_associations = function(associations){
 }
 
 make_plots = function(
-    protein_activity, genexpr, proteomics_inhouse, phospho_inhouse, associations
+    protein_activity, genexpr, proteomics_inhouse, phospho_inhouse, splicing_danielsson, associations
 ){
     plts = list(
-        plot_tumorigenesis(protein_activity, genexpr, proteomics_inhouse, phospho_inhouse),
+        plot_tumorigenesis(protein_activity, genexpr, proteomics_inhouse, phospho_inhouse, splicing_danielsson),
         plot_associations(associations)
     )
     plts = do.call(c,plts)
@@ -372,15 +432,21 @@ save_plt = function(plts, plt_name, extension='.pdf',
 save_plots = function(plts, figs_dir){
     save_plt(plts, "tumorigenesis-cell_line_vs_activity-danielsson-violin", '.pdf', figs_dir, width=6, height=6)
     save_plt(plts, "tumorigenesis-cell_line_vs_activity-matsumoto-violin", '.pdf', figs_dir, width=6, height=6)
-    save_plt(plts, "tumorigenesis-cell_line_vs_abs_genexpr_fc-violin", '.pdf', figs_dir, width=7, height=6)
-    save_plt(plts, "tumorigenesis-cell_line_vs_genexpr_fc-violin", '.pdf', figs_dir, width=7, height=6)
-    save_plt(plts, "tumorigenesis-cell_line_vs_abs_proteomics_fc-violin", '.pdf', figs_dir, width=7, height=6)
-    save_plt(plts, "tumorigenesis-cell_line_vs_proteomics_fc-violin", '.pdf', figs_dir, width=7, height=6)
-    save_plt(plts, "tumorigenesis-cell_line_vs_abs_phospho_fc-violin", '.pdf', figs_dir, width=7, height=6)
-    save_plt(plts, "tumorigenesis-cell_line_vs_phospho_fc-violin", '.pdf', figs_dir, width=7, height=6)
     save_plt(plts, "tumorigenesis-cell_line_vs_activity-random-violin", '.pdf', figs_dir, width=6, height=6)
     
-    save_plt(plts, "associations-driver_type_vs_coefficients-bar", '.pdf', figs_dir, width=20, height=16)
+    save_plt(plts, "tumorigenesis-cell_line_vs_abs_genexpr_fc-violin", '.pdf', figs_dir, width=7, height=6)
+    save_plt(plts, "tumorigenesis-cell_line_vs_genexpr_fc-violin", '.pdf', figs_dir, width=7, height=6)
+
+    save_plt(plts, "tumorigenesis-cell_line_vs_abs_splicing_dpsi-violin", '.pdf', figs_dir, width=23, height=6)
+    save_plt(plts, "tumorigenesis-cell_line_vs_splicing_dpsi-violin", '.pdf', figs_dir, width=23, height=6)
+
+    save_plt(plts, "tumorigenesis-cell_line_vs_abs_proteomics_fc-violin", '.pdf', figs_dir, width=7, height=6)
+    save_plt(plts, "tumorigenesis-cell_line_vs_proteomics_fc-violin", '.pdf', figs_dir, width=7, height=6)
+
+    save_plt(plts, "tumorigenesis-cell_line_vs_abs_phospho_fc-violin", '.pdf', figs_dir, width=7, height=6)
+    save_plt(plts, "tumorigenesis-cell_line_vs_phospho_fc-violin", '.pdf', figs_dir, width=7, height=6)
+
+    save_plt(plts, "associations-driver_type_vs_coefficients-bar", '.pdf', figs_dir, width=21, height=12)
 }
 
 
@@ -432,18 +498,18 @@ main = function(){
     # load
     annot = read_tsv(annotation_file)
     driver_types = read_tsv(driver_types_file)
-    genexpr_danielsson = read_tsv(genexpr_danielsson_file)
-    protein_activity_danielsson = read_tsv(protein_activity_danielsson_file)
-    exons_danielsson = read_tsv(exons_danielsson_file)
-    introns_danielsson = read_tsv(introns_danielsson_file)
-    alta_danielsson = read_tsv(alta_danielsson_file)
-    altd_danielsson = read_tsv(altd_danielsson_file)
     metadata_danielsson = read_tsv(metadata_danielsson_file)
-    proteomics_inhouse = read_tsv(proteomics_inhouse_file)
-    phospho_inhouse = read_tsv(phospho_inhouse_file)
-    genexpr_matsumoto = read_tsv(genexpr_matsumoto_file)
-    protein_activity_matsumoto = read_tsv(protein_activity_matsumoto_file)
+    protein_activity_danielsson = read_tsv(protein_activity_danielsson_file)
+    genexpr_danielsson_raw = read_tsv(genexpr_danielsson_file)
+    exons_danielsson_raw = read_tsv(exons_danielsson_file)
+    introns_danielsson_raw = read_tsv(introns_danielsson_file)
+    alta_danielsson_raw = read_tsv(alta_danielsson_file)
+    altd_danielsson_raw = read_tsv(altd_danielsson_file)
+    proteomics_inhouse_raw = read_tsv(proteomics_inhouse_file)
+    phospho_inhouse_raw = read_tsv(phospho_inhouse_file)
     metadata_matsumoto = read_tsv(metadata_matsumoto_file)
+    protein_activity_matsumoto = read_tsv(protein_activity_matsumoto_file)
+    genexpr_matsumoto = read_tsv(genexpr_matsumoto_file)
     splicing_factors = read_tsv(splicing_factors_file)
     gene_info = read_tsv(gene_info_file) %>% 
         dplyr::rename(GENE=`Approved symbol`, ENSEMBL=`Ensembl gene ID`) %>%
@@ -503,12 +569,21 @@ main = function(){
         left_join(driver_types, by=c("regulator"="ENSEMBL"))
     
     ## gene expression
-    genexpr_danielsson = genexpr_danielsson %>%
+    genexpr_danielsson = genexpr_danielsson_raw %>%
         filter(ID%in%splicing_factors[["ENSEMBL"]]) %>%
         pivot_longer(-ID, names_to="sampleID", values_to="genexpr_tpm") %>%
         left_join(metadata_danielsson, by="sampleID") %>%
         drop_na(condition, genexpr_tpm) %>%
         filter(study_accession=="PRJNA193487")
+    n_sfs = length(unique(genexpr_danielsson[["ID"]]))
+    
+    genexpr_danielsson_rand = genexpr_danielsson_raw %>%
+        filter(!ID%in%splicing_factors[["ENSEMBL"]]) %>% # not SFs
+        sample_n(n_sfs) %>%
+        pivot_longer(-ID, names_to="sampleID", values_to="genexpr_tpm") %>%
+        left_join(metadata_danielsson, by="sampleID") %>%
+        drop_na(condition, genexpr_tpm) %>%
+        filter(study_accession=="PRJNA193487")    
     
     genexpr_matsumoto = genexpr_matsumoto %>%
         filter(ID%in%splicing_factors[["ENSEMBL"]]) %>%
@@ -520,8 +595,11 @@ main = function(){
             PERT_GENE = NA
         )
     
-    genexpr = genexpr_danielsson %>%
-        bind_rows(genexpr_matsumoto) %>%
+    genexpr = bind_rows(
+            genexpr_danielsson %>% mutate(is_random=FALSE),
+            genexpr_danielsson_rand %>% mutate(is_random=TRUE),
+            genexpr_matsumoto %>% mutate(is_random=FALSE)
+        ) %>%
         mutate(
             condition_lab = sprintf(
                 "%s (%s%s) (%s%s) | %s | %s", condition, pert_time, pert_time_units, 
@@ -532,49 +610,115 @@ main = function(){
         # summarize replicates
         group_by(condition_lab, condition, pert_time, pert_time_units, 
                  pert_concentration, pert_concentration_units, cell_line_name, study_accession,
-                 PERT_ENSEMBL, PERT_GENE, ID) %>%
+                 PERT_ENSEMBL, PERT_GENE, ID, is_random) %>%
         summarize(
             genexpr_tpm = median(genexpr_tpm, na.rm=TRUE),
         ) %>%
         ungroup() %>%
         left_join(gene_info, by=c("ID"="ENSEMBL")) %>%
         left_join(driver_types, by=c("ID"="ENSEMBL", "GENE")) %>%
-        mutate(driver_type = replace_na(driver_type, "Non-driver"))
+        mutate(
+            driver_type = case_when(
+                !is.na(driver_type) ~ driver_type,
+                is.na(driver_type) & !is_random ~ "Non-driver",
+                is.na(driver_type) & is_random ~ "Random"
+            )
+        )
 
     # splicing of splicing factors
-    events_oi = annot %>% filter(GENE%in%driver_types[["GENE"]]) %>% distinct(EVENT,GENE)
-    exons_danielsson = exons_danielsson %>%
+    events_oi = annot %>% filter(GENE%in%splicing_factors[["GENE"]]) %>% distinct(EVENT,GENE)
+    exons_danielsson = exons_danielsson_raw %>%
         filter(EVENT %in% events_oi[["EVENT"]]) %>%
         pivot_longer(-EVENT, names_to="sampleID", values_to="psi") %>%
         drop_na(psi) %>%
         left_join(metadata_danielsson, by="sampleID") %>%
         drop_na(condition, psi) %>%
         filter(study_accession=="PRJNA193487")
-    introns_danielsson = introns_danielsson %>%
-        filter(EVENT %in% events_oi[["EVENT"]]) %>%
-        pivot_longer(-EVENT, names_to="sampleID", values_to="psi") %>%
-        drop_na(psi) %>%
-        left_join(metadata_danielsson, by="sampleID") %>%
-        drop_na(condition, psi) %>%
-        filter(study_accession=="PRJNA193487")
-    alta_danielsson = alta_danielsson %>%
-        filter(EVENT %in% events_oi[["EVENT"]]) %>%
-        pivot_longer(-EVENT, names_to="sampleID", values_to="psi") %>%
-        drop_na(psi) %>%
-        left_join(metadata_danielsson, by="sampleID") %>%
-        drop_na(condition, psi) %>%
-        filter(study_accession=="PRJNA193487")
-    altd_danielsson = altd_danielsson %>%
-        filter(EVENT %in% events_oi[["EVENT"]]) %>%
+    n_sfs = length(unique(exons_danielsson[["EVENT"]]))
+    exons_danielsson_rand = exons_danielsson_raw %>%
+        filter(!EVENT%in%events_oi[["EVENT"]]) %>% # not SFs
+        sample_n(n_sfs) %>%
         pivot_longer(-EVENT, names_to="sampleID", values_to="psi") %>%
         drop_na(psi) %>%
         left_join(metadata_danielsson, by="sampleID") %>%
         drop_na(condition, psi) %>%
         filter(study_accession=="PRJNA193487")
     
+    introns_danielsson = introns_danielsson_raw %>%
+        filter(EVENT %in% events_oi[["EVENT"]]) %>%
+        pivot_longer(-EVENT, names_to="sampleID", values_to="psi") %>%
+        drop_na(psi) %>%
+        left_join(metadata_danielsson, by="sampleID") %>%
+        drop_na(condition, psi) %>%
+        filter(study_accession=="PRJNA193487")
+    n_sfs = length(unique(introns_danielsson[["EVENT"]]))
+    introns_danielsson_rand = introns_danielsson_raw %>%
+        filter(!EVENT %in% events_oi[["EVENT"]]) %>%
+        sample_n(n_sfs) %>%
+        pivot_longer(-EVENT, names_to="sampleID", values_to="psi") %>%
+        drop_na(psi) %>%
+        left_join(metadata_danielsson, by="sampleID") %>%
+        drop_na(condition, psi) %>%
+        filter(study_accession=="PRJNA193487")
+    
+    alta_danielsson = alta_danielsson_raw %>%
+        filter(EVENT %in% events_oi[["EVENT"]]) %>%
+        pivot_longer(-EVENT, names_to="sampleID", values_to="psi") %>%
+        drop_na(psi) %>%
+        left_join(metadata_danielsson, by="sampleID") %>%
+        drop_na(condition, psi) %>%
+        filter(study_accession=="PRJNA193487")
+    n_sfs = length(unique(alta_danielsson[["EVENT"]]))
+    alta_danielsson_rand = alta_danielsson_raw %>%
+        filter(!EVENT %in% events_oi[["EVENT"]]) %>%
+        sample_n(n_sfs) %>%
+        pivot_longer(-EVENT, names_to="sampleID", values_to="psi") %>%
+        drop_na(psi) %>%
+        left_join(metadata_danielsson, by="sampleID") %>%
+        drop_na(condition, psi) %>%
+        filter(study_accession=="PRJNA193487")
+    
+    altd_danielsson = altd_danielsson_raw %>%
+        filter(EVENT %in% events_oi[["EVENT"]]) %>%
+        pivot_longer(-EVENT, names_to="sampleID", values_to="psi") %>%
+        drop_na(psi) %>%
+        left_join(metadata_danielsson, by="sampleID") %>%
+        drop_na(condition, psi) %>%
+        filter(study_accession=="PRJNA193487")
+    n_sfs = length(unique(altd_danielsson[["EVENT"]]))
+    altd_danielsson_rand = altd_danielsson_raw %>%
+        filter(!EVENT %in% events_oi[["EVENT"]]) %>%
+        sample_n(n_sfs) %>%
+        pivot_longer(-EVENT, names_to="sampleID", values_to="psi") %>%
+        drop_na(psi) %>%
+        left_join(metadata_danielsson, by="sampleID") %>%
+        drop_na(condition, psi) %>%
+        filter(study_accession=="PRJNA193487")
+    
+    splicing_danielsson = bind_rows(
+            exons_danielsson %>% mutate(event_type = "exon", is_random=FALSE),
+            introns_danielsson %>% mutate(event_type = "intron", is_random=FALSE),
+            altd_danielsson %>% mutate(event_type = "altd", is_random=FALSE),
+            alta_danielsson %>% mutate(event_type = "alta", is_random=FALSE),
+            exons_danielsson_rand %>% mutate(event_type = "exon", is_random=TRUE),
+            introns_danielsson_rand %>% mutate(event_type = "intron", is_random=TRUE),
+            altd_danielsson_rand %>% mutate(event_type = "altd", is_random=TRUE),
+            alta_danielsson_rand %>% mutate(event_type = "alta", is_random=TRUE)
+        ) %>%
+        left_join(annot, by="EVENT") %>%
+        left_join(driver_types, by=c("GENE")) %>%
+        mutate(
+            driver_type = case_when(
+                !is.na(driver_type) ~ driver_type,
+                is.na(driver_type) & !is_random ~ "Non-driver",
+                is.na(driver_type) & is_random ~ "Random"
+            ),
+            event_gene = sprintf("%s_%s", EVENT, GENE)
+        )
+    
     # proteomics and phosphoproteomics of splicing factors
-    duplicated_genes = proteomics_inhouse %>% count(Genes) %>% drop_na() %>% filter(n>1) %>% pull(Genes)
-    proteomics_inhouse = proteomics_inhouse %>%
+    duplicated_genes = proteomics_inhouse_raw %>% count(Genes) %>% drop_na() %>% filter(n>1) %>% pull(Genes)
+    proteomics_inhouse = proteomics_inhouse_raw %>%
         rename(GENE=Genes) %>%
         drop_na(GENE) %>%
         filter(!GENE%in%duplicated_genes) %>%
@@ -588,9 +732,44 @@ main = function(){
         left_join(MAPPING_DANIELSSON, by="cell_line__replicate") %>%
         separate(cell_line__replicate, sep="__", into=c("cell_line_name","replicate"), remove=FALSE) %>%
         left_join(driver_types, by=c("ENSEMBL", "GENE")) %>%
-        mutate(driver_type = replace_na(driver_type, "Non-driver"))
+        mutate(
+            is_random = FALSE,
+            driver_type = case_when(
+                !is.na(driver_type) ~ driver_type,
+                is.na(driver_type) & !is_random ~ "Non-driver",
+                is.na(driver_type) & is_random ~ "Random"
+            )
+        )
+    n_sfs = length(unique(proteomics_inhouse[["ENSEMBL"]]))
+    proteomics_inhouse_rand = proteomics_inhouse_raw %>%
+        rename(GENE=Genes) %>%
+        drop_na(GENE) %>%
+        filter(!GENE%in%duplicated_genes) %>%
+        left_join(gene_info, by="GENE") %>%
+        filter(!ENSEMBL%in%splicing_factors[["ENSEMBL"]]) %>%
+        sample_n(n_sfs) %>%
+        pivot_longer(
+            -c(ENSEMBL,GENE,Protein.Group,Protein.Names,First.Protein.Description,N.Sequences,N.Proteotypic.Sequences), 
+            names_to="cell_line__replicate", 
+            values_to="proteomics_cpm"
+        ) %>%
+        left_join(MAPPING_DANIELSSON, by="cell_line__replicate") %>%
+        separate(cell_line__replicate, sep="__", into=c("cell_line_name","replicate"), remove=FALSE) %>%
+        left_join(driver_types, by=c("ENSEMBL", "GENE")) %>%
+        mutate(
+            is_random = TRUE,
+            driver_type = case_when(
+                !is.na(driver_type) ~ driver_type,
+                is.na(driver_type) & !is_random ~ "Non-driver",
+                is.na(driver_type) & is_random ~ "Random"
+            )
+        )
+    proteomics_inhouse = bind_rows(
+        proteomics_inhouse,
+        proteomics_inhouse_rand
+    )
     
-    phospho_inhouse = phospho_inhouse %>%
+    phospho_inhouse = phospho_inhouse_raw %>%
         mutate(
             GENE = Genes,
             Genes = str_c(Genes, Modified.Sequence, sep="_")
@@ -606,7 +785,44 @@ main = function(){
         left_join(MAPPING_DANIELSSON, by="cell_line__replicate") %>%
         separate(cell_line__replicate, sep="__", into=c("cell_line_name","replicate"), remove=FALSE) %>%
         left_join(driver_types, by=c("ENSEMBL", "GENE")) %>%
-        mutate(driver_type = replace_na(driver_type, "Non-driver"))
+        mutate(
+            is_random = FALSE,
+            driver_type = case_when(
+                !is.na(driver_type) ~ driver_type,
+                is.na(driver_type) & !is_random ~ "Non-driver",
+                is.na(driver_type) & is_random ~ "Random"
+            )
+        )    
+    n_sfs = length(unique(phospho_inhouse[["Precursor.Id"]]))
+    phospho_inhouse_rand = phospho_inhouse_raw %>%
+        mutate(
+            GENE = Genes,
+            Genes = str_c(Genes, Modified.Sequence, sep="_")
+        ) %>%
+        drop_na(GENE) %>%
+        left_join(gene_info, by="GENE") %>%
+        filter(!ENSEMBL%in%splicing_factors[["ENSEMBL"]]) %>%
+        sample_n(n_sfs) %>%
+        pivot_longer(
+            -c(ENSEMBL,GENE,Genes,Protein.Group,Protein.Names,Protein.Ids,First.Protein.Description,Proteotypic,Stripped.Sequence,Modified.Sequence,Precursor.Charge,Precursor.Id), 
+            names_to="cell_line__replicate", 
+            values_to="phospho_cpm"
+        ) %>%
+        left_join(MAPPING_DANIELSSON, by="cell_line__replicate") %>%
+        separate(cell_line__replicate, sep="__", into=c("cell_line_name","replicate"), remove=FALSE) %>%
+        left_join(driver_types, by=c("ENSEMBL", "GENE")) %>%
+        mutate(
+            is_random = TRUE,
+            driver_type = case_when(
+                !is.na(driver_type) ~ driver_type,
+                is.na(driver_type) & !is_random ~ "Non-driver",
+                is.na(driver_type) & is_random ~ "Random"
+            )
+        )
+    phospho_inhouse = bind_rows(
+        phospho_inhouse,
+        phospho_inhouse_rand
+    )
     
     # association protein activity with other omics
     ## Danielsson
@@ -645,12 +861,14 @@ main = function(){
     
     ### are changes in splicing factor activity explained by changes in proteomics or phosphoproteomics?
     mat_proteomics = proteomics_inhouse %>%
+        filter(!is_random) %>%
         mutate(GENE = sprintf("%sprot", GENE)) %>%
         distinct(sampleID, GENE, proteomics_cpm) %>%
         pivot_wider(id_cols="sampleID", names_from="GENE", values_from="proteomics_cpm") %>%
         column_to_rownames("sampleID")
     
     mat_phospho = phospho_inhouse %>%
+        filter(!is_random) %>%
         mutate(GENE = sprintf("%s_%s", GENE, Precursor.Id)) %>%
         distinct(sampleID, GENE, phospho_cpm) %>%
         drop_na() %>%
@@ -738,7 +956,7 @@ main = function(){
     annot = annot %>% 
         mutate(event_gene = sprintf("%s_%s", EVENT, GENE)) %>% 
         left_join(gene_info, by="GENE") %>%
-        distinct(event_gene, ENSEMBL, GENE) %>%
+        distinct(event_gene, EVENT, ENSEMBL, GENE) %>%
         drop_na()
     
     associations = associations %>%
@@ -760,7 +978,7 @@ main = function(){
         )
     
     # plot
-    plts = make_plots(protein_activity, genexpr, proteomics_inhouse, phospho_inhouse, associations)
+    plts = make_plots(protein_activity, genexpr, proteomics_inhouse, phospho_inhouse, splicing_danielsson, associations)
     
     # make figdata
     figdata = make_figdata(protein_activity)
