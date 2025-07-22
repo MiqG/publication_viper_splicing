@@ -854,10 +854,10 @@ main = function(){
         pivot_wider(id_cols="sampleID", names_from="event_gene", values_from="psi") %>%
         column_to_rownames("sampleID")
     #### drop columns with missing values
-    mat_splicing = mat_splicing[,colSums(is.na(mat_splicing))==0] # from 4457 to 3320
+    mat_splicing = mat_splicing[,colSums(is.na(mat_splicing))==0] # from 10043 to 10043
     #### drop_columns with constant values
     idx_notctt = apply(mat_splicing, 2, function(col){ length(unique(col)) > 1 })
-    mat_splicing = mat_splicing[,idx_notctt] # from 3320 to 1481
+    mat_splicing = mat_splicing[,idx_notctt] # from 10043 to 4461
     
     ### are changes in splicing factor activity explained by changes in proteomics or phosphoproteomics?
     mat_proteomics = proteomics_inhouse %>%

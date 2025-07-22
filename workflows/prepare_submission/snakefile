@@ -75,6 +75,9 @@ rule all:
         expand(os.path.join(RESULTS_DIR,'prepare_submission','files','intermediate_files','datasets','event_psi','{dataset}-ALTD.tsv.gz'), dataset=DATASETS),
         expand(os.path.join(RESULTS_DIR,'prepare_submission','files','intermediate_files','datasets','event_psi','{dataset}-INT.tsv.gz'), dataset=DATASETS),
         expand(os.path.join(RESULTS_DIR,'prepare_submission','files','intermediate_files','datasets','genexpr_tpm','{dataset}.tsv.gz'), dataset=DATASETS),
+        # inhouse
+        os.path.join(RESULTS_DIR,'prepare_submission','files','intermediate_files','inhouse','carcinogenesis','proteomics.tsv.gz'),
+        os.path.join(RESULTS_DIR,'prepare_submission','files','intermediate_files','inhouse','carcinogenesis','phosphoproteomics.tsv.gz')
 
 
 rule prep_pert_datasets:
@@ -239,6 +242,25 @@ rule intermediate_files_datasets:
         psi_altd = os.path.join(RESULTS_DIR,'prepare_submission','files','intermediate_files','datasets','event_psi','{dataset}-ALTD.tsv.gz'),
         psi_int = os.path.join(RESULTS_DIR,'prepare_submission','files','intermediate_files','datasets','event_psi','{dataset}-INT.tsv.gz'),
         tpm = os.path.join(RESULTS_DIR,'prepare_submission','files','intermediate_files','datasets','genexpr_tpm','{dataset}.tsv.gz')
+    run:
+        import os
+        import subprocess
+
+        for key, f in input.items():
+            outfile = output[key]
+            cmd = ["cp", f, outfile]
+            print(cmd)
+            subprocess.call(cmd)
+            
+        print("Done!")
+        
+rule intermediate_files_inhouse:
+    input:
+        proteomics = os.path.join(PREP_DIR,'inhouse','carcinogenesis','proteomics.tsv.gz'),
+        phosphoproteomics = os.path.join(PREP_DIR,'inhouse','carcinogenesis','phosphoproteomics.tsv.gz')
+    output:
+        proteomics = os.path.join(RESULTS_DIR,'prepare_submission','files','intermediate_files','inhouse','carcinogenesis','proteomics.tsv.gz'),
+        phosphoproteomics = os.path.join(RESULTS_DIR,'prepare_submission','files','intermediate_files','inhouse','carcinogenesis','phosphoproteomics.tsv.gz')
     run:
         import os
         import subprocess

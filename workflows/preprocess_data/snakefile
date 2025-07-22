@@ -2678,24 +2678,6 @@ rule prep_proteomics_carcinogenesis:
         proteomics[cols_oi] = np.log2(proteomics[cols_oi]+1)
         
         ## phosphoproteomics
-        ### drop columns
-        # todrop = [
-        #     'Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_001_01_45pto.raw.1',
-        #     'Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_002_01_45pto.raw.1',
-        #     'Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_003_01_45pto.raw.1',
-        #     'Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_004_01_45pto.raw.1',
-        #     'Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_005_01_45pto.raw.1',
-        #     'Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_006_01_45pto.raw.1',
-        #     'Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_007_01_45pto.raw.1',
-        #     'Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_008_01_45pto.raw.1',
-        #     'Log10 fold change', 
-        #     'pvalue', 
-        #     'Log10 fold change.1', 
-        #     'pvalue.1',
-        #     'Log10 fold change.2', 
-        #     'pvalue.2'
-        # ]
-        # phosphoproteomics = phosphoproteomics.drop(columns=todrop)
         ### rename
         mapping = {
             "Z:\\data\\orbitrap_astral1\\Raw\\2506\\CASE\\2025NY002_CASE_001_01_45pto.raw": "BJ_IMMORTALIZED__rep1",
